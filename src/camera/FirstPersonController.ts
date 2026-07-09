@@ -61,6 +61,7 @@ export class FirstPersonController {
   private savedFov = DEFAULT_FOV;
   private crosshair: HTMLElement | null = null;
   private toggleRequested = false;
+  private crouchToggle = false;
   private camBobY = 0;
   private camBobRoll = 0;
 
@@ -116,6 +117,7 @@ export class FirstPersonController {
     this.loco.headBobPhase = 0;
     this.loco.eyeSmoothed = fpLocomotionConstants.eyeStand;
     this.keys.clear();
+    this.crouchToggle = false;
     this.camBobY = 0;
     this.camBobRoll = 0;
 
@@ -131,6 +133,7 @@ export class FirstPersonController {
     if (!this.active) return;
     this.active = false;
     this.keys.clear();
+    this.crouchToggle = false;
     this.exitPointerLock();
     this.showCrosshair(false);
 
@@ -240,7 +243,7 @@ export class FirstPersonController {
     this.input.left = this.keys.has('KeyA') || this.keys.has('ArrowLeft');
     this.input.right = this.keys.has('KeyD') || this.keys.has('ArrowRight');
     this.input.sprint = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
-    this.input.crouch = false;
+    this.input.crouch = this.crouchToggle;
     this.input.jumpHeld = this.keys.has('Space');
   }
 
@@ -316,6 +319,11 @@ export class FirstPersonController {
     if (event.code === 'Space' && !event.repeat) {
       event.preventDefault();
       queueFpJump(this.loco);
+    }
+
+    if (event.code === 'KeyC' && !event.repeat) {
+      event.preventDefault();
+      this.crouchToggle = !this.crouchToggle;
     }
   };
 

@@ -22,6 +22,7 @@ export class BuildToolbar {
   private readonly fpsPanel: HTMLElement;
   private readonly fpsValue: HTMLElement;
   private readonly zoomValue: HTMLElement;
+  private readonly fpModePanel: HTMLElement;
   private deleteCancel: (() => void) | null = null;
   private deleteRemove: (() => void) | null = null;
 
@@ -89,6 +90,15 @@ export class BuildToolbar {
         <button type="button" class="ghost-button" data-action="cancel-delete">Cancel</button>
       </div>
 
+      <div class="hud-bottom-right">
+        <div class="fps-panel fp-mode-panel" data-fp-mode-panel aria-label="First person mode">
+          <div class="fps-stat">
+            <strong>~</strong>
+            <span>Walk</span>
+          </div>
+        </div>
+      </div>
+
     `;
 
     this.roadButton = this.mustButton(root, '[data-action="road"]');
@@ -101,6 +111,7 @@ export class BuildToolbar {
     this.fpsPanel = this.mustElement(root, '[data-fps-panel]');
     this.fpsValue = this.mustElement(root, '[data-stat="fps"]');
     this.zoomValue = this.mustElement(root, '[data-stat="zoom"]');
+    this.fpModePanel = this.mustElement(root, '[data-fp-mode-panel]');
 
     this.roadButton.addEventListener('click', handlers.onOpenRoads);
     this.buildButton.addEventListener('click', handlers.onBuildRoad);
@@ -155,7 +166,7 @@ export class BuildToolbar {
   }
 
   setFirstPersonMode(active: boolean): void {
-    if (active) this.zoomValue.textContent = 'Walk';
+    this.fpModePanel.classList.toggle('is-active', active);
   }
 
   showDeletePopup(options: DeletePopupOptions): void {

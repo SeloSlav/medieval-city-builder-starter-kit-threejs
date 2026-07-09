@@ -10,13 +10,17 @@ import {
   distanceToNearest,
   fbm2,
   forestDensityAt,
+  getEdgeHillFactor,
   hasMinimumDistance,
   isInsidePlayableExtent,
+  isInsideTerrainExtent,
   mulberry32,
   pick,
   samplePointInForestCore,
+  samplePointInHillEdgeBand,
   samplePointInPlayableExtent,
   type ForestCore,
+  type ForestSpawnConfig,
 } from './forestField.ts';
 type ForestMaterialSet = {
   bark: THREE.MeshStandardMaterial;
@@ -68,7 +72,7 @@ export async function createForestProps(
   options?: ForestPropsOptions,
 ): Promise<ForestManager> {
   const rng = mulberry32(0x5eedf0a5);
-  const spawnConfig = createForestSpawnConfig(terrain.playableSize);
+  const spawnConfig = createForestSpawnConfig(terrain.playableSize, terrain.size);
   const isBlockedAt = options?.isBlockedAt;
   const enableTreeShadowFilter = options?.rendererBackend !== 'webgpu';
   const materials = await createForestMaterials(maxAnisotropy, enableTreeShadowFilter);
@@ -76,8 +80,9 @@ export async function createForestProps(
   forest.name = 'Road-scale forest props';
   const forestCores = createForestCores(rng, spawnConfig);
   const treePlacements = createTreePlacements(rng, forestCores, spawnConfig, isBlockedAt);
+  const hillEdgePlacements = createHillEdgeTreePlacements(rng, spawnConfig, treePlacements, isBlockedAt);
   const saplingPlacements = createSaplingPlacements(rng, forestCores, spawnConfig, treePlacements, isBlockedAt);
-  const allTreePlacements = [...treePlacements, ...saplingPlacements];
+  const allTreePlacements = [...treePlacements, ...hillEdgePlacements, ...saplingPlacements];
   const conifer = createConiferForest(allTreePlacements, terrain, materials, rng);
   const rockPlacements = createRockPlacements(rng, forestCores, allTreePlacements, spawnConfig, isBlockedAt);
 
@@ -109,7 +114,7 @@ export async function createForestProps(
 function createTreePlacements(
   rng: () => number,
   forestCores: ForestCore[],
-  spawnConfig: ReturnType<typeof createForestSpawnConfig>,
+  spawnConfig: ForestSpawnConfig,
   isBlockedAt?: (x: number, z: number) => boolean,
 ): TreePlacement[] {
   const placements: TreePlacement[] = [];
@@ -126,7 +131,7 @@ function createTreePlacements(
     if (!isInsidePlayableExtent(x, z, spawnConfig.extent)) continue;
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + rng() * 18) continue;
 
-    const density = forestDensityAt(x, z, forestCores, spawnConfig.extent);
+    const density = forestDensityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (density < 0.12 || rng() > density * 1.14) continue;
 
     const formNoise = valueNoise2(x * 0.025 + 37.2, z * 0.025 - 11.8);
@@ -157,10 +162,51 @@ function createTreePlacements(
   return placements;
 }
 
+function createHillEdgeTreePlacements(
+  rng: () => number,
+  spawnConfig: ForestSpawnConfig,
+  existingTrees: TreePlacement[],
+  isBlockedAt?: (x: number, z: number) => boolean,
+): TreePlacement[] {
+  const placements: TreePlacement[] = [];
+  let attempts = 0;
+
+  while (placements.length < spawnConfig.hillEdgeTreeTargetCount && attempts < spawnConfig.hillEdgeTreeTargetCount * 52) {
+    attempts++;
+    const { x, z } = samplePointInHillEdgeBand(rng, spawnConfig.playableSize, spawnConfig.terrainSize);
+
+    if (!isInsideTerrainExtent(x, z, spawnConfig.terrainExtent)) continue;
+
+    const hillFactor = getEdgeHillFactor(x, z, spawnConfig.playableSize, spawnConfig.terrainSize);
+    if (hillFactor < 0.06) continue;
+
+    const density = forestDensityAt(x, z, [], spawnConfig.extent, spawnConfig.terrainExtent);
+    if (rng() > 0.22 + hillFactor * 0.74) continue;
+
+    const formNoise = valueNoise2(x * 0.025 + 37.2, z * 0.025 - 11.8);
+    const broadChance = THREE.MathUtils.clamp(0.28 + density * 0.28 + (formNoise - 0.5) * 0.16, 0.16, 0.52);
+    const form: TreePlacement['form'] = rng() < broadChance ? 'broad' : 'narrow';
+    const minDistance = THREE.MathUtils.lerp(4.6, 2.2, hillFactor);
+    if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
+    if (distanceToNearest(existingTrees, x, z) < minDistance * 0.82) continue;
+
+    const scale =
+      form === 'broad'
+        ? THREE.MathUtils.lerp(1.12, 1.86, Math.pow(rng(), 0.72)) * THREE.MathUtils.lerp(1.02, 0.96, hillFactor)
+        : THREE.MathUtils.lerp(0.96, 1.74, Math.pow(rng(), 0.64)) * THREE.MathUtils.lerp(1.06, 0.98, hillFactor);
+
+    if (isTreePlacementBlocked(x, z, form, scale, isBlockedAt)) continue;
+
+    placements.push({ x, z, form, scale });
+  }
+
+  return placements;
+}
+
 function createSaplingPlacements(
   rng: () => number,
   forestCores: ForestCore[],
-  spawnConfig: ReturnType<typeof createForestSpawnConfig>,
+  spawnConfig: ForestSpawnConfig,
   existingTrees: TreePlacement[],
   isBlockedAt?: (x: number, z: number) => boolean,
 ): TreePlacement[] {
@@ -175,7 +221,7 @@ function createSaplingPlacements(
     if (!isInsidePlayableExtent(x, z, spawnConfig.extent)) continue;
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + 8) continue;
 
-    const density = forestDensityAt(x, z, forestCores, spawnConfig.extent);
+    const density = forestDensityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (density < 0.42 || rng() > density * 1.06) continue;
 
     const minDistance = THREE.MathUtils.lerp(2.8, 1.9, density);
@@ -307,7 +353,7 @@ function createRockPlacements(
   rng: () => number,
   forestCores: ForestCore[],
   treePlacements: TreePlacement[],
-  spawnConfig: ReturnType<typeof createForestSpawnConfig>,
+  spawnConfig: ForestSpawnConfig,
   isBlockedAt?: (x: number, z: number) => boolean,
 ): RockPlacement[] {
   const placements: RockPlacement[] = [];
@@ -327,7 +373,7 @@ function createRockPlacements(
       if (isBlockedAt?.(x, z)) continue;
       if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS * 0.62) continue;
 
-      const forestDensity = forestDensityAt(x, z, forestCores, spawnConfig.extent);
+      const forestDensity = forestDensityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
       if (forestDensity > 0.88 && rng() < 0.55) continue;
 
       const scale = THREE.MathUtils.lerp(0.55, 2.8, Math.pow(rng(), 1.35)) * THREE.MathUtils.lerp(0.92, 1.28, outcrop.strength);
@@ -346,7 +392,7 @@ function createRockPlacements(
     if (isBlockedAt?.(x, z)) continue;
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS * 0.78) continue;
 
-    const suitability = rockSuitabilityAt(x, z, forestCores, spawnConfig.extent);
+    const suitability = rockSuitabilityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (suitability < 0.28 || rng() > suitability * 0.92) continue;
 
     const scale = THREE.MathUtils.lerp(0.45, 2.2, Math.pow(rng(), 1.45));
@@ -361,7 +407,7 @@ function createRockPlacements(
 function createRockOutcrops(
   rng: () => number,
   forestCores: ForestCore[],
-  spawnConfig: ReturnType<typeof createForestSpawnConfig>,
+  spawnConfig: ForestSpawnConfig,
 ): RockOutcrop[] {
   const outcrops: RockOutcrop[] = [];
   let attempts = 0;
@@ -373,7 +419,7 @@ function createRockOutcrops(
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + 12) continue;
     if (!hasMinimumDistance(outcrops, x, z, minOutcropDistance)) continue;
 
-    const suitability = rockSuitabilityAt(x, z, forestCores, spawnConfig.extent);
+    const suitability = rockSuitabilityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (suitability < 0.32 || rng() > suitability) continue;
 
     outcrops.push({
@@ -404,8 +450,14 @@ function rockProfileForScale(scale: number, rng: () => number): RockProfile {
   return 'tall';
 }
 
-function rockSuitabilityAt(x: number, z: number, forestCores: ForestCore[], extent: number): number {
-  const forestDensity = forestDensityAt(x, z, forestCores, extent);
+function rockSuitabilityAt(
+  x: number,
+  z: number,
+  forestCores: ForestCore[],
+  extent: number,
+  terrainExtent: number,
+): number {
+  const forestDensity = forestDensityAt(x, z, forestCores, extent, terrainExtent);
   const forestEdge = 1 - Math.abs(forestDensity - 0.46) / 0.46;
   const stoneNoise = fbm2(x * 0.018 + 18.5, z * 0.018 - 4.4, 4);
   const openGround = 1 - smoothstep(0.74, 1, forestDensity);

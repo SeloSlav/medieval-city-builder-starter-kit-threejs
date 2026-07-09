@@ -15,7 +15,11 @@ export type ForestCore = {
 
 export type ForestSpawnConfig = {
   extent: number;
+  terrainExtent: number;
+  playableSize: number;
+  terrainSize: number;
   treeTargetCount: number;
+  hillEdgeTreeTargetCount: number;
   rockTargetCount: number;
   forestCoreCount: number;
   rockOutcropCount: number;
@@ -24,24 +28,46 @@ export type ForestSpawnConfig = {
 };
 
 const LEGACY_PLAYABLE_SIZE = 496;
+const LEGACY_TERRAIN_SIZE = 1080;
 const BASE_TREE_COUNT = 360;
+const BASE_HILL_EDGE_TREE_COUNT = 820;
 const BASE_ROCK_COUNT = 86;
 const BASE_UNDERGROWTH_COUNT = 720;
 const BASE_SAPLING_COUNT = 148;
 
-export function createForestSpawnConfig(playableSize: number): ForestSpawnConfig {
+export function createForestSpawnConfig(playableSize: number, terrainSize: number): ForestSpawnConfig {
   const extent = playableSize * 0.5;
+  const terrainExtent = terrainSize * 0.5;
   const areaScale = (playableSize / LEGACY_PLAYABLE_SIZE) ** 2;
+  const hillRingAreaScale =
+    (terrainSize ** 2 - playableSize ** 2) / (LEGACY_TERRAIN_SIZE ** 2 - LEGACY_PLAYABLE_SIZE ** 2);
 
   return {
     extent,
+    terrainExtent,
+    playableSize,
+    terrainSize,
     treeTargetCount: Math.round(BASE_TREE_COUNT * areaScale),
+    hillEdgeTreeTargetCount: Math.round(BASE_HILL_EDGE_TREE_COUNT * hillRingAreaScale),
     rockTargetCount: Math.round(BASE_ROCK_COUNT * areaScale),
     forestCoreCount: Math.round(20 + areaScale * 5),
     rockOutcropCount: Math.round(9 + areaScale * 5),
     undergrowthTargetCount: Math.round(BASE_UNDERGROWTH_COUNT * areaScale),
     saplingTargetCount: Math.round(BASE_SAPLING_COUNT * areaScale),
   };
+}
+
+/** Matches terrain edge-hill ramp in TerrainHeight.ts. */
+export function getEdgeHillFactor(
+  x: number,
+  z: number,
+  playableSize: number,
+  terrainSize: number,
+): number {
+  const edgeDistance = Math.max(Math.abs(x), Math.abs(z));
+  const hillStart = playableSize * 0.44;
+  const hillEnd = terrainSize * 0.5;
+  return smoothstep(hillStart, hillEnd, edgeDistance);
 }
 
 export function createForestCores(rng: () => number, spawnConfig: ForestSpawnConfig): ForestCore[] {
@@ -75,28 +101,40 @@ export function createForestCores(rng: () => number, spawnConfig: ForestSpawnCon
   return cores;
 }
 
-export function forestDensityAt(x: number, z: number, forestCores: ForestCore[], extent: number): number {
+export function forestDensityAt(
+  x: number,
+  z: number,
+  forestCores: ForestCore[],
+  extent: number,
+  terrainExtent?: number,
+): number {
   let density = 0;
   for (const core of forestCores) {
     density = Math.max(density, forestCoreInfluence(x, z, core) * core.strength);
   }
 
   const edgeDistance = Math.max(Math.abs(x), Math.abs(z));
+  const playableSize = extent * 2;
+  const terrainSize = (terrainExtent ?? extent) * 2;
+  const hillFactor = getEdgeHillFactor(x, z, playableSize, terrainSize);
   const edgeWoods = smoothstep(extent * 0.58, extent * 0.9, edgeDistance) * 0.24;
+  const hillEdgeWoods = hillFactor * 0.96;
   const canopyNoise = fbm2(x * 0.006 + 5.4, z * 0.006 - 8.8, 4);
   const pocketNoise = fbm2(x * 0.024 - 14.2, z * 0.024 + 3.7, 3);
   const regionalNoise = fbm2(x * 0.0028 + 21.6, z * 0.0028 - 17.4, 3);
   const centralClear = smoothstep(CENTRAL_CLEARING_RADIUS, CENTRAL_CLEARING_RADIUS + 34, Math.hypot(x, z));
   const meadowBreak =
-    0.82 +
-    smoothstep(18, 58, Math.abs(z + Math.sin(x * 0.012) * 34 - extent * 0.16)) * 0.12 +
-    smoothstep(16, 52, Math.abs(x * 0.28 - z - extent * 0.09)) * 0.08;
+    (0.82 +
+      smoothstep(18, 58, Math.abs(z + Math.sin(x * 0.012) * 34 - extent * 0.16)) * 0.12 +
+      smoothstep(16, 52, Math.abs(x * 0.28 - z - extent * 0.09)) * 0.08) *
+      (1 - hillFactor * 0.9) +
+    hillFactor * 0.94;
 
   density +=
-    edgeWoods +
-    (canopyNoise - 0.4) * 0.3 +
-    (pocketNoise - 0.5) * 0.18 +
-    (regionalNoise - 0.46) * 0.22;
+    Math.max(edgeWoods, hillEdgeWoods) +
+    (canopyNoise - 0.4) * 0.3 * (1 - hillFactor * 0.72) +
+    (pocketNoise - 0.5) * 0.18 * (1 - hillFactor * 0.55) +
+    (regionalNoise - 0.46) * 0.22 * (1 - hillFactor * 0.45);
   return saturate(density * centralClear * meadowBreak);
 }
 
@@ -133,6 +171,33 @@ export function samplePointInPlayableExtent(rng: () => number, extent: number): 
 
 export function isInsidePlayableExtent(x: number, z: number, extent: number): boolean {
   return Math.abs(x) <= extent && Math.abs(z) <= extent;
+}
+
+export function isInsideTerrainExtent(x: number, z: number, terrainExtent: number): boolean {
+  return Math.abs(x) <= terrainExtent && Math.abs(z) <= terrainExtent;
+}
+
+export function samplePointInHillEdgeBand(
+  rng: () => number,
+  playableSize: number,
+  terrainSize: number,
+): { x: number; z: number } {
+  const hillStart = playableSize * 0.44;
+  const hillEnd = terrainSize * 0.5;
+  const edgeDistance = THREE.MathUtils.lerp(hillStart, hillEnd, Math.pow(rng(), 0.34));
+  const along = (rng() * 2 - 1) * edgeDistance;
+
+  if (rng() < 0.5) {
+    return {
+      x: along,
+      z: edgeDistance * (rng() < 0.5 ? 1 : -1),
+    };
+  }
+
+  return {
+    x: edgeDistance * (rng() < 0.5 ? 1 : -1),
+    z: along,
+  };
 }
 
 export function hasMinimumDistance(

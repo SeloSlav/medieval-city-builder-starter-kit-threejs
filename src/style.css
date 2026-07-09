@@ -372,6 +372,26 @@ button {
   color: var(--danger);
 }
 
+.hud-bottom-right {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 4;
+}
+
+.fp-mode-panel strong {
+  color: #9ec5e8;
+  font-size: 15px;
+}
+
+.fp-mode-panel.is-active {
+  border-color: rgba(215, 180, 99, 0.45);
+}
+
+.fp-mode-panel.is-active strong {
+  color: var(--accent);
+}
+
 .toast-container {
   position: absolute;
   left: 50%;
@@ -477,5 +497,10 @@ button {
     bottom: 10px;
     transform: none;
     justify-content: center;
+  }
+
+  .hud-bottom-right {
+    right: 10px;
+    bottom: 10px;
   }
 }

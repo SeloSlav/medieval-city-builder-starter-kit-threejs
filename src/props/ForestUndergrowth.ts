@@ -109,7 +109,7 @@ export function createUndergrowthPlacements(
     if (!isInsidePlayableExtent(x, z, spawnConfig.extent)) continue;
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + rng() * 12) continue;
 
-    const density = forestDensityAt(x, z, forestCores, spawnConfig.extent);
+    const density = forestDensityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (density < 0.22 || rng() > density * 1.08) continue;
 
     const kind: UndergrowthKind = rng() < 0.58 + density * 0.12 ? 'bush' : 'fern';

@@ -60,6 +60,7 @@ const BLADE_TIP = new THREE.Color(0x566b48);
 type GrassFieldContext = {
   terrain: Terrain;
   extent: number;
+  terrainExtent: number;
   forestCores: ReturnType<typeof createForestCores>;
   isBlockedAt?: (x: number, z: number) => boolean;
   roadEdges: RoadEdge[];
@@ -86,10 +87,11 @@ export function createGrassBladeField(
     return createDisabledGrassBladeField();
   }
 
-  const spawnConfig = createForestSpawnConfig(terrain.playableSize);
+  const spawnConfig = createForestSpawnConfig(terrain.playableSize, terrain.size);
   const context: GrassFieldContext = {
     terrain,
     extent: spawnConfig.extent,
+    terrainExtent: spawnConfig.terrainExtent,
     forestCores: createForestCores(mulberry32(0x6a55b1ade), spawnConfig),
     isBlockedAt: options?.isBlockedAt,
     roadEdges: [],
@@ -333,7 +335,7 @@ function writeChunkInstances(
   context: GrassFieldContext,
   maxInstances = Number.POSITIVE_INFINITY,
 ): number {
-  const { terrain, extent, forestCores, isBlockedAt, roadEdges } = context;
+  const { terrain, extent, terrainExtent, forestCores, isBlockedAt, roadEdges } = context;
   const rng = mulberry32(chunkSeed(chunkX, chunkZ));
   const chunkMinX = chunkX * GRASS_BLADE_CHUNK_SIZE;
   const chunkMinZ = chunkZ * GRASS_BLADE_CHUNK_SIZE;
@@ -393,7 +395,7 @@ function writeChunkInstances(
 
     localPlacements.push({ x, z, micro });
 
-    const density = forestDensityAt(x, z, forestCores, extent);
+    const density = forestDensityAt(x, z, forestCores, extent, terrainExtent);
     const sizeRoll = Math.pow(rng(), micro ? 1.1 : 0.72);
     const scale =
       THREE.MathUtils.lerp(micro ? 0.58 : 0.88, micro ? 0.92 : 1.32, sizeRoll) *
