@@ -185,11 +185,16 @@ export class SceneManager {
     this.sky.updateResolution(width * pixelRatio, height * pixelRatio);
   }
 
-  render(dt: number, orbitDistance?: number): void {
+  render(dt: number, orbitDistance?: number, firstPersonActive = false): void {
     const elapsed = performance.now() * 0.001;
     const cameraDistance = orbitDistance ?? this.camera.position.distanceTo(this.cameraTarget);
-    updateTerrainZoomBlend(this.terrain, cameraDistance);
-    this.grassField?.updateCameraState(this.camera.position, this.cameraTarget, cameraDistance);
+    updateTerrainZoomBlend(this.terrain, cameraDistance, firstPersonActive);
+    this.grassField?.updateCameraState(
+      this.camera.position,
+      this.cameraTarget,
+      cameraDistance,
+      firstPersonActive,
+    );
     this.sky.updateCamera(this.camera);
     this.sky.updateSun(this.sunDirection);
     this.sky.updateTime(elapsed);

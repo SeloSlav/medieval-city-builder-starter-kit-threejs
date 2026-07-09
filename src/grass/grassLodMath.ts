@@ -67,6 +67,18 @@ export function grassBladeRevealOpacity(cameraDistance: number): number {
   return dirtZoomGate(cameraDistance);
 }
 
+/** First-person mode always uses full close grass/dirt LOD around the player. */
+export function resolveCloseGroundLod(
+  cameraDistance: number,
+  firstPersonActive: boolean,
+): { grassOpacity: number; dirtGate: number } {
+  if (firstPersonActive) {
+    return { grassOpacity: 1, dirtGate: 1 };
+  }
+  const gate = dirtZoomGate(cameraDistance);
+  return { grassOpacity: gate, dirtGate: gate };
+}
+
 export function isGrassBladeZoomActive(cameraDistance: number): boolean {
   return grassBladeRevealOpacity(cameraDistance) > 0.02;
 }

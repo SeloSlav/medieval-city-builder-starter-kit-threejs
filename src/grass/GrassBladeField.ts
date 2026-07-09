@@ -21,7 +21,7 @@ import {
   GRASS_STREAM_CHUNKS_PER_FRAME,
   GRASS_TUFT_SCATTER_ATTEMPTS,
   GRASS_TUFTS_PER_CHUNK,
-  grassBladeRevealOpacity,
+  resolveCloseGroundLod,
 } from './grassLodMath.ts';
 
 export const GRASS_BLADES_ENABLED = true;
@@ -37,6 +37,7 @@ export type GrassBladeField = {
     cameraPosition: THREE.Vector3,
     cameraTarget: THREE.Vector3,
     cameraDistance: number,
+    firstPersonActive?: boolean,
   ) => void;
   dispose: () => void;
 };
@@ -116,6 +117,7 @@ export function createGrassBladeField(
   let buildFocusZ = 0;
   let lastMaterialOpacity = Number.NaN;
   let grassZoomVisible = false;
+  let wasFirstPerson = false;
 
   const collectStreamChunks = (focusX: number, focusZ: number): StreamChunk[] => {
     const centerChunkX = Math.floor(focusX / GRASS_BLADE_CHUNK_SIZE);
@@ -217,14 +219,24 @@ export function createGrassBladeField(
       context.roadEdges = [...network.edges.values()];
       roadClearanceDirty = true;
     },
-    updateCameraState(_cameraPosition: THREE.Vector3, cameraTarget: THREE.Vector3, cameraDistance: number) {
-      const zoomOpacity = grassBladeRevealOpacity(cameraDistance);
-      grassZoomVisible = zoomOpacity > 0.02;
+    updateCameraState(
+      cameraPosition: THREE.Vector3,
+      cameraTarget: THREE.Vector3,
+      cameraDistance: number,
+      firstPersonActive = false,
+    ) {
+      if (firstPersonActive && !wasFirstPerson) {
+        needsInitialStream = true;
+      }
+      wasFirstPerson = firstPersonActive;
 
-      if (!Number.isFinite(lastMaterialOpacity) || Math.abs(zoomOpacity - lastMaterialOpacity) > 0.008) {
-        lastMaterialOpacity = zoomOpacity;
-        material.opacity = zoomOpacity;
-        const useTransparency = zoomOpacity < 0.995;
+      const { grassOpacity } = resolveCloseGroundLod(cameraDistance, firstPersonActive);
+      grassZoomVisible = grassOpacity > 0.02;
+
+      if (!Number.isFinite(lastMaterialOpacity) || Math.abs(grassOpacity - lastMaterialOpacity) > 0.008) {
+        lastMaterialOpacity = grassOpacity;
+        material.opacity = grassOpacity;
+        const useTransparency = grassOpacity < 0.995;
         if (material.transparent !== useTransparency) {
           material.transparent = useTransparency;
           material.depthWrite = !useTransparency;
@@ -238,8 +250,8 @@ export function createGrassBladeField(
         return;
       }
 
-      const focusX = cameraTarget.x;
-      const focusZ = cameraTarget.z;
+      const focusX = firstPersonActive ? cameraPosition.x : cameraTarget.x;
+      const focusZ = firstPersonActive ? cameraPosition.z : cameraTarget.z;
       const centerChunkX = Math.floor(focusX / GRASS_BLADE_CHUNK_SIZE);
       const centerChunkZ = Math.floor(focusZ / GRASS_BLADE_CHUNK_SIZE);
 

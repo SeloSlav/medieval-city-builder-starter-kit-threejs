@@ -198,7 +198,7 @@ export class App {
       this.toolbar?.setFirstPersonMode(true);
       this.roadTool?.update(dt);
       this.updateBuildButtonPosition();
-      this.sceneManager?.render(dt, 12);
+      this.sceneManager?.render(dt, 12, true);
     } else {
       this.cameraController?.update(dt);
       this.toolbar?.setFirstPersonMode(false);

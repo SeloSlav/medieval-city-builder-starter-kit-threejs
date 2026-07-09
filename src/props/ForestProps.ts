@@ -34,10 +34,13 @@ type TreePlacement = {
   scale: number;
 };
 
+type RockProfile = 'flat' | 'moderate' | 'tall';
+
 type RockPlacement = {
   x: number;
   z: number;
   scale: number;
+  profile: RockProfile;
 };
 
 type RockOutcrop = {
@@ -141,10 +144,10 @@ function createTreePlacements(
 
     const scale =
       form === 'broad'
-        ? THREE.MathUtils.lerp(1.02, 1.62, Math.pow(rng(), 0.78)) * THREE.MathUtils.lerp(1.08, 0.94, density)
+        ? THREE.MathUtils.lerp(1.05, 1.78, Math.pow(rng(), 0.76)) * THREE.MathUtils.lerp(1.08, 0.94, density)
         : form === 'young'
           ? THREE.MathUtils.lerp(0.64, 0.92, Math.pow(rng(), 0.7))
-          : THREE.MathUtils.lerp(0.82, 1.42, Math.pow(rng(), 0.7)) * THREE.MathUtils.lerp(1.04, 0.92, density);
+          : THREE.MathUtils.lerp(0.88, 1.68, Math.pow(rng(), 0.68)) * THREE.MathUtils.lerp(1.04, 0.92, density);
 
     if (isTreePlacementBlocked(x, z, form, scale, isBlockedAt)) continue;
 
@@ -327,11 +330,11 @@ function createRockPlacements(
       const forestDensity = forestDensityAt(x, z, forestCores, spawnConfig.extent);
       if (forestDensity > 0.88 && rng() < 0.55) continue;
 
-      const scale = THREE.MathUtils.lerp(0.58, 1.9, Math.pow(rng(), 1.45)) * THREE.MathUtils.lerp(0.92, 1.22, outcrop.strength);
+      const scale = THREE.MathUtils.lerp(0.55, 2.8, Math.pow(rng(), 1.35)) * THREE.MathUtils.lerp(0.92, 1.28, outcrop.strength);
       if (distanceToNearest(treePlacements, x, z) < 2.7 + scale * 0.78) continue;
       if (!hasMinimumDistance(placements, x, z, 2.8 + scale * 1.35)) continue;
 
-      placements.push({ x, z, scale });
+      placements.push({ x, z, scale, profile: rockProfileForScale(scale, rng) });
       placedInOutcrop++;
     }
   }
@@ -346,10 +349,10 @@ function createRockPlacements(
     const suitability = rockSuitabilityAt(x, z, forestCores, spawnConfig.extent);
     if (suitability < 0.28 || rng() > suitability * 0.92) continue;
 
-    const scale = THREE.MathUtils.lerp(0.5, 1.55, Math.pow(rng(), 1.6));
+    const scale = THREE.MathUtils.lerp(0.45, 2.2, Math.pow(rng(), 1.45));
     if (distanceToNearest(treePlacements, x, z) < 3.2 + scale * 0.7) continue;
     if (!hasMinimumDistance(placements, x, z, 5.4 + scale * 1.2)) continue;
-    placements.push({ x, z, scale });
+    placements.push({ x, z, scale, profile: rockProfileForScale(scale, rng) });
   }
 
   return placements;
@@ -383,6 +386,22 @@ function createRockOutcrops(
   }
 
   return outcrops;
+}
+
+/** Standing eye height is ~1.55 m; large outcrop boulders can exceed that when profile is tall. */
+function rockProfileForScale(scale: number, rng: () => number): RockProfile {
+  const roll = rng();
+  if (scale < 0.75) {
+    return roll < 0.68 ? 'flat' : 'moderate';
+  }
+  if (scale < 1.3) {
+    if (roll < 0.38) return 'flat';
+    if (roll < 0.8) return 'moderate';
+    return 'tall';
+  }
+  if (roll < 0.16) return 'flat';
+  if (roll < 0.5) return 'moderate';
+  return 'tall';
 }
 
 function rockSuitabilityAt(x: number, z: number, forestCores: ForestCore[], extent: number): number {
@@ -470,12 +489,12 @@ function createConiferForest(
     const isBroad = placement.form === 'broad';
     const isYoung = placement.form === 'young';
     const isMidstory = placement.form === 'midstory';
-    const heightMul = isBroad ? 0.86 : isYoung ? 0.72 : isMidstory ? 0.44 : 1.08;
+    const heightMul = isBroad ? 0.88 : isYoung ? 0.72 : isMidstory ? 0.44 : 1.14;
     const spreadMul = isBroad ? 1.48 : isYoung ? 0.74 : isMidstory ? 0.9 : 1.06;
     const trunkMul = isBroad ? 1.2 : isYoung || isMidstory ? 0.68 : 1;
     const height = isMidstory
       ? (4.2 + rng() * 2.4) * placement.scale
-      : (13.5 + rng() * 5.2) * placement.scale * heightMul;
+      : (15 + rng() * 7) * placement.scale * heightMul;
     const trunkRadius = (0.28 + rng() * 0.13) * placement.scale * trunkMul;
     const lean = new THREE.Vector3((rng() - 0.5) * 0.045, 1, (rng() - 0.5) * 0.045).normalize();
     const lowWhorl = isBroad ? 0.14 : isMidstory ? 0.3 : isYoung ? 0.24 : 0.17;
@@ -649,7 +668,7 @@ export function createRockShadowGeometry(): THREE.BufferGeometry {
 }
 
 function createRockField(
-  placements: Array<{ x: number; z: number; scale: number }>,
+  placements: RockPlacement[],
   terrain: Terrain,
   material: THREE.Material,
   shadowCast: THREE.MeshStandardMaterial,
@@ -658,10 +677,18 @@ function createRockField(
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Instanced mossy boulder field';
-  const variants = [createBoulderGeometry(1.3), createBoulderGeometry(7.7), createBoulderGeometry(13.2)];
+  const shapeSeeds = [1.3, 7.7, 13.2] as const;
+  const profiles: RockProfile[] = ['flat', 'moderate', 'tall'];
+  const variants = profiles.flatMap((profile) =>
+    shapeSeeds.map((seed) => createBoulderGeometry(seed, profile)),
+  );
   const shadowGeometry = createRockShadowGeometry();
-  const buckets = variants.map(() => [] as Array<{ x: number; z: number; scale: number }>);
-  placements.forEach((placement, index) => buckets[index % buckets.length].push(placement));
+  const buckets = variants.map(() => [] as RockPlacement[]);
+  placements.forEach((placement, index) => {
+    const profileIndex = profiles.indexOf(placement.profile);
+    const bucketIndex = profileIndex * shapeSeeds.length + (index % shapeSeeds.length);
+    buckets[bucketIndex].push(placement);
+  });
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
@@ -683,11 +710,7 @@ function createRockField(
       const y = terrain.getHeightAt(rock.x, rock.z);
       position.set(rock.x, y + rock.scale * 0.18, rock.z);
       quaternion.setFromEuler(new THREE.Euler((rng() - 0.5) * 0.18, rng() * TAU, (rng() - 0.5) * 0.18));
-      scaleVector.set(
-        rock.scale * (1.08 + rng() * 0.68),
-        rock.scale * (0.46 + rng() * 0.28),
-        rock.scale * (0.9 + rng() * 0.55),
-      );
+      rockInstanceScaleForProfile(rock.profile, rock.scale, rng, scaleVector);
       matrix.compose(position, quaternion, scaleVector);
       mesh.setMatrixAt(rockIndex, matrix);
       shadowMesh.setMatrixAt(rockIndex, matrix);
@@ -700,7 +723,39 @@ function createRockField(
   return group;
 }
 
-function createBoulderGeometry(seed: number): THREE.BufferGeometry {
+function rockInstanceScaleForProfile(
+  profile: RockProfile,
+  scale: number,
+  rng: () => number,
+  target: THREE.Vector3,
+): THREE.Vector3 {
+  switch (profile) {
+    case 'flat':
+      return target.set(
+        scale * (1.12 + rng() * 0.72),
+        scale * (0.34 + rng() * 0.22),
+        scale * (0.95 + rng() * 0.55),
+      );
+    case 'moderate':
+      return target.set(
+        scale * (1.02 + rng() * 0.58),
+        scale * (0.62 + rng() * 0.36),
+        scale * (0.88 + rng() * 0.48),
+      );
+    case 'tall':
+      return target.set(
+        scale * (0.84 + rng() * 0.42),
+        scale * (0.96 + rng() * 0.68),
+        scale * (0.8 + rng() * 0.38),
+      );
+    default: {
+      const _exhaustive: never = profile;
+      throw new Error(`Unhandled rock profile: ${_exhaustive}`);
+    }
+  }
+}
+
+function createBoulderGeometry(seed: number, profile: RockProfile = 'moderate'): THREE.BufferGeometry {
   const geometry = new THREE.IcosahedronGeometry(1, 2);
   const position = geometry.getAttribute('position') as THREE.BufferAttribute;
   const uvs: number[] = [];
@@ -713,8 +768,15 @@ function createBoulderGeometry(seed: number): THREE.BufferGeometry {
       stableSurfaceNoise(point, seed) * 0.28 +
       Math.sin(point.x * 7.1 + point.z * 3.3 + seed) * 0.06;
     point.multiplyScalar(ridge);
-    point.y *= 0.5 + stableSurfaceNoise(point, seed + 4.1) * 0.16;
-    if (point.y < -0.24) point.y = THREE.MathUtils.lerp(point.y, -0.28, 0.58);
+    const ySquash =
+      profile === 'flat'
+        ? 0.46 + stableSurfaceNoise(point, seed + 4.1) * 0.14
+        : profile === 'moderate'
+          ? 0.68 + stableSurfaceNoise(point, seed + 4.1) * 0.16
+          : 0.9 + stableSurfaceNoise(point, seed + 4.1) * 0.18;
+    point.y *= ySquash;
+    const bottomFlatten = profile === 'tall' ? 0.42 : 0.58;
+    if (point.y < -0.24) point.y = THREE.MathUtils.lerp(point.y, -0.28, bottomFlatten);
     position.setXYZ(i, point.x, point.y, point.z);
     uvs.push(Math.atan2(point.z, point.x) / TAU + 0.5, point.y * 0.42 + 0.5);
   }

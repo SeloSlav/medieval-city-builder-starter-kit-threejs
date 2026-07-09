@@ -16,7 +16,7 @@ import {
 
 const TAU = Math.PI * 2;
 
-/** Canopy pines are ~14–18 m; these targets are world-space metres at placement scale 1. */
+/** Canopy pines are ~15–22 m at scale 1, with veterans up to ~38 m in dense stands. */
 const BUSH_TARGET_WIDTH = 1.55;
 const BUSH_TARGET_HEIGHT = 0.95;
 
