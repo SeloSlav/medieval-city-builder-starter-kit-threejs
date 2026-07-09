@@ -105,6 +105,45 @@ export class RiverField {
     return this.layout.isWaterAt(x, z);
   }
 
+  isWetAt(x: number, z: number): boolean {
+    return this.sampleConnectedMask(x, z) >= WATER_THRESHOLD;
+  }
+
+  isOrganicWetAt(x: number, z: number): boolean {
+    return this.sampleOrganicSignedDistance(x, z) >= -0.08;
+  }
+
+  sampleConnectedMask(x: number, z: number): number {
+    return sampleBilinear(this.riverMask, this.resolution, this.worldToGrid(x, z));
+  }
+
+  isRenderedWetAt(x: number, z: number): boolean {
+    const grid = this.worldToGrid(x, z);
+    const ix = Math.round(grid.gx);
+    const iz = Math.round(grid.gz);
+    return this.isRenderedWetAtGrid(ix, iz);
+  }
+
+  isRenderedWetAtGrid(ix: number, iz: number): boolean {
+    if (ix < 0 || iz < 0 || ix >= this.resolution || iz >= this.resolution) return false;
+    const i = iz * this.resolution + ix;
+    const coreWet = this.riverMask[i] >= 0.38;
+    const organicWet = this.organicSignedDistance[i] >= -0.15;
+    return coreWet && organicWet;
+  }
+
+  sampleOrganicSignedDistance(x: number, z: number): number {
+    return sampleBilinear(this.organicSignedDistance, this.resolution, this.worldToGrid(x, z));
+  }
+
+  sampleMudBlendAt(x: number, z: number): number {
+    if (this.isRenderedWetAt(x, z)) return 0;
+    const shore = this.sampleShoreDistance(x, z);
+    const t = clamp01((shore - 0.1) / 9.2);
+    const fade = t * t * (3 - 2 * t);
+    return 1 - fade;
+  }
+
   isBlockedForProps(x: number, z: number, margin = 4.2): boolean {
     if (this.isWaterAt(x, z)) return true;
     return this.sampleShoreDistance(x, z) < margin;
@@ -172,6 +211,10 @@ function computeShoreDistanceField(
   }
 
   return shoreDistance;
+}
+
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
 function sampleBilinear(

@@ -173,6 +173,10 @@ export class RoadTool {
     if (!hit) return;
     event.preventDefault();
     event.stopPropagation();
+    if (this.shouldExitOnInvalidClick()) {
+      this.setEnabled(false);
+      return;
+    }
     this.options.onDeleteRequested(null);
     this.options.selection.setSelected(null);
     this.addRoadPoint(this.applySnap(hit));
@@ -361,6 +365,19 @@ export class RoadTool {
     return null;
   }
 
+  private shouldExitOnInvalidClick(): boolean {
+    const hover = this.getUsableHoverPoint();
+    if (!hover || !this.hasDraft()) return false;
+    const path = this.buildPathFromAnchors(
+      [...this.points, hover],
+      [...this.segmentCurves, this.pendingCurve],
+    );
+    if (path.length < 2) return false;
+    if (this.options.sceneManager.isRoadPathBlocked(path, ROAD_WIDTH)) return true;
+    if (pathLength(path) < MIN_COMMIT_LENGTH) return false;
+    return !this.isPlacementValid(path);
+  }
+
   private isPlacementValid(points: THREE.Vector3[]): boolean {
     if (points.length < 2) return false;
     if (pathLength(points) < MIN_COMMIT_LENGTH) return false;
@@ -369,6 +386,7 @@ export class RoadTool {
       const dy = Math.abs(points[i].y - points[i - 1].y);
       if (dxz > 0.1 && dy / dxz > 0.45) return false;
     }
+    if (this.options.sceneManager.isRoadPathBlocked(points, ROAD_WIDTH)) return false;
     return true;
   }
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createTerrainGrassMaterial } from '../terrain/TerrainGrassMaterial.ts';
+import { createTerrainGrassMaterial, createTerrainGrassMaterialWithRiverShore } from '../terrain/TerrainGrassMaterial.ts';
 import { createRoadCoreMaterial, createRoadEdgeMaterial, createRiverBankMaterial } from './RoadSurfaceMaterial.ts';
 import { RoadTextureLoader, type TerrainBlendTextureSet, type TextureSet } from './RoadTextureLoader.ts';
 import type { MeshStandardNodeMaterial } from 'three/webgpu';
@@ -27,12 +27,12 @@ export class RoadMaterialFactory {
       depthWrite: false,
     });
     this.previewInvalid = new THREE.MeshStandardMaterial({
-      color: 0x968880,
-      emissive: 0x1a1210,
+      color: 0xcc4444,
+      emissive: 0x401010,
       roughness: 0.96,
       metalness: 0,
       transparent: true,
-      opacity: 0.52,
+      opacity: 0.58,
       depthWrite: false,
     });
     this.selection = new THREE.MeshBasicMaterial({
@@ -67,6 +67,11 @@ export class RoadMaterialFactory {
       this.disposeTextureSet(this.terrainBlendTextures.dense);
       this.disposeTextureSet(this.terrainBlendTextures.dry);
     }
+  }
+
+  createTerrainMaterialWithRiverShore(): MeshStandardNodeMaterial {
+    if (!this.roadTextures || !this.terrainBlendTextures) throw new Error('Textures are not loaded.');
+    return createTerrainGrassMaterialWithRiverShore(this.terrainBlendTextures, this.roadTextures);
   }
 
   private createMaterials(): {

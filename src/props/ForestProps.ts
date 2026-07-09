@@ -81,18 +81,21 @@ export function createForestProps(
   const forestCores = createForestCores(rng, spawnConfig);
   const treePlacements = createTreePlacements(rng, forestCores, spawnConfig, isBlockedAt);
   const conifer = createConiferForest(treePlacements, terrain, materials, rng);
+  const rockPlacements = createRockPlacements(rng, forestCores, treePlacements, spawnConfig, isBlockedAt);
 
   forest.add(conifer.group);
   forest.add(
     createRockField(
-      createRockPlacements(rng, forestCores, treePlacements, spawnConfig, isBlockedAt),
+      rockPlacements,
       terrain,
       materials.rock,
+      materials.shadowCast,
+      materials.shadowDepth,
       rng,
     ),
   );
 
-  return new ForestManager(forest, conifer, () => disposeForestMaterials(materials));
+  return new ForestManager(forest, conifer, rockPlacements, () => disposeForestMaterials(materials));
 }
 
 function createPropSpawnConfig(terrain: Terrain): PropSpawnConfig {
@@ -558,7 +561,13 @@ function createConiferForest(
     const height = (13.5 + rng() * 5.2) * placement.scale * heightMul;
     const trunkRadius = (0.28 + rng() * 0.13) * placement.scale * trunkMul;
     const lean = new THREE.Vector3((rng() - 0.5) * 0.045, 1, (rng() - 0.5) * 0.045).normalize();
-    const trunkTop = new THREE.Vector3(placement.x, rootY, placement.z).addScaledVector(lean, height);
+    const lowWhorl = isBroad ? 0.14 : 0.17;
+    const highWhorlSpan = isYoung ? 0.72 : 0.78;
+    const topTierHeight =
+      (2.02 * (1 - (isBroad ? 0.25 : 0.36)) + 0.18) * placement.scale * (isYoung ? 0.82 : 1);
+    const tierApexLocal = 0.44;
+    const trunkHeight = height * (lowWhorl + highWhorlSpan) + tierApexLocal * topTierHeight * 0.72;
+    const trunkTop = new THREE.Vector3(placement.x, rootY, placement.z).addScaledVector(lean, trunkHeight);
     composeBranchMatrix(new THREE.Vector3(placement.x, rootY, placement.z), trunkTop, trunkRadius, matrix, quaternion, scaleVector, position);
     trunkMesh.setMatrixAt(treeIndex, matrix);
     trunkMatrices[treeIndex].copy(matrix);
@@ -570,7 +579,7 @@ function createConiferForest(
 
     for (let i = 0; i < layers; i++) {
       const t = layers > 1 ? i / (layers - 1) : 0;
-      const whorl = (isBroad ? 0.14 : 0.17) + t * (isYoung ? 0.72 : 0.76);
+      const whorl = lowWhorl + t * highWhorlSpan;
       const tierRadius =
         (3.35 * Math.pow(1 - t, isBroad ? 0.98 : 1.16) + (isYoung ? 0.36 : 0.5)) *
         placement.scale *
@@ -711,15 +720,28 @@ function createPineTierGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
+/** Solid dome envelope for boulder shadow proxies — stable ground silhouettes without mesh self-shadow. */
+export function createRockShadowGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.SphereGeometry(1, 10, 6, 0, TAU, 0, Math.PI * 0.52);
+  geometry.scale(1, 0.48, 1);
+  geometry.translate(0, -0.12, 0);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 function createRockField(
   placements: Array<{ x: number; z: number; scale: number }>,
   terrain: Terrain,
   material: THREE.Material,
+  shadowCast: THREE.MeshStandardMaterial,
+  shadowDepth: THREE.MeshDepthMaterial,
   rng: () => number,
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Instanced mossy boulder field';
   const variants = [createBoulderGeometry(1.3), createBoulderGeometry(7.7), createBoulderGeometry(13.2)];
+  const shadowGeometry = createRockShadowGeometry();
   const buckets = variants.map(() => [] as Array<{ x: number; z: number; scale: number }>);
   placements.forEach((placement, index) => buckets[index % buckets.length].push(placement));
   const matrix = new THREE.Matrix4();
@@ -731,8 +753,14 @@ function createRockField(
     if (bucket.length === 0) return;
     const mesh = new THREE.InstancedMesh(variants[variantIndex], material, bucket.length);
     mesh.name = `Instanced mossy boulders ${variantIndex + 1}`;
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
+    const shadowMesh = new THREE.InstancedMesh(shadowGeometry, shadowCast, bucket.length);
+    shadowMesh.name = `Instanced mossy boulder shadows ${variantIndex + 1}`;
+    shadowMesh.layers.set(TREE_SHADOW_CAST_LAYER);
+    shadowMesh.castShadow = true;
+    shadowMesh.receiveShadow = false;
+    shadowMesh.customDepthMaterial = shadowDepth;
     bucket.forEach((rock, rockIndex) => {
       const y = terrain.getHeightAt(rock.x, rock.z);
       position.set(rock.x, y + rock.scale * 0.18, rock.z);
@@ -744,9 +772,11 @@ function createRockField(
       );
       matrix.compose(position, quaternion, scaleVector);
       mesh.setMatrixAt(rockIndex, matrix);
+      shadowMesh.setMatrixAt(rockIndex, matrix);
     });
     mesh.instanceMatrix.needsUpdate = true;
-    group.add(mesh);
+    shadowMesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh, shadowMesh);
   });
 
   return group;

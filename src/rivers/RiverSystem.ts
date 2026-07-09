@@ -1,14 +1,31 @@
 import * as THREE from 'three';
-import type { MeshStandardNodeMaterial } from 'three/webgpu';
 import type { Terrain } from '../terrain/Terrain.ts';
-import { createRiverBankMeshes } from './RiverBankMesh.ts';
 import { RiverField } from './RiverField.ts';
 import { createRiverShoreStones } from './RiverShoreStones.ts';
 import { createRiverWaterMesh, disposeSharedRiverWaterMaterial } from './RiverWaterMesh.ts';
+import type { RockObstacle } from '../utils/pathGeometry.ts';
+
+function createPropShadowMaterials(): {
+  shadowCast: THREE.MeshStandardMaterial;
+  shadowDepth: THREE.MeshDepthMaterial;
+} {
+  return {
+    shadowCast: new THREE.MeshStandardMaterial({
+      transparent: true,
+      opacity: 0,
+      colorWrite: false,
+      depthWrite: false,
+    }),
+    shadowDepth: new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking,
+    }),
+  };
+}
 
 export type RiverSystem = {
   field: RiverField;
   group: THREE.Group;
+  shoreRockPlacements: ReadonlyArray<RockObstacle>;
   isBlockedAt: (x: number, z: number) => boolean;
   tick: (dt: number, timeSec: number) => void;
   dispose: () => void;
@@ -18,16 +35,16 @@ export function createRiverSystem(
   terrain: Terrain,
   riverField: RiverField,
   maxAnisotropy: number,
-  riverBankMaterial: MeshStandardNodeMaterial,
 ): RiverSystem {
   const group = new THREE.Group();
   group.name = 'River system';
 
   const rockMaterial = createRiverRockMaterial(maxAnisotropy);
+  const rockShadowMaterials = createPropShadowMaterials();
   const rng = mulberry32(0x71ee1212);
   const waterController = createRiverWaterMesh(group, terrain, riverField);
-  group.add(createRiverBankMeshes(terrain, riverField.layout, riverBankMaterial));
-  group.add(createRiverShoreStones(terrain, riverField, rockMaterial, rng));
+  const shoreStones = createRiverShoreStones(terrain, riverField, rockMaterial, rockShadowMaterials, rng);
+  group.add(shoreStones.group);
 
   const dispose = () => {
     waterController?.dispose();
@@ -36,11 +53,14 @@ export function createRiverSystem(
     rockMaterial.map?.dispose();
     rockMaterial.normalMap?.dispose();
     rockMaterial.roughnessMap?.dispose();
+    rockShadowMaterials.shadowCast.dispose();
+    rockShadowMaterials.shadowDepth.dispose();
   };
 
   return {
     field: riverField,
     group,
+    shoreRockPlacements: shoreStones.placements,
     isBlockedAt: (x, z) => riverField.isBlockedForProps(x, z),
     tick: (dt, timeSec) => waterController?.tick(dt, timeSec),
     dispose,

@@ -14,6 +14,7 @@ import { SkyCloudMesh } from '../sky/SkyCloudMesh.ts';
 import { Terrain } from '../terrain/Terrain.ts';
 import { TerrainProjector } from '../terrain/TerrainProjector.ts';
 import { disposeObject3D } from '../utils/dispose.ts';
+import { isRockNearPath } from '../utils/pathGeometry.ts';
 import { createPostProcessor, type ScenePostProcessor } from './PostProcessing.ts';
 import { fitDirectionalLightShadow } from './fitDirectionalShadow.ts';
 import { createPreferredRenderer, type RendererBackend, type RendererBackendKind, type SupportedRenderer } from './RendererBackend.ts';
@@ -61,7 +62,7 @@ export class SceneManager {
     const riverLayout = RiverLayout.create({ bounds });
     setActiveRiverLayout(riverLayout);
     const riverField = RiverField.fromLayout({ bounds, layout: riverLayout });
-    this.terrain = new Terrain(materials.terrain);
+    this.terrain = new Terrain(materials.createTerrainMaterialWithRiverShore(), riverField);
     this.terrainProjector = new TerrainProjector(this.terrain, this.camera, this.renderer.domElement);
     this.roadMeshBuilder = new RoadMeshBuilder(this.terrain, materials);
     this.sky = new SkyCloudMesh({
@@ -81,7 +82,7 @@ export class SceneManager {
       heightSegments: 28,
       rendererBackend: backend.kind,
     });
-    this.riverSystem = createRiverSystem(this.terrain, riverField, backend.maxAnisotropy, materials.riverBank);
+    this.riverSystem = createRiverSystem(this.terrain, riverField, backend.maxAnisotropy);
     this.forestManager = createForestProps(this.terrain, backend.maxAnisotropy, {
       isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z),
       rendererBackend: backend.kind,
@@ -144,6 +145,26 @@ export class SceneManager {
       triangles: this.renderer.info.render.triangles,
       pixelRatio: this.renderer.getPixelRatio(),
     };
+  }
+
+  isRoadPathBlocked(path: THREE.Vector3[], roadWidth: number): boolean {
+    if (path.length < 2) return false;
+    const sampled = this.roadMeshBuilder.samplePath(path, 1.25);
+    if (sampled.length < 2) return false;
+
+    for (const point of sampled) {
+      if (this.riverSystem.isBlockedAt(point.x, point.z)) return true;
+    }
+
+    const roadHalfWidth = roadWidth * 0.5;
+    for (const rock of this.forestManager.rockPlacements) {
+      if (isRockNearPath(rock, sampled, roadHalfWidth)) return true;
+    }
+    for (const rock of this.riverSystem.shoreRockPlacements) {
+      if (isRockNearPath(rock, sampled, roadHalfWidth)) return true;
+    }
+
+    return false;
   }
 
   syncRoadNetwork(network: RoadNetwork): void {

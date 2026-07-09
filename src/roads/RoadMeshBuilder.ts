@@ -51,7 +51,7 @@ export class RoadMeshBuilder {
   }
 
   buildPreview(points: THREE.Vector3[], width: number, valid: boolean): THREE.Mesh | null {
-    const sampled = this.samplePoints(points, 1.25);
+    const sampled = this.samplePath(points, 1.25);
     if (sampled.length < 2) return null;
     return this.buildRibbon(sampled, width, valid ? this.materials.previewValid : this.materials.previewInvalid, 0.13, 'preview', false);
   }
@@ -62,6 +62,10 @@ export class RoadMeshBuilder {
     const mesh = this.buildRibbon(path, edge.width + 0.9, this.materials.selection, 0.18, `${edge.id}-selection`, false);
     mesh.renderOrder = 20;
     return mesh;
+  }
+
+  samplePath(points: THREE.Vector3[], spacing: number): THREE.Vector3[] {
+    return this.samplePoints(points, spacing);
   }
 
   private sampleEdge(edge: RoadEdge): THREE.Vector3[] {

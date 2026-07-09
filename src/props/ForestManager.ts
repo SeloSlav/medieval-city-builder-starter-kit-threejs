@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { RoadEdge } from '../roads/RoadEdge.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
+import { distancePointToPolylineXZ, type RockObstacle } from '../utils/pathGeometry.ts';
 
 const ROAD_CLEAR_MARGIN = 1.35;
 
@@ -25,6 +26,7 @@ export type ConiferForestInstances = {
 
 export class ForestManager {
   readonly group: THREE.Group;
+  readonly rockPlacements: ReadonlyArray<RockObstacle>;
   private readonly disposeResources: () => void;
   private readonly placements: TreePlacement[];
   private readonly trunkMesh: THREE.InstancedMesh;
@@ -37,8 +39,14 @@ export class ForestManager {
   private readonly hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
   private removedTrees = new Set<number>();
 
-  constructor(root: THREE.Group, conifer: ConiferForestInstances, disposeResources: () => void) {
+  constructor(
+    root: THREE.Group,
+    conifer: ConiferForestInstances,
+    rockPlacements: ReadonlyArray<RockObstacle>,
+    disposeResources: () => void,
+  ) {
     this.group = root;
+    this.rockPlacements = rockPlacements;
     this.disposeResources = disposeResources;
     this.placements = conifer.placements;
     this.trunkMesh = conifer.trunkMesh;
@@ -118,22 +126,4 @@ function treeClearRadius(placement: TreePlacement, roadWidth: number): number {
         ? 2.3 * placement.scale
         : 3.3 * placement.scale;
   return roadWidth * 0.5 + canopyRadius + ROAD_CLEAR_MARGIN;
-}
-
-function distancePointToPolylineXZ(x: number, z: number, path: THREE.Vector3[]): number {
-  let minDistance = Infinity;
-  for (let i = 0; i < path.length - 1; i++) {
-    minDistance = Math.min(minDistance, distancePointToSegmentXZ(x, z, path[i], path[i + 1]));
-  }
-  return minDistance;
-}
-
-function distancePointToSegmentXZ(x: number, z: number, a: THREE.Vector3, b: THREE.Vector3): number {
-  const abx = b.x - a.x;
-  const abz = b.z - a.z;
-  const lengthSq = abx * abx + abz * abz;
-  const t = lengthSq <= 1e-6 ? 0 : THREE.MathUtils.clamp(((x - a.x) * abx + (z - a.z) * abz) / lengthSq, 0, 1);
-  const px = a.x + abx * t;
-  const pz = a.z + abz * t;
-  return Math.hypot(x - px, z - pz);
 }

@@ -52,6 +52,15 @@ function buildBankOpacityNode(textures: TextureSet): TslNode {
     .mul(float(0.94) as TslNode);
 }
 
+function buildRiverBankOpacityNode(textures: TextureSet): TslNode {
+  const uvNode = uv() as TslNode;
+  const radialFade = pow(smoothstep(float(0.08) as TslNode, float(0.92) as TslNode, uvNode.x), float(0.55) as TslNode) as TslNode;
+  const edgeMaskSample = textures.edgeMask
+    ? (texture(textures.edgeMask, uvNode) as TslNode).r
+    : (float(1) as TslNode);
+  return radialFade.mul(edgeMaskSample).mul(float(0.96) as TslNode);
+}
+
 export function createRoadCoreMaterial(textures: TextureSet): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial();
   material.name = 'Road core';
@@ -98,6 +107,6 @@ export function createRiverBankMaterial(textures: TextureSet): MeshStandardNodeM
   const roughSample = (texture(textures.roughness, uv() as TslNode) as TslNode).r;
   material.roughnessNode = mix(roughSample, float(0.58) as TslNode, float(0.42) as TslNode);
   if (textures.ao) material.aoNode = (texture(textures.ao, uv() as TslNode) as TslNode).r;
-  material.opacityNode = buildBankOpacityNode(textures);
+  material.opacityNode = buildRiverBankOpacityNode(textures);
   return material;
 }

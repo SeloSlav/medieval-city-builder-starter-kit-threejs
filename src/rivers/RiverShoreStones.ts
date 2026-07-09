@@ -1,6 +1,12 @@
 import * as THREE from 'three';
+import { createRockShadowGeometry, TREE_SHADOW_CAST_LAYER } from '../props/ForestProps.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RiverField } from './RiverField.ts';
+
+type RockShadowMaterials = {
+  shadowCast: THREE.MeshStandardMaterial;
+  shadowDepth: THREE.MeshDepthMaterial;
+};
 
 type StonePlacement = {
   x: number;
@@ -14,14 +20,16 @@ export function createRiverShoreStones(
   terrain: Terrain,
   riverField: RiverField,
   material: THREE.Material,
+  shadowMaterials: RockShadowMaterials,
   rng: () => number,
-): THREE.Group {
+): { group: THREE.Group; placements: StonePlacement[] } {
   const group = new THREE.Group();
   group.name = 'River shore stones';
   const placements = createShoreStonePlacements(riverField, rng);
-  if (placements.length === 0) return group;
+  if (placements.length === 0) return { group, placements };
 
   const variants = [createBoulderGeometry(1.3), createBoulderGeometry(7.7), createBoulderGeometry(13.2)];
+  const shadowGeometry = createRockShadowGeometry();
   const buckets = variants.map(() => [] as StonePlacement[]);
   placements.forEach((placement, index) => buckets[index % buckets.length].push(placement));
 
@@ -34,8 +42,14 @@ export function createRiverShoreStones(
     if (bucket.length === 0) return;
     const mesh = new THREE.InstancedMesh(variants[variantIndex], material, bucket.length);
     mesh.name = `River shore boulders ${variantIndex + 1}`;
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
+    const shadowMesh = new THREE.InstancedMesh(shadowGeometry, shadowMaterials.shadowCast, bucket.length);
+    shadowMesh.name = `River shore boulder shadows ${variantIndex + 1}`;
+    shadowMesh.layers.set(TREE_SHADOW_CAST_LAYER);
+    shadowMesh.castShadow = true;
+    shadowMesh.receiveShadow = false;
+    shadowMesh.customDepthMaterial = shadowMaterials.shadowDepth;
     bucket.forEach((rock, rockIndex) => {
       const y = terrain.getHeightAt(rock.x, rock.z);
       position.set(rock.x, y + rock.scale * 0.14, rock.z);
@@ -47,12 +61,14 @@ export function createRiverShoreStones(
       );
       matrix.compose(position, quaternion, scaleVector);
       mesh.setMatrixAt(rockIndex, matrix);
+      shadowMesh.setMatrixAt(rockIndex, matrix);
     });
     mesh.instanceMatrix.needsUpdate = true;
-    group.add(mesh);
+    shadowMesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh, shadowMesh);
   });
 
-  return group;
+  return { group, placements };
 }
 
 function createShoreStonePlacements(riverField: RiverField, rng: () => number): StonePlacement[] {

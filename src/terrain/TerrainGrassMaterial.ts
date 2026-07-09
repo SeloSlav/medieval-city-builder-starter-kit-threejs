@@ -1,5 +1,6 @@
 import { MeshStandardNodeMaterial } from 'three/webgpu';
-import { float, max, normalMap, texture, uv, vertexColor } from 'three/tsl';
+import { attribute, float, max, mix, normalMap, pow, texture, uv, vec3, vertexColor } from 'three/tsl';
+import type { TextureSet } from '../roads/RoadTextureLoader.ts';
 import type { TerrainBlendTextureSet } from '../roads/RoadTextureLoader.ts';
 
 type TslNode = {
@@ -7,6 +8,8 @@ type TslNode = {
   div(value: TslNode): TslNode;
   mul(value: TslNode): TslNode;
   r: TslNode;
+  g: TslNode;
+  b: TslNode;
   rgb: TslNode;
   xyz: TslNode;
   x: TslNode;
@@ -44,7 +47,22 @@ function buildGrassBlendNodes(textures: TerrainBlendTextureSet) {
   const dryAo = (texture(textures.dry.ao!, grassUv) as TslNode).r;
   const aoNode = meadowAo.mul(w.x).add(denseAo.mul(w.y)).add(dryAo.mul(w.z));
 
-  return { colorNode, normalNode, roughnessNode, aoNode };
+  return { colorNode, normalNode, roughnessNode, aoNode, grassUv };
+}
+
+function buildMuddyRoadColorNode(textures: TextureSet, grassUv: TslNode): TslNode {
+  const sample = texture(textures.albedo, grassUv) as TslNode;
+  const luminance = sample.r
+    .mul(float(0.299) as TslNode)
+    .add(sample.g.mul(float(0.587) as TslNode))
+    .add(sample.b.mul(float(0.114) as TslNode));
+  const desaturated = mix(
+    sample.rgb,
+    vec3(luminance, luminance, luminance) as TslNode,
+    float(0.34) as TslNode,
+  ) as TslNode;
+  const warmTint = desaturated.mul(vec3(0.72, 0.54, 0.38) as TslNode);
+  return warmTint.mul(float(0.86) as TslNode);
 }
 
 export function createTerrainGrassMaterial(textures: TerrainBlendTextureSet): MeshStandardNodeMaterial {
@@ -57,6 +75,31 @@ export function createTerrainGrassMaterial(textures: TerrainBlendTextureSet): Me
   material.colorNode = blendNodes.colorNode;
   material.normalNode = blendNodes.normalNode;
   material.roughnessNode = blendNodes.roughnessNode;
+  material.aoNode = blendNodes.aoNode;
+  return material;
+}
+
+export function createTerrainGrassMaterialWithRiverShore(
+  grassTextures: TerrainBlendTextureSet,
+  roadTextures: TextureSet,
+): MeshStandardNodeMaterial {
+  const blendNodes = buildGrassBlendNodes(grassTextures);
+  const mudColor = buildMuddyRoadColorNode(roadTextures, blendNodes.grassUv);
+  const shoreBlend = pow(attribute('shoreBlend', 'float') as TslNode, float(0.82) as TslNode) as TslNode;
+  const colorNode = mix(blendNodes.colorNode, mudColor, shoreBlend) as TslNode;
+
+  const roadRoughness = (texture(roadTextures.roughness, blendNodes.grassUv) as TslNode).r;
+  const muddyRoughness = mix(roadRoughness, float(0.58) as TslNode, float(0.42) as TslNode);
+  const roughnessNode = mix(blendNodes.roughnessNode, muddyRoughness, shoreBlend);
+
+  const material = new MeshStandardNodeMaterial();
+  material.name = 'Grass blend terrain with river shore';
+  material.color.set(0xffffff);
+  material.roughness = 1;
+  material.metalness = 0;
+  material.colorNode = colorNode;
+  material.normalNode = blendNodes.normalNode;
+  material.roughnessNode = roughnessNode;
   material.aoNode = blendNodes.aoNode;
   return material;
 }

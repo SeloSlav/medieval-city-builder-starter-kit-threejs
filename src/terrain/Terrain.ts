@@ -1,4 +1,5 @@
 ﻿import * as THREE from 'three';
+import type { RiverField } from '../rivers/RiverField.ts';
 import { sampleBaseTerrainHeight } from './TerrainHeight.ts';
 
 export type TerrainBounds = {
@@ -15,10 +16,10 @@ export class Terrain {
   readonly bounds: TerrainBounds;
   readonly mesh: THREE.Mesh;
 
-  constructor(material: THREE.Material) {
+  constructor(material: THREE.Material, riverField?: RiverField) {
     const half = this.playableSize * 0.5;
     this.bounds = { minX: -half, maxX: half, minZ: -half, maxZ: half };
-    this.mesh = new THREE.Mesh(this.createGeometry(), material);
+    this.mesh = new THREE.Mesh(this.createGeometry(riverField), material);
     this.mesh.name = 'Continuous terrain heightfield';
     this.mesh.receiveShadow = true;
     this.mesh.userData.terrain = true;
@@ -41,12 +42,14 @@ export class Terrain {
 
   dispose(): void {
     this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
   }
 
-  private createGeometry(): THREE.BufferGeometry {
+  private createGeometry(riverField?: RiverField): THREE.BufferGeometry {
     const positions: number[] = [];
     const uvs: number[] = [];
     const colors: number[] = [];
+    const shoreBlends: number[] = [];
     const indices: number[] = [];
     const step = this.size / (this.resolution - 1);
     const half = this.size * 0.5;
@@ -59,6 +62,7 @@ export class Terrain {
         const uv = this.getTerrainUv(x, z);
         uvs.push(uv.x, uv.y);
         colors.push(...this.getTerrainBlendWeights(x, z));
+        shoreBlends.push(riverField?.sampleMudBlendAt(x, z) ?? 0);
       }
     }
 
@@ -78,6 +82,7 @@ export class Terrain {
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('shoreBlend', new THREE.Float32BufferAttribute(shoreBlends, 1));
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
     return geometry;
