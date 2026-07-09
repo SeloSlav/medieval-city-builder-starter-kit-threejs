@@ -13,7 +13,7 @@ import {
   vec3,
   vertexColor,
 } from 'three/tsl';
-import { GRASS_LOD, grassCameraDistance } from '../grass/GrassLodConfig.ts';
+import { grassCameraDistance, TERRAIN_DIRT_LOD } from '../grass/GrassLodConfig.ts';
 import type { TextureSet } from '../roads/RoadTextureLoader.ts';
 import type { TerrainBlendTextureSet } from '../roads/RoadTextureLoader.ts';
 
@@ -61,36 +61,7 @@ function buildGrassBlendNodes(textures: TerrainBlendTextureSet) {
   const dryAo = (texture(textures.dry.ao!, grassUv) as TslNode).r;
   const aoNode = meadowAo.mul(w.x).add(denseAo.mul(w.y)).add(dryAo.mul(w.z));
 
-  return { colorNode, normalNode, roughnessNode, aoNode, grassUv, weights: w };
-}
-
-function buildFarGrassLodColorNode(
-  nearColor: TslNode,
-  grassUv: TslNode,
-  weights: TslNode,
-  farTextures: TextureSet,
-  shoreBlend: TslNode,
-  roadWear: TslNode,
-): TslNode {
-  const lodBlend = smoothstep(
-    float(GRASS_LOD.near) as TslNode,
-    float(GRASS_LOD.far) as TslNode,
-    grassCameraDistance as unknown as TslNode,
-  ) as TslNode;
-
-  const farColor = (texture(farTextures.albedo, grassUv) as TslNode).rgb;
-
-  // Keep worn shore and road patches brown; dry grass stays patchier at distance.
-  const wornMask = max(shoreBlend, roadWear) as TslNode;
-  const meadowWeight = weights.x as TslNode;
-  const dryWeight = weights.z as TslNode;
-  const grassMask = sub(
-    float(1) as TslNode,
-    max(wornMask, dryWeight.mul(float(0.72) as TslNode) as TslNode) as TslNode,
-  ) as TslNode;
-  const effectiveLod = lodBlend.mul(grassMask).mul(mix(float(0.55) as TslNode, float(1) as TslNode, meadowWeight) as TslNode) as TslNode;
-
-  return mix(nearColor, farColor, effectiveLod) as TslNode;
+  return { colorNode, normalNode, roughnessNode, aoNode, grassUv };
 }
 
 function buildMuddyRoadColorNode(textures: TextureSet, grassUv: TslNode): TslNode {
@@ -106,6 +77,30 @@ function buildMuddyRoadColorNode(textures: TextureSet, grassUv: TslNode): TslNod
   ) as TslNode;
   const warmTint = desaturated.mul(vec3(0.72, 0.54, 0.38) as TslNode);
   return warmTint.mul(float(0.86) as TslNode);
+}
+
+function buildDirtGroundColorNode(textures: TextureSet, grassUv: TslNode): TslNode {
+  const sample = texture(textures.albedo, grassUv) as TslNode;
+  return sample.rgb.mul(vec3(0.52, 0.42, 0.3) as TslNode);
+}
+
+function applyCloseZoomDirtBlend(
+  meadowColor: TslNode,
+  dirtColor: TslNode,
+  shoreBlend: TslNode,
+  roadWear: TslNode,
+): TslNode {
+  const meadowWeight = pow(
+    smoothstep(
+      float(TERRAIN_DIRT_LOD.close) as TslNode,
+      float(TERRAIN_DIRT_LOD.far) as TslNode,
+      grassCameraDistance as unknown as TslNode,
+    ) as TslNode,
+    float(TERRAIN_DIRT_LOD.ease) as TslNode,
+  ) as TslNode;
+  const wornMask = max(shoreBlend, roadWear) as TslNode;
+  const openGround = sub(float(1) as TslNode, wornMask) as TslNode;
+  return mix(dirtColor, meadowColor, meadowWeight.mul(openGround)) as TslNode;
 }
 
 export function createTerrainGrassMaterial(textures: TerrainBlendTextureSet): MeshStandardNodeMaterial {
@@ -140,30 +135,33 @@ function buildTrampledWearColorNode(textures: TextureSet, grassUv: TslNode): Tsl
 export function createTerrainGrassMaterialWithRiverShore(
   grassTextures: TerrainBlendTextureSet,
   roadTextures: TextureSet,
-  farGrassTextures: TextureSet,
 ): MeshStandardNodeMaterial {
   const blendNodes = buildGrassBlendNodes(grassTextures);
   const mudColor = buildMuddyRoadColorNode(roadTextures, blendNodes.grassUv);
+  const dirtColor = buildDirtGroundColorNode(roadTextures, blendNodes.grassUv);
   const wearColor = buildTrampledWearColorNode(roadTextures, blendNodes.grassUv);
   const shoreBlend = pow(attribute('shoreBlend', 'float') as TslNode, float(0.82) as TslNode) as TslNode;
   const roadWear = pow(attribute('roadWearBlend', 'float') as TslNode, float(0.78) as TslNode) as TslNode;
   const grassWithShore = mix(blendNodes.colorNode, mudColor, shoreBlend) as TslNode;
-  const nearColor = mix(grassWithShore, wearColor, roadWear) as TslNode;
+  const meadowWithWear = mix(grassWithShore, wearColor, roadWear) as TslNode;
+  const colorNode = applyCloseZoomDirtBlend(meadowWithWear, dirtColor, shoreBlend, roadWear);
 
   const roadRoughness = (texture(roadTextures.roughness, blendNodes.grassUv) as TslNode).r;
   const muddyRoughness = mix(roadRoughness, float(0.58) as TslNode, float(0.42) as TslNode);
   const wornRoughness = mix(roadRoughness, float(0.72) as TslNode, float(0.38) as TslNode);
+  const dirtRoughness = mix(roadRoughness, float(0.82) as TslNode, float(0.24) as TslNode);
   const roughnessWithShore = mix(blendNodes.roughnessNode, muddyRoughness, shoreBlend);
-  const roughnessNode = mix(roughnessWithShore, wornRoughness, roadWear);
-
-  const colorNode = buildFarGrassLodColorNode(
-    nearColor,
-    blendNodes.grassUv,
-    blendNodes.weights,
-    farGrassTextures,
-    shoreBlend,
-    roadWear,
-  );
+  const roughnessWithWear = mix(roughnessWithShore, wornRoughness, roadWear);
+  const meadowRoughness = pow(
+    smoothstep(
+      float(TERRAIN_DIRT_LOD.close) as TslNode,
+      float(TERRAIN_DIRT_LOD.far) as TslNode,
+      grassCameraDistance as unknown as TslNode,
+    ) as TslNode,
+    float(TERRAIN_DIRT_LOD.ease) as TslNode,
+  ) as TslNode;
+  const openGround = sub(float(1) as TslNode, max(shoreBlend, roadWear) as TslNode) as TslNode;
+  const roughnessNode = mix(dirtRoughness, roughnessWithWear, meadowRoughness.mul(openGround));
 
   const material = new MeshStandardNodeMaterial();
   material.name = 'Grass blend terrain with river shore';

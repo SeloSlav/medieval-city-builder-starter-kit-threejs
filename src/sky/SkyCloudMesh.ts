@@ -12,6 +12,7 @@ type SkyCloudOptions = {
   maxCloudDistance?: number;
   mieCoefficient?: number;
   mieDirectionalG?: number;
+  perlinTexture?: THREE.Texture;
   radius?: number;
   rayleigh?: number;
   rendererBackend?: RendererBackendKind;
@@ -57,6 +58,24 @@ const DEFAULTS = {
 
 const WEBGL_PERLIN_TEXTURE_URL = new URL('../../vendor/sky-cloud-3d/perlin256.png', import.meta.url).href;
 
+export function configureSkyPerlinTexture(texture: THREE.Texture): THREE.Texture {
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.flipY = false;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+export async function loadSkyPerlinTexture(): Promise<THREE.Texture> {
+  const loader = new THREE.TextureLoader();
+  const texture = await loader.loadAsync(WEBGL_PERLIN_TEXTURE_URL);
+  return configureSkyPerlinTexture(texture);
+}
+
 /**
  * Thin app wrapper around the actual sky-cloud-3d volumetric package.
  * WebGPU uses the package's TSL/NodeMaterial path; WebGL uses its shader fallback.
@@ -73,7 +92,8 @@ export class SkyCloudMesh extends THREE.Group {
     const NativeSky = rendererBackend === 'webgpu' ? WebGPUSkyCloudMesh : WebGLSkyCloudMesh;
     const nativeOptions = {
       ...config,
-      perlinTextureUrl: WEBGL_PERLIN_TEXTURE_URL,
+      perlinTexture: config.perlinTexture,
+      perlinTextureUrl: config.perlinTexture ? undefined : WEBGL_PERLIN_TEXTURE_URL,
     };
     const nativeSky = new NativeSky(nativeOptions) as SkyCloudNativeMesh;
     nativeSky.name = rendererBackend === 'webgpu' ? 'sky-cloud-3d WebGPU volumetric sky' : 'sky-cloud-3d WebGL volumetric sky';

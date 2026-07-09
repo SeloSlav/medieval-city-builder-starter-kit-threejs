@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Terrain } from '../terrain/Terrain.ts';
-import { TREE_SHADOW_CAST_LAYER } from './ForestProps.ts';
+import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import type { RendererBackendKind } from '../scene/RendererBackend.ts';
 import {
   CENTRAL_CLEARING_RADIUS,

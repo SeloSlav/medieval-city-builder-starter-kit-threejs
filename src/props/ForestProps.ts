@@ -18,13 +18,6 @@ import {
   samplePointInPlayableExtent,
   type ForestCore,
 } from './forestField.ts';
-import {
-  buildUndergrowthInstances,
-  createUndergrowthMaterials,
-  createUndergrowthPlacements,
-  disposeUndergrowthInstances,
-} from './ForestUndergrowth.ts';
-
 type ForestMaterialSet = {
   bark: THREE.MeshStandardMaterial;
   needles: THREE.MeshStandardMaterial[];
@@ -55,26 +48,27 @@ type RockOutcrop = {
   strength: number;
 };
 
+import { loadMossyRockTextures, loadPineFoliageTextures } from '../utils/propTextureLoad.ts';
+import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
+
 const UP = new THREE.Vector3(0, 1, 0);
 const TAU = Math.PI * 2;
-/** Layer used for invisible tree shadow proxies — hidden from the main camera, visible to the shadow map. */
-export const TREE_SHADOW_CAST_LAYER = 1;
 
 export type ForestPropsOptions = {
   isBlockedAt?: (x: number, z: number) => boolean;
   rendererBackend?: RendererBackendKind;
 };
 
-export function createForestProps(
+export async function createForestProps(
   terrain: Terrain,
   maxAnisotropy: number,
   options?: ForestPropsOptions,
-): ForestManager {
+): Promise<ForestManager> {
   const rng = mulberry32(0x5eedf0a5);
   const spawnConfig = createForestSpawnConfig(terrain.playableSize);
   const isBlockedAt = options?.isBlockedAt;
   const enableTreeShadowFilter = options?.rendererBackend !== 'webgpu';
-  const materials = createForestMaterials(maxAnisotropy, enableTreeShadowFilter);
+  const materials = await createForestMaterials(maxAnisotropy, enableTreeShadowFilter);
   const forest = new THREE.Group();
   forest.name = 'Road-scale forest props';
   const forestCores = createForestCores(rng, spawnConfig);
@@ -83,12 +77,8 @@ export function createForestProps(
   const allTreePlacements = [...treePlacements, ...saplingPlacements];
   const conifer = createConiferForest(allTreePlacements, terrain, materials, rng);
   const rockPlacements = createRockPlacements(rng, forestCores, allTreePlacements, spawnConfig, isBlockedAt);
-  const undergrowthPlacements = createUndergrowthPlacements(rng, forestCores, spawnConfig, isBlockedAt);
-  const undergrowthMaterials = createUndergrowthMaterials(maxAnisotropy, options?.rendererBackend, materials.textures);
-  const undergrowth = buildUndergrowthInstances(undergrowthPlacements, terrain, undergrowthMaterials, rng);
 
   forest.add(conifer.group);
-  forest.add(undergrowth.group);
   forest.add(
     createRockField(
       rockPlacements,
@@ -104,12 +94,11 @@ export function createForestProps(
     forest,
     conifer,
     rockPlacements,
-    undergrowth,
-    undergrowthPlacements,
+    null,
+    [],
     terrain,
     () => {
       disposeForestMaterials(materials);
-      disposeUndergrowthInstances(undergrowth, undergrowthMaterials);
     },
   );
 }
@@ -154,7 +143,7 @@ function createTreePlacements(
       form === 'broad'
         ? THREE.MathUtils.lerp(1.02, 1.62, Math.pow(rng(), 0.78)) * THREE.MathUtils.lerp(1.08, 0.94, density)
         : form === 'young'
-          ? THREE.MathUtils.lerp(0.54, 0.92, Math.pow(rng(), 0.7))
+          ? THREE.MathUtils.lerp(0.64, 0.92, Math.pow(rng(), 0.7))
           : THREE.MathUtils.lerp(0.82, 1.42, Math.pow(rng(), 0.7)) * THREE.MathUtils.lerp(1.04, 0.92, density);
 
     if (isTreePlacementBlocked(x, z, form, scale, isBlockedAt)) continue;
@@ -195,34 +184,22 @@ function createSaplingPlacements(
       x,
       z,
       form: 'midstory',
-      scale: THREE.MathUtils.lerp(0.72, 1.18, Math.pow(rng(), 0.82)),
+      scale: THREE.MathUtils.lerp(0.84, 1.18, Math.pow(rng(), 0.82)),
     });
   }
 
   return placements;
 }
 
-function createForestMaterials(maxAnisotropy: number, enableTreeShadowFilter: boolean): ForestMaterialSet {
-  const loader = new THREE.TextureLoader();
-  const textures: THREE.Texture[] = [];
-  const loadMap = (url: string, srgb = false, anisotropyLimit = 16): THREE.Texture => {
-    const texture = loader.load(url);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = Math.max(1, Math.min(anisotropyLimit, maxAnisotropy));
-    if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    textures.push(texture);
-    return texture;
-  };
+async function createForestMaterials(maxAnisotropy: number, enableTreeShadowFilter: boolean): Promise<ForestMaterialSet> {
+  const [rockTextures, foliageTextures] = await Promise.all([
+    loadMossyRockTextures(maxAnisotropy),
+    loadPineFoliageTextures(maxAnisotropy),
+  ]);
+  const textures: THREE.Texture[] = [rockTextures.map, rockTextures.normalMap, rockTextures.roughnessMap];
 
   const barkMap = createPineBarkTexture(maxAnisotropy);
-  const needleMap = loadMap('/assets/textures/props/pine_foliage/albedo.png', true, 4);
-  const needleRoughnessMap = loadMap('/assets/textures/props/pine_foliage/roughness.png', false, 4);
-  textures.push(barkMap);
+  textures.push(barkMap, foliageTextures.needleMap, foliageTextures.needleRoughnessMap);
 
   const bark = new THREE.MeshStandardMaterial({
     map: barkMap,
@@ -232,9 +209,9 @@ function createForestMaterials(maxAnisotropy: number, enableTreeShadowFilter: bo
   });
 
   const rock = new THREE.MeshStandardMaterial({
-    map: loadMap('/assets/textures/props/mossy_rock/albedo.png', true),
-    normalMap: loadMap('/assets/textures/props/mossy_rock/normal.png'),
-    roughnessMap: loadMap('/assets/textures/props/mossy_rock/roughness.png'),
+    map: rockTextures.map,
+    normalMap: rockTextures.normalMap,
+    roughnessMap: rockTextures.roughnessMap,
     color: 0xb6b3a4,
     roughness: 0.9,
     metalness: 0,
@@ -243,8 +220,8 @@ function createForestMaterials(maxAnisotropy: number, enableTreeShadowFilter: bo
 
   const needles = [
     new THREE.MeshStandardMaterial({
-      map: needleMap,
-      roughnessMap: needleRoughnessMap,
+      map: foliageTextures.needleMap,
+      roughnessMap: foliageTextures.needleRoughnessMap,
       color: 0xffffff,
       roughness: 0.98,
       metalness: 0,
@@ -497,14 +474,14 @@ function createConiferForest(
     const spreadMul = isBroad ? 1.48 : isYoung ? 0.74 : isMidstory ? 0.9 : 1.06;
     const trunkMul = isBroad ? 1.2 : isYoung || isMidstory ? 0.68 : 1;
     const height = isMidstory
-      ? (3.6 + rng() * 2.6) * placement.scale
+      ? (4.2 + rng() * 2.4) * placement.scale
       : (13.5 + rng() * 5.2) * placement.scale * heightMul;
     const trunkRadius = (0.28 + rng() * 0.13) * placement.scale * trunkMul;
     const lean = new THREE.Vector3((rng() - 0.5) * 0.045, 1, (rng() - 0.5) * 0.045).normalize();
-    const lowWhorl = isBroad ? 0.14 : isMidstory ? 0.18 : 0.17;
-    const highWhorlSpan = isYoung || isMidstory ? 0.72 : 0.78;
+    const lowWhorl = isBroad ? 0.14 : isMidstory ? 0.3 : isYoung ? 0.24 : 0.17;
+    const highWhorlSpan = isYoung || isMidstory ? 0.68 : 0.78;
     const topTierHeight =
-      (2.02 * (1 - (isBroad ? 0.25 : 0.36)) + 0.18) * placement.scale * (isYoung || isMidstory ? 0.82 : 1);
+      (2.02 * (1 - (isBroad ? 0.25 : 0.36)) + 0.18) * placement.scale * (isYoung || isMidstory ? 0.74 : 1);
     const tierApexLocal = 0.44;
     const trunkHeight = height * (lowWhorl + highWhorlSpan) + tierApexLocal * topTierHeight * 0.72;
     const trunkTop = new THREE.Vector3(placement.x, rootY, placement.z).addScaledVector(lean, trunkHeight);
@@ -526,7 +503,7 @@ function createConiferForest(
         spreadMul *
         (0.94 + rng() * 0.12);
       const tierHeight =
-        (2.02 * (1 - t * (isBroad ? 0.25 : 0.36)) + 0.18) * placement.scale * (isYoung || isMidstory ? 0.82 : 1);
+        (2.02 * (1 - t * (isBroad ? 0.25 : 0.36)) + 0.18) * placement.scale * (isYoung || isMidstory ? 0.74 : 1);
       const sway = (1 - t) * (isBroad ? 0.42 : 0.5);
       position.set(
         placement.x + lean.x * height * whorl + Math.cos(yawOffset + i * 1.74) * sway * rng(),

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { createRockShadowGeometry, TREE_SHADOW_CAST_LAYER } from '../props/ForestProps.ts';
+import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
+import { createRockShadowGeometry } from '../props/ForestProps.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RiverField } from './RiverField.ts';
 

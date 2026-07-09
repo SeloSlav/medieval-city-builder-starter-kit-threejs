@@ -1,24 +1,34 @@
 ﻿import * as THREE from 'three';
 import type { TerrainBounds } from '../terrain/Terrain.ts';
 import {
-  DEFAULT_ZOOM01,
+  CLOSE_FOV,
+  DEFAULT_FOV,
   MIN_CAMERA_TERRAIN_CLEARANCE,
-  evalCameraRigPose,
-  zoom01ToPercent,
+  CLOSE_BACK_DISTANCE,
+  CLOSE_HEIGHT_ABOVE_TERRAIN,
+  CLOSE_LOOK_AHEAD,
+  CLOSE_LOOK_HEIGHT_OFFSET,
+  CLOSE_PAN_SPEED_SCALE,
+  evalCloseBlendFromDistance,
 } from './CameraCurves.ts';
 
+const DEFAULT_PITCH = THREE.MathUtils.degToRad(7);
+const MIN_PITCH = THREE.MathUtils.degToRad(5);
+const MAX_PITCH = THREE.MathUtils.degToRad(70);
+const DEFAULT_DISTANCE = 88;
+const BASELINE_ZOOM_PERCENT = 100;
+const MAX_ZOOM_PERCENT = 1000;
+const MIN_DISTANCE = DEFAULT_DISTANCE / (MAX_ZOOM_PERCENT / BASELINE_ZOOM_PERCENT);
+const MAX_DISTANCE = 300;
+const ZOOM_MULTIPLIER = 1.18;
 const PAN_LERP_SPEED = 10;
 const ROTATE_LERP_SPEED = 12;
 const ZOOM_LERP_SPEED = 12;
 const ROTATE_SENSITIVITY = 0.005;
-const PITCH_OFFSET_SENSITIVITY = 0.003;
-const MAX_PITCH_OFFSET = THREE.MathUtils.degToRad(12);
+const PITCH_SENSITIVITY = 0.004;
 const RMB_PAN_MULTIPLIER = 0.105;
 const KEY_PAN_SPEED = 34;
 const KEY_ROTATE_SPEED = 2.8;
-const WHEEL_ZOOM_STEP = 0.045;
-const CURSOR_ANCHOR_STRENGTH = 2.8;
-const HORIZONTAL_WHEEL_PAN = 0.03;
 
 export type CameraControllerConfig = {
   camera: THREE.PerspectiveCamera;
@@ -26,30 +36,24 @@ export type CameraControllerConfig = {
   domElement: HTMLElement;
   bounds: TerrainBounds;
   getHeightAt: (x: number, z: number) => number;
-  pickAtScreen?: (clientX: number, clientY: number) => THREE.Vector3 | null;
   getCursorOverride?: () => string | null;
   shouldIgnoreInput?: (event: MouseEvent | WheelEvent) => boolean;
 };
 
-/**
- * Manor Lords-style camera rig: orbits a terrain target at far/mid zoom, then
- * blends into a low ground-eye perspective when zoomed close.
- */
 export class CameraController {
   private readonly config: CameraControllerConfig;
+  private currentDistance = DEFAULT_DISTANCE;
+  private targetDistance = DEFAULT_DISTANCE;
+  private currentYaw = -Math.PI / 2;
+  private targetYaw = -Math.PI / 2;
+  private currentPitch = DEFAULT_PITCH;
+  private targetPitch = DEFAULT_PITCH;
   private readonly desiredTarget = new THREE.Vector3();
   private readonly orbitPosition = new THREE.Vector3();
+  private readonly orbitDirection = new THREE.Vector3();
   private readonly closePosition = new THREE.Vector3();
   private readonly lookAtPoint = new THREE.Vector3();
   private readonly forward = new THREE.Vector3();
-  private readonly orbitDirection = new THREE.Vector3();
-
-  private currentZoom01 = DEFAULT_ZOOM01;
-  private targetZoom01 = DEFAULT_ZOOM01;
-  private currentYaw = -Math.PI / 2;
-  private targetYaw = -Math.PI / 2;
-  private pitchOffset = 0;
-  private targetPitchOffset = 0;
   private readonly keys = new Set<string>();
   private isPanning = false;
   private isRotating = false;
@@ -71,12 +75,16 @@ export class CameraController {
   }
 
   getZoomPercent(): number {
-    return zoom01ToPercent(this.currentZoom01);
+    return (DEFAULT_DISTANCE / this.currentDistance) * BASELINE_ZOOM_PERCENT;
+  }
+
+  getOrbitDistance(): number {
+    return this.currentDistance;
   }
 
   update(dt: number): void {
-    const pose = evalCameraRigPose(this.currentZoom01);
-    const panSpeed = KEY_PAN_SPEED * pose.panSpeed * dt;
+    const scale = this.getPanScale();
+    const panSpeed = KEY_PAN_SPEED * scale * dt;
     if (this.keys.has('w') || this.keys.has('arrowup')) this.pan(0, panSpeed);
     if (this.keys.has('s') || this.keys.has('arrowdown')) this.pan(0, -panSpeed);
     if (this.keys.has('a') || this.keys.has('arrowleft')) this.pan(panSpeed, 0);
@@ -87,14 +95,11 @@ export class CameraController {
     const panLerp = 1 - Math.exp(-PAN_LERP_SPEED * dt);
     const rotLerp = 1 - Math.exp(-ROTATE_LERP_SPEED * dt);
     const zoomLerp = 1 - Math.exp(-ZOOM_LERP_SPEED * dt);
-
     this.config.target.lerp(this.desiredTarget, panLerp);
     this.config.target.y = this.config.getHeightAt(this.config.target.x, this.config.target.z);
-
     this.currentYaw = this.normalizeAngle(this.currentYaw + this.normalizeAngle(this.targetYaw - this.currentYaw) * rotLerp);
-    this.pitchOffset += (this.targetPitchOffset - this.pitchOffset) * rotLerp;
-    this.currentZoom01 += (this.targetZoom01 - this.currentZoom01) * zoomLerp;
-
+    this.currentPitch += (this.targetPitch - this.currentPitch) * rotLerp;
+    this.currentDistance += (this.targetDistance - this.currentDistance) * zoomLerp;
     this.updateCamera();
     this.applyCursor();
   }
@@ -134,9 +139,8 @@ export class CameraController {
         this.isPanning = false;
         return;
       }
-      const scale = this.getPanScale();
-      const dx = (event.clientX - this.lastMouseX) * RMB_PAN_MULTIPLIER * scale;
-      const dy = (event.clientY - this.lastMouseY) * RMB_PAN_MULTIPLIER * scale;
+      const dx = (event.clientX - this.lastMouseX) * RMB_PAN_MULTIPLIER * this.getPanScale();
+      const dy = (event.clientY - this.lastMouseY) * RMB_PAN_MULTIPLIER * this.getPanScale();
       this.lastMouseX = event.clientX;
       this.lastMouseY = event.clientY;
       this.pan(dx, dy);
@@ -150,13 +154,8 @@ export class CameraController {
       this.lastMouseX = event.clientX;
       this.lastMouseY = event.clientY;
       this.targetYaw = this.normalizeAngle(this.targetYaw - dx * ROTATE_SENSITIVITY);
-      const closeBlend = evalCameraRigPose(this.currentZoom01).closeBlend;
-      const pitchScale = 1 - closeBlend;
-      this.targetPitchOffset = THREE.MathUtils.clamp(
-        this.targetPitchOffset + dy * PITCH_OFFSET_SENSITIVITY * pitchScale,
-        -MAX_PITCH_OFFSET,
-        MAX_PITCH_OFFSET,
-      );
+      this.targetPitch = THREE.MathUtils.clamp(this.targetPitch + dy * PITCH_SENSITIVITY, MIN_PITCH, MAX_PITCH);
+      this.targetDistance = this.clampDistance(this.targetDistance);
     }
   };
 
@@ -170,10 +169,10 @@ export class CameraController {
     event.preventDefault();
     if (event.deltaY !== 0) {
       const steps = Math.max(1, Math.floor(Math.abs(event.deltaY) / 80));
-      const direction = event.deltaY < 0 ? 1 : -1;
-      for (let i = 0; i < steps; i++) this.applyZoomStep(direction, event.clientX, event.clientY);
+      const factor = event.deltaY > 0 ? ZOOM_MULTIPLIER : 1 / ZOOM_MULTIPLIER;
+      for (let i = 0; i < steps; i++) this.targetDistance = this.clampDistance(this.targetDistance * factor);
     }
-    if (event.deltaX !== 0) this.pan(event.deltaX * HORIZONTAL_WHEEL_PAN, 0);
+    if (event.deltaX !== 0) this.pan(event.deltaX * 0.03, 0);
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -191,21 +190,6 @@ export class CameraController {
 
   private readonly onContextMenu = (event: Event): void => event.preventDefault();
 
-  private applyZoomStep(direction: 1 | -1, clientX: number, clientY: number): void {
-    const beforeZoom = this.targetZoom01;
-    this.targetZoom01 = THREE.MathUtils.clamp(this.targetZoom01 + direction * WHEEL_ZOOM_STEP, 0, 1);
-    const zoomDelta = this.targetZoom01 - beforeZoom;
-    if (zoomDelta === 0) return;
-
-    const pick = this.config.pickAtScreen?.(clientX, clientY);
-    if (pick) {
-      const anchorT = Math.abs(zoomDelta) * CURSOR_ANCHOR_STRENGTH;
-      this.desiredTarget.x += (pick.x - this.desiredTarget.x) * anchorT;
-      this.desiredTarget.z += (pick.z - this.desiredTarget.z) * anchorT;
-      this.clampTarget();
-    }
-  }
-
   private pan(dx: number, dy: number): void {
     const rightX = -Math.sin(this.currentYaw);
     const rightZ = Math.cos(this.currentYaw);
@@ -216,8 +200,23 @@ export class CameraController {
     this.clampTarget();
   }
 
+  private getMinDistance(): number {
+    return MIN_DISTANCE + Math.max(0, this.config.getHeightAt(this.config.target.x, this.config.target.z)) * 0.08;
+  }
+
+  private getCloseBlend(): number {
+    return evalCloseBlendFromDistance(this.currentDistance, this.getMinDistance());
+  }
+
   private getPanScale(): number {
-    return evalCameraRigPose(this.currentZoom01).panSpeed;
+    const ratio = this.currentDistance / 48;
+    const base = THREE.MathUtils.clamp(ratio * ratio * 1.8, 0.55, 18);
+    const closeBlend = this.getCloseBlend();
+    return THREE.MathUtils.lerp(base, base * CLOSE_PAN_SPEED_SCALE, closeBlend);
+  }
+
+  private clampDistance(value: number): number {
+    return THREE.MathUtils.clamp(value, this.getMinDistance(), MAX_DISTANCE);
   }
 
   private clampTarget(): void {
@@ -233,37 +232,36 @@ export class CameraController {
   }
 
   private updateCamera(): void {
-    const pose = evalCameraRigPose(this.currentZoom01);
     const target = this.config.target;
-    const forward = this.getForwardXZ();
-    const pitch = pose.orbitPitch + this.pitchOffset * (1 - pose.closeBlend);
+    const closeBlend = this.getCloseBlend();
 
     this.orbitDirection.set(
-      Math.cos(pitch) * Math.cos(this.currentYaw),
-      Math.sin(pitch),
-      Math.cos(pitch) * Math.sin(this.currentYaw),
+      Math.cos(this.currentPitch) * Math.cos(this.currentYaw),
+      Math.sin(this.currentPitch),
+      Math.cos(this.currentPitch) * Math.sin(this.currentYaw),
     );
-    this.orbitPosition.copy(target).addScaledVector(this.orbitDirection, pose.orbitDistance);
+    this.orbitPosition.copy(target).addScaledVector(this.orbitDirection, this.currentDistance);
 
-    const camX = target.x - forward.x * pose.backDistance;
-    const camZ = target.z - forward.z * pose.backDistance;
+    const forward = this.getForwardXZ();
+    const camX = target.x - forward.x * CLOSE_BACK_DISTANCE;
+    const camZ = target.z - forward.z * CLOSE_BACK_DISTANCE;
     const terrainUnderCamera = this.config.getHeightAt(camX, camZ);
-    this.closePosition.set(camX, terrainUnderCamera + pose.heightAboveTerrain, camZ);
+    this.closePosition.set(camX, terrainUnderCamera + CLOSE_HEIGHT_ABOVE_TERRAIN, camZ);
 
     const camera = this.config.camera;
-    camera.position.lerpVectors(this.orbitPosition, this.closePosition, pose.closeBlend);
+    camera.position.lerpVectors(this.orbitPosition, this.closePosition, closeBlend);
     this.enforceTerrainClearance(camera.position);
 
-    const lookX = target.x + forward.x * pose.lookAhead;
-    const lookZ = target.z + forward.z * pose.lookAhead;
+    const lookX = target.x + forward.x * CLOSE_LOOK_AHEAD;
+    const lookZ = target.z + forward.z * CLOSE_LOOK_AHEAD;
     const lookTerrainY = this.config.getHeightAt(lookX, lookZ);
-    this.lookAtPoint.set(lookX, lookTerrainY + pose.lookHeightOffset, lookZ);
-    const orbitLookAt = target;
-    this.lookAtPoint.lerp(orbitLookAt, 1 - pose.closeBlend);
+    this.lookAtPoint.set(lookX, lookTerrainY + CLOSE_LOOK_HEIGHT_OFFSET, lookZ);
+    this.lookAtPoint.lerp(target, 1 - closeBlend);
     camera.lookAt(this.lookAtPoint);
 
-    if (Math.abs(camera.fov - pose.fov) > 0.01) {
-      camera.fov = pose.fov;
+    const fov = THREE.MathUtils.lerp(DEFAULT_FOV, CLOSE_FOV, closeBlend);
+    if (Math.abs(camera.fov - fov) > 0.01) {
+      camera.fov = fov;
       camera.updateProjectionMatrix();
     }
   }

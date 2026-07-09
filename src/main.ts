@@ -10,6 +10,16 @@ if (!root) {
 const app = new App(root);
 app.start().catch((error) => {
   console.error(error);
+  const loading = document.getElementById('app-loading');
+  if (loading) {
+    const label = loading.querySelector('[data-loading-label]');
+    const detail = loading.querySelector('[data-loading-detail]');
+    if (label) label.textContent = 'Failed to start';
+    if (detail) detail.textContent = error instanceof Error ? error.message : 'Unknown startup error';
+    loading.classList.remove('is-dismissed');
+    return;
+  }
+  document.getElementById('app-loading')?.remove();
   root.innerHTML = '<div class="fatal">Unable to start the road sandbox.</div>';
 });
 

@@ -53,12 +53,20 @@ button {
   outline: none;
 }
 
-.road-controls-panel {
+.hud-right-stack {
   position: absolute;
   top: 14px;
-  left: 14px;
+  right: 14px;
   z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   width: min(280px, calc(100vw - 28px));
+}
+
+.road-controls-panel {
+  width: 100%;
   display: grid;
   gap: 14px;
   padding: 14px;
@@ -284,9 +292,7 @@ button {
 }
 
 .fps-panel {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  align-self: flex-end;
   min-width: 88px;
   display: flex;
   flex-direction: column;
@@ -411,10 +417,13 @@ button {
 }
 
 @media (max-width: 720px) {
-  .road-controls-panel {
+  .hud-right-stack {
     top: 10px;
-    left: 10px;
+    right: 10px;
     width: min(260px, calc(100vw - 20px));
+  }
+
+  .road-controls-panel {
     padding: 12px;
     gap: 12px;
   }

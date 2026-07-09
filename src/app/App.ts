@@ -1,10 +1,12 @@
 ﻿import { CameraController } from '../camera/CameraController.ts';
 import { InputManager } from '../input/InputManager.ts';
+import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
 import { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { RoadSelection } from '../roads/RoadSelection.ts';
 import { RoadTool } from '../roads/RoadTool.ts';
 import { SceneManager } from '../scene/SceneManager.ts';
 import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
+import { LoadingScreen } from '../ui/LoadingScreen.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
 import { roadPlacementReasonToToastId } from '../ui/toastMessages.ts';
 
@@ -34,6 +36,10 @@ export class App {
   }
 
   async start(): Promise<void> {
+    const loadingScreen = LoadingScreen.tryCreate();
+    const materialsPromise = RoadMaterialFactory.create(8);
+    loadingScreen?.setProgress({ label: 'Starting world…', detail: 'Setting up scene shell' });
+
     this.root.innerHTML = `
       <div class="app-shell">
         <div class="scene-root" data-scene-root></div>
@@ -44,7 +50,9 @@ export class App {
     const sceneRoot = this.mustElement('[data-scene-root]');
     const uiRoot = this.mustElement('[data-ui-root]');
 
-    const sceneManager = await SceneManager.create(sceneRoot);
+    const sceneManager = await SceneManager.create(sceneRoot, (label, detail) => {
+      loadingScreen?.setProgress({ label, detail });
+    }, materialsPromise);
     const input = new InputManager(sceneManager.renderer.domElement);
     const roadNetwork = new RoadNetwork();
     const cameraController = new CameraController({
@@ -53,7 +61,6 @@ export class App {
       domElement: sceneManager.renderer.domElement,
       bounds: sceneManager.terrain.bounds,
       getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
-      pickAtScreen: (clientX, clientY) => sceneManager.terrainProjector.pick(clientX, clientY),
       getCursorOverride: () => this.roadTool?.getCursor() ?? null,
       shouldIgnoreInput: (event) => this.roadTool?.shouldBlockCameraInput(event) ?? false,
     });
@@ -116,10 +123,24 @@ export class App {
     this.syncToolbar();
     window.addEventListener('resize', this.onResize);
     this.onResize();
+    cameraController.update(0);
     this.lastTime = performance.now();
     this.frameBudgetTime = this.lastTime;
     this.fpsSampleStart = this.lastTime;
+    loadingScreen?.setProgress({ label: 'Almost ready…', detail: 'Rendering first frame' });
+    sceneManager.render(0, cameraController.getOrbitDistance());
+    loadingScreen?.dismiss();
     this.animationId = requestAnimationFrame(this.tick);
+    window.setTimeout(() => {
+      void (async () => {
+        try {
+          await sceneManager.finishVegetation();
+          if (this.roadNetwork) sceneManager.syncRoadNetwork(this.roadNetwork);
+        } catch (error) {
+          console.error('Vegetation build failed:', error);
+        }
+      })();
+    }, 0);
   }
 
   dispose(): void {
@@ -151,7 +172,7 @@ export class App {
     this.toolbar?.setZoomPercent(this.cameraController?.getZoomPercent() ?? 100);
     this.roadTool?.update(dt);
     this.updateBuildButtonPosition();
-    this.sceneManager?.render(dt);
+    this.sceneManager?.render(dt, this.cameraController?.getOrbitDistance());
     this.updateFps(time, dt);
     this.animationId = requestAnimationFrame(this.tick);
   };

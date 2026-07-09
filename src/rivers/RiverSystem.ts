@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { MeshStandardNodeMaterial } from 'three/webgpu';
+import type { MossyRockTextureSet } from '../utils/propTextureLoad.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import { RiverField } from './RiverField.ts';
 import { createRiverBankMeshes } from './RiverBankMesh.ts';
@@ -37,13 +38,13 @@ export type RiverSystem = {
 export function createRiverSystem(
   terrain: Terrain,
   riverField: RiverField,
-  maxAnisotropy: number,
   bankMaterial: MeshStandardNodeMaterial,
+  rockTextures: MossyRockTextureSet,
 ): RiverSystem {
   const group = new THREE.Group();
   group.name = 'River system';
 
-  const rockMaterial = createRiverRockMaterial(maxAnisotropy);
+  const rockMaterial = createRiverRockMaterial(rockTextures);
   const rockShadowMaterials = createPropShadowMaterials();
   const rng = mulberry32(0x71ee1212);
   const waterController = createRiverWaterMesh(group, terrain, riverField);
@@ -74,21 +75,11 @@ export function createRiverSystem(
   };
 }
 
-function createRiverRockMaterial(maxAnisotropy: number): THREE.MeshStandardMaterial {
-  const loader = new THREE.TextureLoader();
-  const loadMap = (url: string, srgb = false): THREE.Texture => {
-    const texture = loader.load(url);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = Math.max(1, Math.min(16, maxAnisotropy));
-    if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-  };
-
+function createRiverRockMaterial(rockTextures: MossyRockTextureSet): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
-    map: loadMap('/assets/textures/props/mossy_rock/albedo.png', true),
-    normalMap: loadMap('/assets/textures/props/mossy_rock/normal.png'),
-    roughnessMap: loadMap('/assets/textures/props/mossy_rock/roughness.png'),
+    map: rockTextures.map,
+    normalMap: rockTextures.normalMap,
+    roughnessMap: rockTextures.roughnessMap,
     color: 0xb0aea0,
     roughness: 0.92,
     metalness: 0,

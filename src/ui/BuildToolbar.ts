@@ -33,29 +33,42 @@ export class BuildToolbar {
     },
   ) {
     root.innerHTML = `
-      <aside class="road-controls-panel" data-road-controls-panel aria-label="Road placement instructions" hidden>
-        <header class="road-controls-header">
-          <div>
-            <p class="road-controls-eyebrow">Builder</p>
-            <h2 class="road-controls-title">Roads</h2>
-            <p class="road-controls-status" data-road-status>Road tool off</p>
+      <div class="hud-right-stack">
+        <div class="fps-panel" data-fps-panel aria-live="polite">
+          <div class="fps-stat">
+            <strong data-stat="fps">--</strong>
+            <span>FPS</span>
           </div>
-        </header>
+          <div class="fps-stat">
+            <strong data-stat="zoom">100%</strong>
+            <span>Zoom</span>
+          </div>
+        </div>
 
-        <section class="road-controls-help" aria-label="Road placement shortcuts">
-          <h3 class="road-controls-help-title">Controls</h3>
-          <ul class="road-controls-list">
-            <li><span>Toggle road tool</span><span class="road-controls-key">R</span></li>
-            <li><span>Place point</span><span class="road-controls-key">L-click</span></li>
-            <li><span>Undo last point</span><span class="road-controls-key">R-click</span></li>
-            <li><span>Curve segment</span><span class="road-controls-key">Ctrl + scroll</span></li>
-            <li><span>Build road</span><span class="road-controls-key">Hammer or Enter</span></li>
-            <li><span>Delete segment</span><span class="road-controls-key">Alt + L-click</span></li>
-            <li><span>Undo change</span><span class="road-controls-key">Ctrl + Z</span></li>
-            <li><span>Cancel / exit</span><span class="road-controls-key">Esc</span></li>
-          </ul>
-        </section>
-      </aside>
+        <aside class="road-controls-panel" data-road-controls-panel aria-label="Road placement instructions" hidden>
+          <header class="road-controls-header">
+            <div>
+              <p class="road-controls-eyebrow">Builder</p>
+              <h2 class="road-controls-title">Roads</h2>
+              <p class="road-controls-status" data-road-status>Road tool off</p>
+            </div>
+          </header>
+
+          <section class="road-controls-help" aria-label="Road placement shortcuts">
+            <h3 class="road-controls-help-title">Controls</h3>
+            <ul class="road-controls-list">
+              <li><span>Toggle road tool</span><span class="road-controls-key">R</span></li>
+              <li><span>Place point</span><span class="road-controls-key">L-click</span></li>
+              <li><span>Undo last point</span><span class="road-controls-key">R-click</span></li>
+              <li><span>Curve segment</span><span class="road-controls-key">Ctrl + scroll</span></li>
+              <li><span>Build road</span><span class="road-controls-key">Hammer or Enter</span></li>
+              <li><span>Delete segment</span><span class="road-controls-key">Alt + L-click</span></li>
+              <li><span>Undo change</span><span class="road-controls-key">Ctrl + Z</span></li>
+              <li><span>Cancel / exit</span><span class="road-controls-key">Esc</span></li>
+            </ul>
+          </section>
+        </aside>
+      </div>
 
       <div class="road-tools" aria-label="Road tools">
         <button type="button" class="road-tool-button" data-action="road" title="Roads (R)">
@@ -76,16 +89,6 @@ export class BuildToolbar {
         <button type="button" class="ghost-button" data-action="cancel-delete">Cancel</button>
       </div>
 
-      <div class="fps-panel" data-fps-panel aria-live="polite">
-        <div class="fps-stat">
-          <strong data-stat="fps">--</strong>
-          <span>FPS</span>
-        </div>
-        <div class="fps-stat">
-          <strong data-stat="zoom">100%</strong>
-          <span>Zoom</span>
-        </div>
-      </div>
     `;
 
     this.roadButton = this.mustButton(root, '[data-action="road"]');

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { createForestProps, TREE_SHADOW_CAST_LAYER } from '../props/ForestProps.ts';
+import { createForestProps } from '../props/ForestProps.ts';
 import type { ForestManager } from '../props/ForestManager.ts';
-import { createGrassBladeField, type GrassBladeField } from '../grass/GrassBladeField.ts';
+import { createGrassBladeField, GRASS_BLADES_ENABLED, type GrassBladeField } from '../grass/GrassBladeField.ts';
 import { updateGrassCameraDistance } from '../grass/GrassLodConfig.ts';
 import { createRiverSystem, type RiverSystem } from '../rivers/RiverSystem.ts';
 import { updateTerrainRoadWear } from '../terrain/TerrainRoadWear.ts';
@@ -13,14 +13,21 @@ import { RoadJunctionBuilder } from '../roads/RoadJunctionBuilder.ts';
 import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
 import { RoadMeshBuilder } from '../roads/RoadMeshBuilder.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
-import { SkyCloudMesh } from '../sky/SkyCloudMesh.ts';
+import { SkyCloudMesh, loadSkyPerlinTexture } from '../sky/SkyCloudMesh.ts';
 import { Terrain } from '../terrain/Terrain.ts';
 import { TerrainProjector } from '../terrain/TerrainProjector.ts';
 import { disposeObject3D } from '../utils/dispose.ts';
 import { isRockNearPath } from '../utils/pathGeometry.ts';
+import { loadMossyRockTextures } from '../utils/propTextureLoad.ts';
 import { createPostProcessor, type ScenePostProcessor } from './PostProcessing.ts';
 import { fitDirectionalLightShadow } from './fitDirectionalShadow.ts';
 import { createPreferredRenderer, type RendererBackend, type RendererBackendKind, type SupportedRenderer } from './RendererBackend.ts';
+import { TREE_SHADOW_CAST_LAYER } from './SceneLayers.ts';
+
+type SceneStartupTextures = {
+  riverRock: Awaited<ReturnType<typeof loadMossyRockTextures>>;
+  skyPerlin: THREE.Texture;
+};
 
 export class SceneManager {
   private readonly container: HTMLElement;
@@ -29,6 +36,7 @@ export class SceneManager {
   readonly renderer: SupportedRenderer;
   readonly rendererBackend: RendererBackendKind;
   readonly postProcessor: ScenePostProcessor;
+  private readonly maxAnisotropy: number;
   readonly cameraTarget = new THREE.Vector3();
   readonly terrain: Terrain;
   readonly terrainProjector: TerrainProjector;
@@ -39,17 +47,25 @@ export class SceneManager {
   private readonly sky: SkyCloudMesh;
   private readonly sunDirection = new THREE.Vector3();
   private sunLight!: THREE.DirectionalLight;
-  private readonly forestManager: ForestManager;
-  private readonly grassField: GrassBladeField;
+  private forestManager: ForestManager | null = null;
+  private grassField: GrassBladeField | null = null;
+  private vegetationBuilt = false;
+  private roadNetworkRef: RoadNetwork | null = null;
   private readonly riverSystem: RiverSystem;
   private readonly roadGroup = new THREE.Group();
   private readonly junctionGroup = new THREE.Group();
   private readonly edgeVisuals = new Map<string, { revision: number; group: THREE.Group }>();
 
-  private constructor(container: HTMLElement, backend: RendererBackend, materials: RoadMaterialFactory) {
+  private constructor(
+    container: HTMLElement,
+    backend: RendererBackend,
+    materials: RoadMaterialFactory,
+    startupTextures: SceneStartupTextures,
+  ) {
     this.container = container;
     this.renderer = backend.renderer;
     this.rendererBackend = backend.kind;
+    this.maxAnisotropy = backend.maxAnisotropy;
     this.materials = materials;
     this.scene = new THREE.Scene();
     this.scene.background = null;
@@ -79,15 +95,14 @@ export class SceneManager {
       widthSegments: 56,
       heightSegments: 28,
       rendererBackend: backend.kind,
+      perlinTexture: startupTextures.skyPerlin,
     });
-    this.riverSystem = createRiverSystem(this.terrain, riverField, backend.maxAnisotropy, materials.riverBank);
-    this.forestManager = createForestProps(this.terrain, backend.maxAnisotropy, {
-      isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z),
-      rendererBackend: backend.kind,
-    });
-    this.grassField = createGrassBladeField(this.terrain, {
-      isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z),
-    });
+    this.riverSystem = createRiverSystem(
+      this.terrain,
+      riverField,
+      materials.riverBank,
+      startupTextures.riverRock,
+    );
 
     this.roadGroup.name = 'Road network visuals';
     this.junctionGroup.name = 'Road junction visuals';
@@ -97,9 +112,7 @@ export class SceneManager {
     this.scene.add(
       this.sky,
       this.terrain.mesh,
-      this.grassField.group,
       this.riverSystem.group,
-      this.forestManager.group,
       this.roadGroup,
       this.junctionGroup,
       this.previewGroup,
@@ -109,11 +122,51 @@ export class SceneManager {
     this.postProcessor = createPostProcessor(backend, this.scene, this.camera);
   }
 
-  static async create(container: HTMLElement): Promise<SceneManager> {
-    const backend = await createPreferredRenderer();
+  static async create(
+    container: HTMLElement,
+    onProgress?: (label: string, detail?: string) => void,
+    materialsPromise?: Promise<RoadMaterialFactory>,
+  ): Promise<SceneManager> {
+    onProgress?.('Loading graphics', 'Starting WebGPU renderer and textures');
+    const [backend, materials] = await Promise.all([
+      createPreferredRenderer(),
+      materialsPromise ?? RoadMaterialFactory.create(8),
+    ]);
     container.appendChild(backend.renderer.domElement);
-    const materials = await RoadMaterialFactory.create(backend.maxAnisotropy);
-    return new SceneManager(container, backend, materials);
+    onProgress?.('Loading textures', 'Sky and river surfaces');
+    const [riverRock, skyPerlin] = await Promise.all([
+      loadMossyRockTextures(backend.maxAnisotropy),
+      loadSkyPerlinTexture(),
+    ]);
+    onProgress?.('Building world', 'Terrain, sky, and river');
+    const manager = new SceneManager(container, backend, materials, { riverRock, skyPerlin });
+    await manager.sky.ready;
+    return manager;
+  }
+
+  /** Builds forest and grass after the first frame — same bundle, no dynamic import. */
+  async finishVegetation(): Promise<void> {
+    if (this.vegetationBuilt) return;
+    this.vegetationBuilt = true;
+
+    this.forestManager = await createForestProps(this.terrain, this.maxAnisotropy, {
+      isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z),
+      rendererBackend: this.rendererBackend,
+    });
+    if (GRASS_BLADES_ENABLED) {
+      this.grassField = createGrassBladeField(this.terrain, {
+        isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z),
+      });
+      this.scene.add(this.grassField.group);
+    }
+
+    this.scene.add(this.forestManager.group);
+
+    if (this.roadNetworkRef) {
+      this.forestManager.syncRoadClearance(this.roadNetworkRef);
+      this.grassField?.syncRoadClearance(this.roadNetworkRef);
+      this.refreshShadowMap();
+    }
   }
 
   resize(): void {
@@ -130,9 +183,11 @@ export class SceneManager {
     this.sky.updateResolution(width * pixelRatio, height * pixelRatio);
   }
 
-  render(dt: number): void {
+  render(dt: number, orbitDistance?: number): void {
     const elapsed = performance.now() * 0.001;
-    updateGrassCameraDistance(this.camera.position.distanceTo(this.cameraTarget));
+    const cameraDistance = orbitDistance ?? this.camera.position.distanceTo(this.cameraTarget);
+    updateGrassCameraDistance(cameraDistance);
+    this.grassField?.updateCameraState(this.camera.position, cameraDistance);
     this.sky.updateCamera(this.camera);
     this.sky.updateSun(this.sunDirection);
     this.sky.updateTime(elapsed);
@@ -164,7 +219,7 @@ export class SceneManager {
     }
 
     const roadHalfWidth = roadWidth * 0.5;
-    for (const rock of this.forestManager.rockPlacements) {
+    for (const rock of this.forestManager?.rockPlacements ?? []) {
       if (isRockNearPath(rock, sampled, roadHalfWidth)) return 'rocks';
     }
     for (const rock of this.riverSystem.shoreRockPlacements) {
@@ -175,6 +230,7 @@ export class SceneManager {
   }
 
   syncRoadNetwork(network: RoadNetwork): void {
+    this.roadNetworkRef = network;
     for (const [edgeId, visual] of this.edgeVisuals) {
       if (!network.edges.has(edgeId)) {
         this.roadGroup.remove(visual.group);
@@ -188,8 +244,8 @@ export class SceneManager {
     }
 
     this.rebuildJunctions(network);
-    this.forestManager.syncRoadClearance(network);
-    this.grassField.syncRoadClearance(network);
+    this.forestManager?.syncRoadClearance(network);
+    this.grassField?.syncRoadClearance(network);
     updateTerrainRoadWear(this.terrain, network);
     this.refreshShadowMap();
   }
@@ -212,10 +268,14 @@ export class SceneManager {
   dispose(): void {
     for (const visual of this.edgeVisuals.values()) disposeObject3D(visual.group);
     this.edgeVisuals.clear();
-    disposeObject3D(this.forestManager.group);
-    this.forestManager.dispose();
-    this.grassField.dispose();
-    disposeObject3D(this.grassField.group);
+    if (this.forestManager) {
+      disposeObject3D(this.forestManager.group);
+      this.forestManager.dispose();
+    }
+    if (this.grassField) {
+      this.grassField.dispose();
+      disposeObject3D(this.grassField.group);
+    }
     this.riverSystem.dispose();
     disposeObject3D(this.riverSystem.group);
     this.sky.dispose();
