@@ -1,41 +1,48 @@
-﻿export type ToolbarStats = {
-  nodes: number;
-  edges: number;
-  selected: boolean;
+export type ToolbarStats = {
+  canBuild: boolean;
+  hasDraft: boolean;
   mode: 'road' | 'idle';
+};
+
+type DeletePopupOptions = {
+  clientX: number;
+  clientY: number;
+  onRemove: () => void;
+  onCancel: () => void;
 };
 
 export class BuildToolbar {
   private readonly roadButton: HTMLButtonElement;
-  private readonly undoButton: HTMLButtonElement;
-  private readonly deleteButton: HTMLButtonElement;
-  private readonly status: HTMLElement;
-  private readonly nodeCount: HTMLElement;
-  private readonly edgeCount: HTMLElement;
-  private readonly selectionState: HTMLElement;
+  private readonly buildButton: HTMLButtonElement;
+  private readonly deletePopup: HTMLElement;
+  private readonly removeButton: HTMLButtonElement;
+  private readonly cancelDeleteButton: HTMLButtonElement;
   private readonly fpsPanel: HTMLElement;
   private readonly fpsValue: HTMLElement;
+  private deleteCancel: (() => void) | null = null;
+  private deleteRemove: (() => void) | null = null;
 
   constructor(
     root: HTMLElement,
     handlers: {
-      onToggleRoad: () => void;
-      onUndo: () => void;
-      onDelete: () => void;
+      onOpenRoads: () => void;
+      onBuildRoad: () => void;
     }
   ) {
     root.innerHTML = `
-      <div class="toolbar" aria-label="Build tools">
-        <button type="button" data-action="road" title="Road tool">Road</button>
-        <span class="divider" aria-hidden="true"></span>
-        <button type="button" data-action="undo" title="Undo last road">Undo</button>
-        <button type="button" data-action="delete" title="Delete selected road">Delete</button>
+      <div class="road-tools" aria-label="Road tools">
+        <button type="button" class="road-tool-button" data-action="road" title="Roads (R)">Roads</button>
+        <button type="button" class="road-tool-button icon-button" data-action="build" title="Build road" aria-label="Build road" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.5 5.5l4 4" />
+            <path d="M12.3 7.7l4-4 3.9 3.9-4 4" />
+            <path d="M14.8 10.8L6.4 19.2a2.1 2.1 0 0 1-3-3l8.4-8.4" />
+          </svg>
+        </button>
       </div>
-      <div class="stats-panel" aria-live="polite">
-        <span class="status-pill is-idle" data-stat="mode">Idle</span>
-        <span>Nodes <strong data-stat="nodes">0</strong></span>
-        <span>Segments <strong data-stat="edges">0</strong></span>
-        <span data-stat="selected">None</span>
+      <div class="delete-popup" data-delete-popup hidden>
+        <button type="button" data-action="confirm-delete">Remove</button>
+        <button type="button" class="ghost-button" data-action="cancel-delete">Cancel</button>
       </div>
       <div class="fps-panel" data-fps-panel aria-live="polite">
         <strong data-stat="fps">--</strong>
@@ -44,29 +51,31 @@ export class BuildToolbar {
     `;
 
     this.roadButton = this.mustButton(root, '[data-action="road"]');
-    this.undoButton = this.mustButton(root, '[data-action="undo"]');
-    this.deleteButton = this.mustButton(root, '[data-action="delete"]');
-    this.status = this.mustElement(root, '[data-stat="mode"]');
-    this.nodeCount = this.mustElement(root, '[data-stat="nodes"]');
-    this.edgeCount = this.mustElement(root, '[data-stat="edges"]');
-    this.selectionState = this.mustElement(root, '[data-stat="selected"]');
+    this.buildButton = this.mustButton(root, '[data-action="build"]');
+    this.deletePopup = this.mustElement(root, '[data-delete-popup]');
+    this.removeButton = this.mustButton(root, '[data-action="confirm-delete"]');
+    this.cancelDeleteButton = this.mustButton(root, '[data-action="cancel-delete"]');
     this.fpsPanel = this.mustElement(root, '[data-fps-panel]');
     this.fpsValue = this.mustElement(root, '[data-stat="fps"]');
 
-    this.roadButton.addEventListener('click', handlers.onToggleRoad);
-    this.undoButton.addEventListener('click', handlers.onUndo);
-    this.deleteButton.addEventListener('click', handlers.onDelete);
+    this.roadButton.addEventListener('click', handlers.onOpenRoads);
+    this.buildButton.addEventListener('click', handlers.onBuildRoad);
+    this.deletePopup.addEventListener('mousedown', (event) => event.stopPropagation());
+    this.deletePopup.addEventListener('click', (event) => event.stopPropagation());
+    this.removeButton.addEventListener('click', () => {
+      const remove = this.deleteRemove;
+      this.hideDeletePopup(false);
+      remove?.();
+    });
+    this.cancelDeleteButton.addEventListener('click', () => this.hideDeletePopup(true));
   }
 
   setStats(stats: ToolbarStats): void {
     this.roadButton.classList.toggle('is-active', stats.mode === 'road');
-    this.status.textContent = stats.mode === 'road' ? 'Road' : 'Idle';
-    this.status.classList.toggle('is-idle', stats.mode !== 'road');
-    this.nodeCount.textContent = String(stats.nodes);
-    this.edgeCount.textContent = String(stats.edges);
-    this.selectionState.textContent = stats.selected ? 'Selected' : 'None';
-    this.deleteButton.disabled = !stats.selected;
-    this.undoButton.disabled = stats.edges === 0;
+    this.roadButton.setAttribute('aria-pressed', String(stats.mode === 'road'));
+    this.buildButton.disabled = !stats.canBuild;
+    this.buildButton.classList.toggle('is-ready', stats.canBuild);
+    this.buildButton.classList.toggle('has-draft', stats.hasDraft);
   }
 
   setFps(fps: number): void {
@@ -74,6 +83,29 @@ export class BuildToolbar {
     this.fpsValue.textContent = displayFps.toString();
     this.fpsPanel.classList.toggle('is-low', displayFps < 60);
     this.fpsPanel.classList.toggle('is-fast', displayFps >= 85);
+  }
+
+  showDeletePopup(options: DeletePopupOptions): void {
+    this.deleteCancel = options.onCancel;
+    this.deleteRemove = options.onRemove;
+    const width = 168;
+    const height = 44;
+    const margin = 10;
+    const left = Math.max(margin, Math.min(window.innerWidth - width - margin, options.clientX + 12));
+    const top = Math.max(margin, Math.min(window.innerHeight - height - margin, options.clientY - height * 0.5));
+    this.deletePopup.style.left = `${left}px`;
+    this.deletePopup.style.top = `${top}px`;
+    this.deletePopup.hidden = false;
+    this.removeButton.focus({ preventScroll: true });
+  }
+
+  hideDeletePopup(runCancel = true): void {
+    if (this.deletePopup.hidden) return;
+    const cancel = this.deleteCancel;
+    this.deletePopup.hidden = true;
+    this.deleteCancel = null;
+    this.deleteRemove = null;
+    if (runCancel) cancel?.();
   }
 
   private mustButton(root: HTMLElement, selector: string): HTMLButtonElement {

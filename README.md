@@ -21,10 +21,15 @@ A real-time Three.js sandbox for drawing medieval dirt roads directly onto a pro
 
 | Action | Control |
 | --- | --- |
-| Draw road | Left-click and drag on terrain |
-| Select road | Click an existing road segment |
-| Delete selected road | Delete button, `Delete`, or `Backspace` |
-| Undo last road change | Undo button or `Ctrl+Z` / `Cmd+Z` |
+| Open road tool | `R` or click Roads |
+| Start road | Left-click on terrain |
+| Add more road points | Left-click more terrain points |
+| Undo last placed point while drawing | Right-click |
+| Curve the road | Hold `Ctrl` and scroll the mouse wheel |
+| Commit/build the road | Click the hammer icon or press `Enter` |
+| Delete road | In road mode, hold `Alt` and left-click a road segment |
+| Confirm deletion | Click Remove in the popup |
+| Undo last road change | `Ctrl+Z` / `Cmd+Z` |
 | Cancel active road preview | `Escape` |
 | Pan camera | Right-click drag, `WASD`, or arrow keys |
 | Rotate camera | Middle-click drag or `Q` / `E` |
@@ -88,7 +93,7 @@ docs/
 
 The terrain is generated as a continuous heightfield in `src/terrain/Terrain.ts`. It combines several value-noise layers with broad sine/cosine shaping, then uses vertex colors to blend terrain tints over tiled texture maps.
 
-Road placement is handled by `src/roads/RoadTool.ts`. Pointer input is projected onto the terrain by `TerrainProjector`, sampled as the user drags, validated against slope and minimum length rules, and committed into a `RoadNetwork`.
+Road placement is handled by `src/roads/RoadTool.ts`. Pointer input is projected onto the terrain by `TerrainProjector`, collected as clicked road nodes with optional wheel-adjusted curvature, validated against slope and minimum length rules, and committed into a `RoadNetwork`.
 
 `src/roads/RoadNetwork.ts` stores roads as nodes and edges. It resolves endpoint snapping, splits existing road segments when new paths connect into them, detects crossings, prunes orphan nodes, and classifies junction types.
 
@@ -113,4 +118,3 @@ Texture assets are stored under `public/assets/textures`. The road surface uses 
 - `npm run build` runs TypeScript first, then Vite's production build.
 - A Vite chunk-size warning may appear because Three.js and post-processing code are bundled into the main client chunk. The build still completes successfully.
 - `dist/`, `node_modules/`, logs, and local editor files are ignored by Git.
-

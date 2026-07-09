@@ -24,7 +24,7 @@ export class RoadPreview {
     this.group.add(this.marker, this.anchors);
   }
 
-  update(points: THREE.Vector3[], valid: boolean, width: number, snapPoint: THREE.Vector3 | null): void {
+  update(points: THREE.Vector3[], valid: boolean, width: number, snapPoint: THREE.Vector3 | null, anchorPoints = points): void {
     if (this.previewMesh) {
       this.group.remove(this.previewMesh);
       disposeObject3D(this.previewMesh);
@@ -36,7 +36,7 @@ export class RoadPreview {
       this.previewMesh = mesh;
       this.group.add(mesh);
     }
-    this.updateAnchors(points, valid);
+    this.updateAnchors(anchorPoints, valid);
     if (snapPoint) {
       this.marker.visible = true;
       this.marker.position.set(snapPoint.x, snapPoint.y + 0.22, snapPoint.z);

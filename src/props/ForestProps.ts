@@ -3,6 +3,11 @@ import type { Terrain } from '../terrain/Terrain.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const TAU = Math.PI * 2;
+const FOREST_EXTENT = 248;
+const CENTRAL_CLEARING_RADIUS = 34;
+const TREE_TARGET_COUNT = 208;
+const BROADLEAF_TARGET_LIMIT = 72;
+const ROCK_TARGET_COUNT = 86;
 
 type ForestMaterialSet = {
   bark: THREE.MeshStandardMaterial;
@@ -19,13 +24,38 @@ type TreePlacement = {
   scale: number;
 };
 
+type RockPlacement = {
+  x: number;
+  z: number;
+  scale: number;
+};
+
+type ForestCore = {
+  x: number;
+  z: number;
+  radiusX: number;
+  radiusZ: number;
+  rotation: number;
+  strength: number;
+  coniferBias: number;
+};
+
+type RockOutcrop = {
+  x: number;
+  z: number;
+  radius: number;
+  count: number;
+  strength: number;
+};
+
 export function createForestProps(terrain: Terrain, maxAnisotropy: number): THREE.Group {
   const rng = mulberry32(0x5eedf0a5);
   const materials = createForestMaterials(maxAnisotropy);
   const forest = new THREE.Group();
   forest.name = 'Road-scale forest props';
   forest.userData.disposeResources = () => disposeForestMaterials(materials);
-  const treePlacements = createTreePlacements(rng);
+  const forestCores = createForestCores(rng);
+  const treePlacements = createTreePlacements(rng, forestCores);
   const broadleafPlacements = treePlacements.filter((placement) => placement.species === 'broadleaf');
   const coniferPlacements = treePlacements.filter((placement) => placement.species === 'conifer');
 
@@ -38,7 +68,7 @@ export function createForestProps(terrain: Terrain, maxAnisotropy: number): THRE
   }
 
   forest.add(createConiferForest(coniferPlacements, terrain, materials, rng));
-  forest.add(createRockField(createRockPlacements(rng), terrain, materials.rock, rng));
+  forest.add(createRockField(createRockPlacements(rng, forestCores, treePlacements), terrain, materials.rock, rng));
 
   return forest;
 }
@@ -93,54 +123,221 @@ function createForestMaterials(maxAnisotropy: number): ForestMaterialSet {
   };
 }
 
-function createTreePlacements(rng: () => number): TreePlacement[] {
-  const placements: TreePlacement[] = [
-    { x: -36, z: 18, species: 'broadleaf', scale: 1.18 },
-    { x: 34, z: 22, species: 'broadleaf', scale: 1.08 },
-    { x: -54, z: -18, species: 'conifer', scale: 1.2 },
-    { x: 58, z: -12, species: 'broadleaf', scale: 1.28 },
-    { x: -18, z: 48, species: 'broadleaf', scale: 1.04 },
-    { x: 22, z: 52, species: 'conifer', scale: 1.14 },
-    { x: -76, z: 36, species: 'broadleaf', scale: 1.34 },
-    { x: 82, z: 34, species: 'conifer', scale: 1.18 },
+function createForestCores(rng: () => number): ForestCore[] {
+  const anchors: ForestCore[] = [
+    { x: -178, z: -122, radiusX: 92, radiusZ: 58, rotation: -0.42, strength: 1.08, coniferBias: 0.72 },
+    { x: 150, z: -150, radiusX: 86, radiusZ: 64, rotation: 0.3, strength: 1.02, coniferBias: 0.64 },
+    { x: -184, z: 72, radiusX: 100, radiusZ: 62, rotation: 0.62, strength: 1.12, coniferBias: 0.46 },
+    { x: 180, z: 84, radiusX: 96, radiusZ: 60, rotation: -0.24, strength: 1.1, coniferBias: 0.58 },
+    { x: -70, z: 174, radiusX: 82, radiusZ: 54, rotation: -0.82, strength: 0.98, coniferBias: 0.42 },
+    { x: 92, z: 182, radiusX: 84, radiusZ: 52, rotation: 0.18, strength: 1.02, coniferBias: 0.68 },
+    { x: -124, z: -10, radiusX: 70, radiusZ: 42, rotation: 0.18, strength: 0.86, coniferBias: 0.5 },
+    { x: 124, z: -10, radiusX: 72, radiusZ: 44, rotation: -0.2, strength: 0.84, coniferBias: 0.62 },
   ];
 
-  for (let i = 0; i < 66; i++) {
-    const angle = i * 2.399963 + rng() * 0.55;
-    const radius = 34 + Math.pow(rng(), 0.7) * 330;
-    const x = Math.cos(angle) * radius + (rng() - 0.5) * 22;
-    const z = Math.sin(angle) * radius + (rng() - 0.5) * 22;
-    if (Math.hypot(x, z) < 22) continue;
-    placements.push({
-      x,
-      z,
-      species: rng() > 0.72 ? 'conifer' : 'broadleaf',
-      scale: 0.82 + rng() * 0.68,
-    });
+  return anchors.map((core) => ({
+    x: core.x + (rng() - 0.5) * 18,
+    z: core.z + (rng() - 0.5) * 18,
+    radiusX: core.radiusX * (0.92 + rng() * 0.18),
+    radiusZ: core.radiusZ * (0.9 + rng() * 0.22),
+    rotation: core.rotation + (rng() - 0.5) * 0.22,
+    strength: core.strength * (0.92 + rng() * 0.16),
+    coniferBias: THREE.MathUtils.clamp(core.coniferBias + (rng() - 0.5) * 0.12, 0.34, 0.82),
+  }));
+}
+
+function createTreePlacements(rng: () => number, forestCores: ForestCore[]): TreePlacement[] {
+  const placements: TreePlacement[] = [];
+  let broadleafCount = 0;
+  let attempts = 0;
+
+  while (placements.length < TREE_TARGET_COUNT && attempts < TREE_TARGET_COUNT * 44) {
+    attempts++;
+    const core = rng() < 0.84 ? pick(forestCores, rng) : undefined;
+    const sampled = core ? samplePointInForestCore(core, rng) : samplePointInForestExtent(rng);
+    const { x, z } = sampled;
+
+    if (!isInsideForestExtent(x, z)) continue;
+    if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + rng() * 18) continue;
+
+    const density = forestDensityAt(x, z, forestCores);
+    if (density < 0.23 || rng() > density * 1.18) continue;
+
+    const speciesNoise = valueNoise2(x * 0.025 + 37.2, z * 0.025 - 11.8);
+    const baseConiferChance = core?.coniferBias ?? 0.56;
+    const coniferChance = THREE.MathUtils.clamp(
+      baseConiferChance + (density - 0.5) * 0.22 + (speciesNoise - 0.5) * 0.32,
+      0.24,
+      0.86,
+    );
+    const species = rng() < coniferChance || broadleafCount >= BROADLEAF_TARGET_LIMIT ? 'conifer' : 'broadleaf';
+    const minDistance = species === 'broadleaf' ? THREE.MathUtils.lerp(8.8, 5.4, density) : THREE.MathUtils.lerp(6.8, 3.8, density);
+    if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
+
+    const scale =
+      species === 'broadleaf'
+        ? THREE.MathUtils.lerp(0.86, 1.48, Math.pow(rng(), 0.75)) * THREE.MathUtils.lerp(1.12, 0.92, density)
+        : THREE.MathUtils.lerp(0.78, 1.4, Math.pow(rng(), 0.7)) * THREE.MathUtils.lerp(1.04, 0.9, density);
+
+    placements.push({ x, z, species, scale });
+    if (species === 'broadleaf') broadleafCount++;
   }
 
   return placements;
 }
 
-function createRockPlacements(rng: () => number): Array<{ x: number; z: number; scale: number }> {
-  const placements: Array<{ x: number; z: number; scale: number }> = [
-    { x: -18, z: 16, scale: 1.35 },
-    { x: 17, z: -24, scale: 1.15 },
-    { x: 42, z: 8, scale: 1.65 },
-    { x: -48, z: -4, scale: 1.4 },
-  ];
+function createRockPlacements(rng: () => number, forestCores: ForestCore[], treePlacements: TreePlacement[]): RockPlacement[] {
+  const placements: RockPlacement[] = [];
+  const outcrops = createRockOutcrops(rng, forestCores);
 
-  for (let i = 0; i < 58; i++) {
-    const angle = i * 1.713 + rng() * 0.8;
-    const radius = 24 + rng() * 330;
-    placements.push({
-      x: Math.cos(angle) * radius + (rng() - 0.5) * 24,
-      z: Math.sin(angle) * radius + (rng() - 0.5) * 24,
-      scale: 0.75 + rng() * 1.8,
-    });
+  for (const outcrop of outcrops) {
+    let placedInOutcrop = 0;
+    let attempts = 0;
+    while (placedInOutcrop < outcrop.count && attempts < outcrop.count * 24) {
+      attempts++;
+      const angle = rng() * TAU;
+      const radius = Math.pow(rng(), 0.58) * outcrop.radius;
+      const stretch = 0.7 + rng() * 0.65;
+      const x = outcrop.x + Math.cos(angle) * radius * stretch + (rng() - 0.5) * 3.6;
+      const z = outcrop.z + Math.sin(angle) * radius * (1.2 - stretch * 0.28) + (rng() - 0.5) * 3.6;
+      if (!isInsideForestExtent(x, z)) continue;
+      if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS * 0.62) continue;
+
+      const forestDensity = forestDensityAt(x, z, forestCores);
+      if (forestDensity > 0.88 && rng() < 0.55) continue;
+
+      const scale = THREE.MathUtils.lerp(0.58, 1.9, Math.pow(rng(), 1.45)) * THREE.MathUtils.lerp(0.92, 1.22, outcrop.strength);
+      if (distanceToNearest(treePlacements, x, z) < 2.7 + scale * 0.78) continue;
+      if (!hasMinimumDistance(placements, x, z, 2.8 + scale * 1.35)) continue;
+
+      placements.push({ x, z, scale });
+      placedInOutcrop++;
+    }
+  }
+
+  let attempts = 0;
+  while (placements.length < ROCK_TARGET_COUNT && attempts < ROCK_TARGET_COUNT * 36) {
+    attempts++;
+    const { x, z } = samplePointInForestExtent(rng);
+    if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS * 0.78) continue;
+
+    const suitability = rockSuitabilityAt(x, z, forestCores);
+    if (suitability < 0.34 || rng() > suitability * 0.9) continue;
+
+    const scale = THREE.MathUtils.lerp(0.5, 1.55, Math.pow(rng(), 1.6));
+    if (distanceToNearest(treePlacements, x, z) < 3.2 + scale * 0.7) continue;
+    if (!hasMinimumDistance(placements, x, z, 5.4 + scale * 1.2)) continue;
+    placements.push({ x, z, scale });
   }
 
   return placements;
+}
+
+function createRockOutcrops(rng: () => number, forestCores: ForestCore[]): RockOutcrop[] {
+  const outcrops: RockOutcrop[] = [];
+  let attempts = 0;
+
+  while (outcrops.length < 9 && attempts < 420) {
+    attempts++;
+    const { x, z } = samplePointInForestExtent(rng);
+    if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + 12) continue;
+    if (!hasMinimumDistance(outcrops, x, z, 46)) continue;
+
+    const suitability = rockSuitabilityAt(x, z, forestCores);
+    if (suitability < 0.36 || rng() > suitability) continue;
+
+    outcrops.push({
+      x,
+      z,
+      radius: THREE.MathUtils.lerp(10, 24, rng()),
+      count: 5 + Math.floor(rng() * 7),
+      strength: suitability,
+    });
+  }
+
+  return outcrops;
+}
+
+function samplePointInForestCore(core: ForestCore, rng: () => number): { x: number; z: number } {
+  const angle = rng() * TAU;
+  const radius = Math.pow(rng(), 0.54);
+  const localX = Math.cos(angle) * core.radiusX * radius;
+  const localZ = Math.sin(angle) * core.radiusZ * radius;
+  const cos = Math.cos(core.rotation);
+  const sin = Math.sin(core.rotation);
+  return {
+    x: core.x + localX * cos - localZ * sin + (rng() - 0.5) * 9,
+    z: core.z + localX * sin + localZ * cos + (rng() - 0.5) * 9,
+  };
+}
+
+function samplePointInForestExtent(rng: () => number): { x: number; z: number } {
+  return {
+    x: (rng() * 2 - 1) * FOREST_EXTENT,
+    z: (rng() * 2 - 1) * FOREST_EXTENT,
+  };
+}
+
+function forestDensityAt(x: number, z: number, forestCores: ForestCore[]): number {
+  let density = 0;
+  for (const core of forestCores) {
+    density = Math.max(density, forestCoreInfluence(x, z, core) * core.strength);
+  }
+
+  const edgeWoods = smoothstep(150, FOREST_EXTENT, Math.max(Math.abs(x), Math.abs(z))) * 0.2;
+  const canopyNoise = fbm2(x * 0.008 + 5.4, z * 0.008 - 8.8, 4);
+  const pocketNoise = fbm2(x * 0.031 - 14.2, z * 0.031 + 3.7, 3);
+  const centralClear = smoothstep(CENTRAL_CLEARING_RADIUS, CENTRAL_CLEARING_RADIUS + 34, Math.hypot(x, z));
+  const meadowBreak =
+    0.84 +
+    smoothstep(16, 48, Math.abs(z + Math.sin(x * 0.018) * 22 - 64)) * 0.1 +
+    smoothstep(14, 42, Math.abs(x * 0.34 - z - 36)) * 0.06;
+
+  density += edgeWoods + (canopyNoise - 0.43) * 0.28 + (pocketNoise - 0.5) * 0.16;
+  return saturate(density * centralClear * meadowBreak);
+}
+
+function forestCoreInfluence(x: number, z: number, core: ForestCore): number {
+  const dx = x - core.x;
+  const dz = z - core.z;
+  const cos = Math.cos(-core.rotation);
+  const sin = Math.sin(-core.rotation);
+  const localX = dx * cos - dz * sin;
+  const localZ = dx * sin + dz * cos;
+  const normalizedDistance = Math.sqrt((localX / core.radiusX) ** 2 + (localZ / core.radiusZ) ** 2);
+  return 1 - smoothstep(0.42, 1.28, normalizedDistance);
+}
+
+function rockSuitabilityAt(x: number, z: number, forestCores: ForestCore[]): number {
+  const forestDensity = forestDensityAt(x, z, forestCores);
+  const forestEdge = 1 - Math.abs(forestDensity - 0.46) / 0.46;
+  const stoneNoise = fbm2(x * 0.022 + 18.5, z * 0.022 - 4.4, 4);
+  const openGround = 1 - smoothstep(0.74, 1, forestDensity);
+  return saturate(forestEdge * 0.42 + stoneNoise * 0.42 + openGround * 0.16);
+}
+
+function isInsideForestExtent(x: number, z: number): boolean {
+  return Math.abs(x) <= FOREST_EXTENT && Math.abs(z) <= FOREST_EXTENT;
+}
+
+function hasMinimumDistance(points: Array<{ x: number; z: number }>, x: number, z: number, minDistance: number): boolean {
+  const minDistanceSq = minDistance * minDistance;
+  for (const point of points) {
+    const dx = x - point.x;
+    const dz = z - point.z;
+    if (dx * dx + dz * dz < minDistanceSq) return false;
+  }
+  return true;
+}
+
+function distanceToNearest(points: Array<{ x: number; z: number }>, x: number, z: number): number {
+  let nearestSq = Infinity;
+  for (const point of points) {
+    const dx = x - point.x;
+    const dz = z - point.z;
+    nearestSq = Math.min(nearestSq, dx * dx + dz * dz);
+  }
+  return Math.sqrt(nearestSq);
 }
 
 function createBroadleafTree(scale: number, materials: ForestMaterialSet, rng: () => number): THREE.Group {
@@ -503,6 +700,57 @@ function createBoulderGeometry(seed: number): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+function fbm2(x: number, z: number, octaves: number): number {
+  let value = 0;
+  let amplitude = 0.5;
+  let frequency = 1;
+  let amplitudeSum = 0;
+
+  for (let octave = 0; octave < octaves; octave++) {
+    value += valueNoise2(x * frequency, z * frequency) * amplitude;
+    amplitudeSum += amplitude;
+    amplitude *= 0.5;
+    frequency *= 2.03;
+  }
+
+  return value / amplitudeSum;
+}
+
+function valueNoise2(x: number, z: number): number {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fz = z - iz;
+  const sx = noiseFade(fx);
+  const sz = noiseFade(fz);
+  const a = hashGrid2(ix, iz);
+  const b = hashGrid2(ix + 1, iz);
+  const c = hashGrid2(ix, iz + 1);
+  const d = hashGrid2(ix + 1, iz + 1);
+  const x0 = THREE.MathUtils.lerp(a, b, sx);
+  const x1 = THREE.MathUtils.lerp(c, d, sx);
+  return THREE.MathUtils.lerp(x0, x1, sz);
+}
+
+function hashGrid2(x: number, z: number): number {
+  const value = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
+  return value - Math.floor(value);
+}
+
+function noiseFade(value: number): number {
+  return value * value * value * (value * (value * 6 - 15) + 10);
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  if (edge0 === edge1) return value < edge0 ? 0 : 1;
+  const t = saturate((value - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
+}
+
+function saturate(value: number): number {
+  return THREE.MathUtils.clamp(value, 0, 1);
 }
 
 function stableSurfaceNoise(point: THREE.Vector3, seed: number): number {

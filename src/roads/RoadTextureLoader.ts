@@ -40,15 +40,15 @@ export class RoadTextureLoader {
   }
 
   async loadTerrainTextures(): Promise<TextureSet> {
-    const base = '/assets/textures/terrain/grass_ground';
-    const [albedo, normal, roughness, ao, height] = await Promise.all([
-      this.load(`${base}/albedo.png`, true),
-      this.load(`${base}/normal.png`, false),
-      this.load(`${base}/roughness.png`, false),
-      this.load(`${base}/ao.png`, false),
-      this.load(`${base}/height.png`, false),
+    const base = '/assets/textures/terrain/mammoth_grass_ground';
+    const wrapping = THREE.MirroredRepeatWrapping;
+    const [albedo, normal, roughness, height] = await Promise.all([
+      this.load(`${base}/albedo.png`, true, wrapping),
+      this.load(`${base}/normal.png`, false, wrapping),
+      this.load(`${base}/roughness.png`, false, wrapping),
+      this.load(`${base}/height.png`, false, wrapping),
     ]);
-    return { albedo, normal, roughness, ao, height };
+    return { albedo, normal, roughness, height };
   }
 
   async loadTerrainBlendTextures(): Promise<TerrainBlendTextureSet> {
@@ -63,18 +63,20 @@ export class RoadTextureLoader {
 
   private async loadTerrainBlendSet(base: string): Promise<TextureSet> {
     const [albedo, normal, roughness, height] = await Promise.all([
-      this.load(`${base}/albedo.png`, true),
-      this.load(`${base}/normal.png`, false),
-      this.load(`${base}/roughness.png`, false),
-      this.load(`${base}/height.png`, false),
+      this.load(`${base}/albedo.png`, true, THREE.MirroredRepeatWrapping),
+      this.load(`${base}/normal.png`, false, THREE.MirroredRepeatWrapping),
+      this.load(`${base}/roughness.png`, false, THREE.MirroredRepeatWrapping),
+      this.load(`${base}/height.png`, false, THREE.MirroredRepeatWrapping),
     ]);
     return { albedo, normal, roughness, height };
   }
 
-  private async load(url: string, srgb: boolean): Promise<THREE.Texture> {
+  private async load(url: string, srgb: boolean, wrapping: THREE.Wrapping = THREE.RepeatWrapping): Promise<THREE.Texture> {
     const texture = await this.loader.loadAsync(url);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
+    texture.wrapS = wrapping;
+    texture.wrapT = wrapping;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = Math.max(1, Math.min(16, this.maxAnisotropy));
     if (srgb) texture.colorSpace = THREE.SRGBColorSpace;

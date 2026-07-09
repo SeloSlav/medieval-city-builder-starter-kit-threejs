@@ -28,6 +28,8 @@ type RouteEvent = {
   nodeId: string;
 };
 
+const CLOSED_ENDPOINT_DISTANCE = 1.25;
+
 export class RoadNetwork {
   readonly nodes = new Map<string, RoadNode>();
   readonly edges = new Map<string, RoadEdge>();
@@ -59,17 +61,40 @@ export class RoadNetwork {
     const points = simplifyPath(rawPoints.map((point) => point.clone()), 0.85);
     if (points.length < 2 || routeLength(points) < 2.5) return [];
 
-    const startNodeId = this.resolveEndpoint(points, 0);
-    const endNodeId = this.resolveEndpoint(points, points.length - 1);
+    let startNodeId = this.resolveEndpoint(points, 0);
+    let endNodeId = this.resolveEndpoint(points, points.length - 1);
     const events = this.resolveCrossings(points, new Set([startNodeId, endNodeId].filter(Boolean) as string[]));
     const route = insertEvents(points, events);
     const connectionIndices = new Map<number, string>();
+    const endIndex = route.length - 1;
+    const isClosedRoute = distanceXZ(route[0], route[endIndex]) <= CLOSED_ENDPOINT_DISTANCE;
+
+    if (isClosedRoute && (!startNodeId || !endNodeId || startNodeId === endNodeId)) {
+      const sharedNodeId = startNodeId ?? endNodeId;
+      if (sharedNodeId) {
+        const node = this.nodes.get(sharedNodeId);
+        if (node) {
+          route[0].copy(node.position);
+          route[endIndex].copy(node.position);
+        }
+        startNodeId = sharedNodeId;
+        endNodeId = sharedNodeId;
+      }
+    }
 
     if (startNodeId) connectionIndices.set(0, startNodeId);
-    else connectionIndices.set(0, this.createNode(route[0]).id);
+    else {
+      const node = this.createNode(route[0]);
+      startNodeId = node.id;
+      connectionIndices.set(0, node.id);
+      if (isClosedRoute && !endNodeId) {
+        endNodeId = node.id;
+        route[endIndex].copy(node.position);
+      }
+    }
 
-    if (endNodeId) connectionIndices.set(route.length - 1, endNodeId);
-    else connectionIndices.set(route.length - 1, this.createNode(route[route.length - 1]).id);
+    if (endNodeId) connectionIndices.set(endIndex, endNodeId);
+    else connectionIndices.set(endIndex, this.createNode(route[endIndex]).id);
 
     for (const event of events) {
       const index = route.findIndex((point) => distanceXZ(point, event.point) < 0.05);

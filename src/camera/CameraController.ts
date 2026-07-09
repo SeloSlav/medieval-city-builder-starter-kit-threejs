@@ -24,6 +24,7 @@ export type CameraControllerConfig = {
   bounds: TerrainBounds;
   getHeightAt: (x: number, z: number) => number;
   getCursorOverride?: () => string | null;
+  shouldIgnoreInput?: (event: MouseEvent | WheelEvent) => boolean;
 };
 
 export class CameraController {
@@ -92,6 +93,7 @@ export class CameraController {
 
   private readonly onMouseDown = (event: MouseEvent): void => {
     if (!this.config.domElement.contains(event.target as Node)) return;
+    if (this.config.shouldIgnoreInput?.(event)) return;
     if (event.button === 2) {
       this.isPanning = true;
       this.lastMouseX = event.clientX;
@@ -137,6 +139,7 @@ export class CameraController {
   };
 
   private readonly onWheel = (event: WheelEvent): void => {
+    if (this.config.shouldIgnoreInput?.(event)) return;
     event.preventDefault();
     if (event.deltaY !== 0) {
       const steps = Math.max(1, Math.floor(Math.abs(event.deltaY) / 80));

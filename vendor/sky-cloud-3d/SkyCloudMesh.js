@@ -696,7 +696,11 @@ function buildColorNode(nodes) {
             const tExit = min(max(tBase, tTop), nodes.uMaxCloudDistance).toVar();
 
             If(tExit.greaterThan(tEntry), () => {
-                const distanceFade = float(1.0).sub(smoothstep(nodes.uMaxCloudDistance.mul(0.52), nodes.uMaxCloudDistance, tEntry));
+                const horizonFade = smoothstep(0.035, 0.16, rayDirection.y).toVar();
+                const distanceFade = float(1.0)
+                    .sub(smoothstep(nodes.uMaxCloudDistance.mul(0.52), nodes.uMaxCloudDistance, tEntry))
+                    .mul(horizonFade)
+                    .toVar();
                 const distanceColorFade = mix(0.72, 1.0, distanceFade).toVar();
                 const marchDistance = tExit.sub(tEntry);
                 const angleFactor = float(1.0).sub(abs(rayDirection.y)).toVar();
@@ -756,7 +760,7 @@ function buildColorNode(nodes) {
                             1.0,
                         ).mul(mix(0.78, 1.0, edgePresence));
                         const shadedColor = mix(
-                            vec3(0.39, 0.39, 0.41),
+                            vec3(0.58, 0.6, 0.63),
                             edgeColor,
                             shadeMix,
                         );
@@ -773,15 +777,22 @@ function buildColorNode(nodes) {
                     });
                 });
 
-                color.assign(
-                    cloudColor.mul(
-                        mix(
-                            vec3(0.78, 0.8, 0.82),
-                            vec3(0.92, 0.78, 0.62),
-                            pow(max(0.0, dot(rayDirection, nodes.uSunDirection)), 2.5).mul(0.28),
-                        ),
-                    ).mul(distanceColorFade),
+                const cloudTint = mix(
+                    vec3(0.78, 0.8, 0.82),
+                    vec3(0.92, 0.78, 0.62),
+                    pow(max(0.0, dot(rayDirection, nodes.uSunDirection)), 2.5).mul(0.28),
                 );
+                const premultipliedCloudColor = cloudColor
+                    .mul(cloudTint)
+                    .mul(distanceColorFade)
+                    .mul(distanceFade)
+                    .toVar();
+                const cloudColorFloor = vec3(0.72, 0.75, 0.78)
+                    .mul(cloudAlpha)
+                    .mul(distanceFade)
+                    .toVar();
+
+                color.assign(max(premultipliedCloudColor, cloudColorFloor));
                 alpha.assign(cloudAlpha.mul(distanceFade));
             });
         });

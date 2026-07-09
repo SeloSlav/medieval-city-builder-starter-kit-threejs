@@ -51,6 +51,7 @@ export class App {
       bounds: sceneManager.terrain.bounds,
       getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
       getCursorOverride: () => this.roadTool?.getCursor() ?? null,
+      shouldIgnoreInput: (event) => this.roadTool?.shouldBlockCameraInput(event) ?? false,
     });
 
     const roadSelection = new RoadSelection({
@@ -62,9 +63,7 @@ export class App {
     });
 
     const roadTool = new RoadTool({
-      camera: sceneManager.camera,
       domElement: sceneManager.renderer.domElement,
-      input,
       network: roadNetwork,
       sceneManager,
       selection: roadSelection,
@@ -74,13 +73,25 @@ export class App {
         roadSelection.refresh();
         this.syncToolbar();
       },
-      onModeChanged: () => this.syncToolbar(),
+      onStateChanged: () => this.syncToolbar(),
+      onDeleteRequested: (request) => {
+        if (!this.toolbar) return;
+        if (!request) {
+          this.toolbar.hideDeletePopup();
+          return;
+        }
+        this.toolbar.showDeletePopup({
+          clientX: request.clientX,
+          clientY: request.clientY,
+          onRemove: () => roadTool.confirmDelete(request.edgeId),
+          onCancel: () => roadSelection.setSelected(null),
+        });
+      },
     });
 
     const toolbar = new BuildToolbar(uiRoot, {
-      onToggleRoad: () => roadTool.setEnabled(!roadTool.isEnabled()),
-      onUndo: () => roadTool.undo(),
-      onDelete: () => roadTool.deleteSelected(),
+      onOpenRoads: () => roadTool.setEnabled(!roadTool.isEnabled()),
+      onBuildRoad: () => roadTool.commitDraft(),
     });
 
     this.sceneManager = sceneManager;
@@ -139,9 +150,8 @@ export class App {
   private syncToolbar(): void {
     if (!this.toolbar || !this.roadNetwork || !this.roadTool || !this.roadSelection) return;
     const stats: ToolbarStats = {
-      nodes: this.roadNetwork.nodes.size,
-      edges: this.roadNetwork.edges.size,
-      selected: this.roadSelection.getSelectedEdgeId() !== null,
+      canBuild: this.roadTool.isDraftBuildable(),
+      hasDraft: this.roadTool.hasDraft(),
       mode: this.roadTool.isEnabled() ? 'road' : 'idle',
     };
     this.toolbar.setStats(stats);

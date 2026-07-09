@@ -32,15 +32,20 @@ export class RoadSelection {
   }
 
   pick(clientX: number, clientY: number): boolean {
+    const edgeId = this.pickEdgeId(clientX, clientY);
+    this.setSelected(edgeId);
+    return Boolean(edgeId);
+  }
+
+  pickEdgeId(clientX: number, clientY: number): string | null {
     const rect = this.options.domElement.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
+    if (rect.width <= 0 || rect.height <= 0) return null;
     this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.mouse, this.options.camera);
     const hits = this.raycaster.intersectObjects(this.options.sceneManager.getRoadPickMeshes(), false);
     const edgeId = hits.find((hit) => typeof hit.object.userData.edgeId === 'string')?.object.userData.edgeId as string | undefined;
-    this.setSelected(edgeId ?? null);
-    return Boolean(edgeId);
+    return edgeId ?? null;
   }
 
   setSelected(edgeId: string | null): void {

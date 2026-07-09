@@ -122,11 +122,12 @@ export class Terrain {
   }
 
   private getTerrainUv(x: number, z: number): THREE.Vector2 {
-    const scale = 42;
-    const rotatedX = x * 0.82 - z * 0.57;
-    const rotatedZ = x * 0.57 + z * 0.82;
-    const warp = this.fbm(x * 0.008 + 13.2, z * 0.008 - 7.4, 3) * 0.36;
-    return new THREE.Vector2(rotatedX / scale + warp, rotatedZ / scale - warp * 0.62);
+    const scale = 88;
+    const rotatedX = x * 0.67 - z * 0.74;
+    const rotatedZ = x * 0.74 + z * 0.67;
+    const warpX = this.fbm(x * 0.0048 + 13.2, z * 0.0048 - 7.4, 4) * 0.38 + this.fbm(x * 0.018 - 71.5, z * 0.018 + 19.8, 3) * 0.055;
+    const warpZ = this.fbm(x * 0.0053 - 28.6, z * 0.0053 + 44.1, 4) * 0.38 + this.fbm(x * 0.016 + 53.7, z * 0.016 - 38.2, 3) * 0.055;
+    return new THREE.Vector2(rotatedX / scale + warpX, rotatedZ / (scale * 1.17) + warpZ);
   }
 
   private getEdgeHillHeight(x: number, z: number): number {
