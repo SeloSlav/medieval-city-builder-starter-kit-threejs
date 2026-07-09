@@ -146,7 +146,9 @@ export class App {
     this.syncToolbar();
     window.addEventListener('resize', this.onResize);
     this.onResize();
+    cameraController.applyRtsOrbitView();
     cameraController.update(0);
+    this.toolbar?.setZoomPercent(cameraController.getZoomPercent());
     this.lastTime = performance.now();
     this.frameBudgetTime = this.lastTime;
     this.fpsSampleStart = this.lastTime;

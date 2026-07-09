@@ -17,6 +17,13 @@ export const CLOSE_PAN_SPEED_SCALE = 0.22;
 export const CLOSE_FOV = 48;
 export const DEFAULT_FOV = 54;
 
+/** 100% zoom reference — keep in sync with grassLodMath BASELINE_CAMERA_DISTANCE. */
+export const BASELINE_ORBIT_DISTANCE = 88;
+
+/** Default strategic RTS orbit when the app loads and when leaving first-person. */
+export const RTS_ORBIT_DISTANCE = 240;
+export const RTS_ORBIT_PITCH = THREE.MathUtils.degToRad(68);
+
 /** Minimum clearance between camera and sampled terrain height. */
 export const MIN_CAMERA_TERRAIN_CLEARANCE = 1.8;
 

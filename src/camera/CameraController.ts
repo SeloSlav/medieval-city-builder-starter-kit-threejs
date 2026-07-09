@@ -1,6 +1,7 @@
 ﻿import * as THREE from 'three';
 import type { TerrainBounds } from '../terrain/Terrain.ts';
 import {
+  BASELINE_ORBIT_DISTANCE,
   CLOSE_FOV,
   DEFAULT_FOV,
   MIN_CAMERA_TERRAIN_CLEARANCE,
@@ -9,16 +10,16 @@ import {
   CLOSE_LOOK_AHEAD,
   CLOSE_LOOK_HEIGHT_OFFSET,
   CLOSE_PAN_SPEED_SCALE,
+  RTS_ORBIT_DISTANCE,
+  RTS_ORBIT_PITCH,
   evalCloseBlendFromDistance,
 } from './CameraCurves.ts';
 
-const DEFAULT_PITCH = THREE.MathUtils.degToRad(7);
 const MIN_PITCH = THREE.MathUtils.degToRad(5);
 const MAX_PITCH = THREE.MathUtils.degToRad(70);
-const DEFAULT_DISTANCE = 88;
 const BASELINE_ZOOM_PERCENT = 100;
 const MAX_ZOOM_PERCENT = 1000;
-const MIN_DISTANCE = DEFAULT_DISTANCE / (MAX_ZOOM_PERCENT / BASELINE_ZOOM_PERCENT);
+const MIN_DISTANCE = BASELINE_ORBIT_DISTANCE / (MAX_ZOOM_PERCENT / BASELINE_ZOOM_PERCENT);
 const MAX_DISTANCE = 300;
 const ZOOM_MULTIPLIER = 1.18;
 const PAN_LERP_SPEED = 10;
@@ -42,12 +43,12 @@ export type CameraControllerConfig = {
 
 export class CameraController {
   private readonly config: CameraControllerConfig;
-  private currentDistance = DEFAULT_DISTANCE;
-  private targetDistance = DEFAULT_DISTANCE;
+  private currentDistance = RTS_ORBIT_DISTANCE;
+  private targetDistance = RTS_ORBIT_DISTANCE;
   private currentYaw = -Math.PI / 2;
   private targetYaw = -Math.PI / 2;
-  private currentPitch = DEFAULT_PITCH;
-  private targetPitch = DEFAULT_PITCH;
+  private currentPitch = RTS_ORBIT_PITCH;
+  private targetPitch = RTS_ORBIT_PITCH;
   private readonly desiredTarget = new THREE.Vector3();
   private readonly orbitPosition = new THREE.Vector3();
   private readonly orbitDirection = new THREE.Vector3();
@@ -65,7 +66,7 @@ export class CameraController {
     this.config = config;
     this.config.target.set(0, config.getHeightAt(0, 0), 0);
     this.desiredTarget.copy(this.config.target);
-    this.updateCamera();
+    this.applyRtsOrbitView();
     config.domElement.addEventListener('mousedown', this.onMouseDown, { capture: true });
     config.domElement.addEventListener('wheel', this.onWheel, { passive: false, capture: true });
     config.domElement.addEventListener('contextmenu', this.onContextMenu);
@@ -76,7 +77,7 @@ export class CameraController {
   }
 
   getZoomPercent(): number {
-    return (DEFAULT_DISTANCE / this.currentDistance) * BASELINE_ZOOM_PERCENT;
+    return (BASELINE_ORBIT_DISTANCE / this.currentDistance) * BASELINE_ZOOM_PERCENT;
   }
 
   getOrbitDistance(): number {
@@ -99,17 +100,21 @@ export class CameraController {
     this.keys.clear();
   }
 
+  applyRtsOrbitView(): void {
+    this.currentPitch = RTS_ORBIT_PITCH;
+    this.targetPitch = RTS_ORBIT_PITCH;
+    this.targetDistance = THREE.MathUtils.clamp(RTS_ORBIT_DISTANCE, this.getMinDistance(), MAX_DISTANCE);
+    this.currentDistance = this.targetDistance;
+    this.updateCamera();
+  }
+
   syncFromFirstPerson(x: number, z: number, yaw: number): void {
     const terrainY = this.config.getHeightAt(x, z);
     this.desiredTarget.set(x, terrainY, z);
     this.config.target.copy(this.desiredTarget);
     this.currentYaw = this.normalizeAngle(yaw);
     this.targetYaw = this.currentYaw;
-    this.currentPitch = DEFAULT_PITCH;
-    this.targetPitch = DEFAULT_PITCH;
-    this.targetDistance = THREE.MathUtils.clamp(24, this.getMinDistance(), MAX_DISTANCE);
-    this.currentDistance = this.targetDistance;
-    this.updateCamera();
+    this.applyRtsOrbitView();
   }
 
   update(dt: number): void {
