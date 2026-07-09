@@ -18,7 +18,7 @@ import {
   GRASS_BLADES_PER_TUFT,
   GRASS_EDGE_FADE_BAND,
   GRASS_STREAM_CHUNK_RADIUS,
-  GRASS_STREAM_CHUNKS_PER_FRAME,
+  GRASS_STREAM_SLOTS_PER_FRAME,
   GRASS_TUFT_SCATTER_ATTEMPTS,
   GRASS_TUFTS_PER_CHUNK,
   resolveCloseGroundLod,
@@ -44,9 +44,14 @@ export type GrassBladeField = {
 
 const ROAD_CLEAR_MARGIN = 1.05;
 const TAU = Math.PI * 2;
-const MAX_STREAM_INSTANCES = (GRASS_STREAM_CHUNK_RADIUS * 2 + 1) ** 2 * (GRASS_TUFTS_PER_CHUNK + 8);
+const GRID_SIDE = GRASS_STREAM_CHUNK_RADIUS * 2 + 1;
+const SLOT_CAPACITY = GRASS_TUFTS_PER_CHUNK + 8;
+const MAX_STREAM_INSTANCES = GRID_SIDE * GRID_SIDE * SLOT_CAPACITY;
 const MIN_TUFT_SPACING_SQ = 0.42 * 0.42;
 const MIN_MICRO_TUFT_SPACING_SQ = 0.26 * 0.26;
+const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+const copyMatrix = new THREE.Matrix4();
+const copyColor = new THREE.Color();
 
 /** Muted olive — aligned with forest undergrowth. */
 const BLADE_BASE = new THREE.Color(0x3a5032);
@@ -61,10 +66,17 @@ type GrassFieldContext = {
   roadEdges: RoadEdge[];
 };
 
-type StreamChunk = {
-  chunkX: number;
-  chunkZ: number;
+type PendingSlot = {
+  gridIndex: number;
+  worldChunkX: number;
+  worldChunkZ: number;
   sortKey: number;
+};
+
+type SlotRecord = {
+  worldChunkX: number;
+  worldChunkZ: number;
+  count: number;
 };
 
 export function createGrassBladeField(
@@ -86,131 +98,178 @@ export function createGrassBladeField(
 
   const material = createGrassBladeMaterial();
   const geometry = createGrassTuftGeometry();
-
-  const createStreamMesh = (name: string): THREE.InstancedMesh => {
-    const streamMesh = new THREE.InstancedMesh(geometry, material, MAX_STREAM_INSTANCES);
-    streamMesh.name = name;
-    streamMesh.count = 0;
-    streamMesh.castShadow = false;
-    streamMesh.receiveShadow = true;
-    streamMesh.frustumCulled = false;
-    streamMesh.visible = false;
-    return streamMesh;
-  };
-
-  const meshPrimary = createStreamMesh('Grass blade stream A');
-  const meshSecondary = createStreamMesh('Grass blade stream B');
-  let activeMesh = meshPrimary;
-  let buildMesh = meshSecondary;
+  const mesh = new THREE.InstancedMesh(geometry, material, MAX_STREAM_INSTANCES);
+  mesh.name = 'Grass blade stream';
+  mesh.count = 0;
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  mesh.visible = false;
 
   const group = new THREE.Group();
   group.name = 'Grass blade field';
-  group.add(meshPrimary, meshSecondary);
+  group.add(mesh);
+
+  const slotRecords: SlotRecord[] = Array.from({ length: GRID_SIDE * GRID_SIDE }, () => ({
+    worldChunkX: Number.NaN,
+    worldChunkZ: Number.NaN,
+    count: 0,
+  }));
 
   let streamChunkX = Number.NaN;
   let streamChunkZ = Number.NaN;
-  let needsInitialStream = true;
+  let needsFullStream = true;
   let roadClearanceDirty = false;
-  let rebuildQueue: StreamChunk[] | null = null;
-  let buildInstanceIndex = 0;
-  let buildFocusX = 0;
-  let buildFocusZ = 0;
+  let pendingSlots: PendingSlot[] = [];
+  let streamFocusX = 0;
+  let streamFocusZ = 0;
   let lastMaterialOpacity = Number.NaN;
   let grassZoomVisible = false;
   let wasFirstPerson = false;
 
-  const collectStreamChunks = (focusX: number, focusZ: number): StreamChunk[] => {
-    const centerChunkX = Math.floor(focusX / GRASS_BLADE_CHUNK_SIZE);
-    const centerChunkZ = Math.floor(focusZ / GRASS_BLADE_CHUNK_SIZE);
-    const includeRadiusSq = (GRASS_BLADE_NEAR_RADIUS + GRASS_BLADE_CHUNK_SIZE * 0.55) ** 2;
-    const chunks: StreamChunk[] = [];
-
-    for (let dz = -GRASS_STREAM_CHUNK_RADIUS; dz <= GRASS_STREAM_CHUNK_RADIUS; dz++) {
-      for (let dx = -GRASS_STREAM_CHUNK_RADIUS; dx <= GRASS_STREAM_CHUNK_RADIUS; dx++) {
-        const chunkX = centerChunkX + dx;
-        const chunkZ = centerChunkZ + dz;
-        const chunkCenterX = (chunkX + 0.5) * GRASS_BLADE_CHUNK_SIZE;
-        const chunkCenterZ = (chunkZ + 0.5) * GRASS_BLADE_CHUNK_SIZE;
-        const toFocusX = chunkCenterX - focusX;
-        const toFocusZ = chunkCenterZ - focusZ;
-        const distSq = toFocusX * toFocusX + toFocusZ * toFocusZ;
-        if (distSq > includeRadiusSq) continue;
-        chunks.push({ chunkX, chunkZ, sortKey: distSq });
-      }
-    }
-
-    chunks.sort((a, b) => a.sortKey - b.sortKey);
-    return chunks;
+  const chunkInStreamRange = (chunkX: number, chunkZ: number, focusX: number, focusZ: number): boolean => {
+    const chunkCenterX = (chunkX + 0.5) * GRASS_BLADE_CHUNK_SIZE;
+    const chunkCenterZ = (chunkZ + 0.5) * GRASS_BLADE_CHUNK_SIZE;
+    const includeRadiusSq = (GRASS_BLADE_NEAR_RADIUS + GRASS_BLADE_CHUNK_SIZE * 0.85) ** 2;
+    const dx = chunkCenterX - focusX;
+    const dz = chunkCenterZ - focusZ;
+    return dx * dx + dz * dz <= includeRadiusSq;
   };
 
-  const startBackgroundRebuild = (focusX: number, focusZ: number): void => {
-    rebuildQueue = collectStreamChunks(focusX, focusZ);
-    buildInstanceIndex = 0;
-    buildFocusX = focusX;
-    buildFocusZ = focusZ;
-    buildMesh.count = 0;
-    needsInitialStream = false;
+  const gridIndex = (localX: number, localZ: number): number => localZ * GRID_SIDE + localX;
+
+  const worldChunkAt = (centerChunkX: number, centerChunkZ: number, localX: number, localZ: number) => ({
+    chunkX: centerChunkX + localX - GRASS_STREAM_CHUNK_RADIUS,
+    chunkZ: centerChunkZ + localZ - GRASS_STREAM_CHUNK_RADIUS,
+  });
+
+  const slotDistanceSq = (chunkX: number, chunkZ: number, focusX: number, focusZ: number): number => {
+    const centerX = (chunkX + 0.5) * GRASS_BLADE_CHUNK_SIZE;
+    const centerZ = (chunkZ + 0.5) * GRASS_BLADE_CHUNK_SIZE;
+    const dx = centerX - focusX;
+    const dz = centerZ - focusZ;
+    return dx * dx + dz * dz;
+  };
+
+  const refreshMeshCount = (): void => {
+    mesh.count = MAX_STREAM_INSTANCES;
+  };
+
+  const regenerateSlot = (
+    gridIdx: number,
+    worldChunkX: number,
+    worldChunkZ: number,
+    focusX: number,
+    focusZ: number,
+  ): void => {
+    const slotStart = gridIdx * SLOT_CAPACITY;
+    clearSlotRange(mesh, slotStart, SLOT_CAPACITY);
+    if (!chunkInStreamRange(worldChunkX, worldChunkZ, focusX, focusZ)) {
+      slotRecords[gridIdx] = { worldChunkX, worldChunkZ, count: 0 };
+      return;
+    }
+
+    const written = writeChunkInstances(
+      mesh,
+      slotStart,
+      worldChunkX,
+      worldChunkZ,
+      focusX,
+      focusZ,
+      context,
+      SLOT_CAPACITY,
+    );
+    slotRecords[gridIdx] = { worldChunkX, worldChunkZ, count: written - slotStart };
+  };
+
+  const queueFullStream = (centerChunkX: number, centerChunkZ: number, focusX: number, focusZ: number): void => {
+    pendingSlots = [];
+    for (let localZ = 0; localZ < GRID_SIDE; localZ++) {
+      for (let localX = 0; localX < GRID_SIDE; localX++) {
+        const { chunkX, chunkZ } = worldChunkAt(centerChunkX, centerChunkZ, localX, localZ);
+        if (!chunkInStreamRange(chunkX, chunkZ, focusX, focusZ)) continue;
+        pendingSlots.push({
+          gridIndex: gridIndex(localX, localZ),
+          worldChunkX: chunkX,
+          worldChunkZ: chunkZ,
+          sortKey: slotDistanceSq(chunkX, chunkZ, focusX, focusZ),
+        });
+      }
+    }
+    pendingSlots.sort((a, b) => a.sortKey - b.sortKey);
+    streamChunkX = centerChunkX;
+    streamChunkZ = centerChunkZ;
+    streamFocusX = focusX;
+    streamFocusZ = focusZ;
+    needsFullStream = false;
     roadClearanceDirty = false;
   };
 
-  const swapActiveMesh = (): void => {
-    activeMesh.visible = false;
-    buildMesh.computeBoundingSphere();
-    buildMesh.visible = grassZoomVisible;
-    activeMesh = buildMesh;
-    buildMesh = activeMesh === meshPrimary ? meshSecondary : meshPrimary;
-    streamChunkX = Math.floor(buildFocusX / GRASS_BLADE_CHUNK_SIZE);
-    streamChunkZ = Math.floor(buildFocusZ / GRASS_BLADE_CHUNK_SIZE);
+  const shiftStreamGrid = (
+    deltaChunkX: number,
+    deltaChunkZ: number,
+    newCenterChunkX: number,
+    newCenterChunkZ: number,
+    focusX: number,
+    focusZ: number,
+  ): void => {
+    const nextRecords: SlotRecord[] = Array.from({ length: GRID_SIDE * GRID_SIDE }, () => ({
+      worldChunkX: Number.NaN,
+      worldChunkZ: Number.NaN,
+      count: 0,
+    }));
+    const regen: PendingSlot[] = [];
+
+    for (let localZ = 0; localZ < GRID_SIDE; localZ++) {
+      for (let localX = 0; localX < GRID_SIDE; localX++) {
+        const gridIdx = gridIndex(localX, localZ);
+        const { chunkX, chunkZ } = worldChunkAt(newCenterChunkX, newCenterChunkZ, localX, localZ);
+        const sourceLocalX = localX + deltaChunkX;
+        const sourceLocalZ = localZ + deltaChunkZ;
+
+        if (
+          sourceLocalX >= 0 &&
+          sourceLocalX < GRID_SIDE &&
+          sourceLocalZ >= 0 &&
+          sourceLocalZ < GRID_SIDE
+        ) {
+          const sourceIdx = gridIndex(sourceLocalX, sourceLocalZ);
+          copySlotRange(mesh, sourceIdx, gridIdx, SLOT_CAPACITY);
+          nextRecords[gridIdx] = { worldChunkX: chunkX, worldChunkZ: chunkZ, count: slotRecords[sourceIdx]!.count };
+        } else if (chunkInStreamRange(chunkX, chunkZ, focusX, focusZ)) {
+          regen.push({
+            gridIndex: gridIdx,
+            worldChunkX: chunkX,
+            worldChunkZ: chunkZ,
+            sortKey: slotDistanceSq(chunkX, chunkZ, focusX, focusZ),
+          });
+          nextRecords[gridIdx] = { worldChunkX: chunkX, worldChunkZ: chunkZ, count: 0 };
+        }
+      }
+    }
+
+    slotRecords.splice(0, slotRecords.length, ...nextRecords);
+    regen.sort((a, b) => a.sortKey - b.sortKey);
+    pendingSlots = regen;
+    streamChunkX = newCenterChunkX;
+    streamChunkZ = newCenterChunkZ;
+    streamFocusX = focusX;
+    streamFocusZ = focusZ;
   };
 
-  const stepBackgroundRebuild = (): void => {
-    if (!rebuildQueue) return;
+  const stepPendingSlots = (): void => {
+    if (pendingSlots.length === 0) return;
 
-    const end = Math.min(GRASS_STREAM_CHUNKS_PER_FRAME, rebuildQueue.length);
+    const end = Math.min(GRASS_STREAM_SLOTS_PER_FRAME, pendingSlots.length);
     for (let index = 0; index < end; index++) {
-      const { chunkX, chunkZ } = rebuildQueue[index]!;
-      buildInstanceIndex = writeChunkInstances(
-        buildMesh,
-        buildInstanceIndex,
-        chunkX,
-        chunkZ,
-        buildFocusX,
-        buildFocusZ,
-        context,
-      );
+      const slot = pendingSlots[index]!;
+      regenerateSlot(slot.gridIndex, slot.worldChunkX, slot.worldChunkZ, streamFocusX, streamFocusZ);
     }
-
-    rebuildQueue.splice(0, end);
-    buildMesh.count = buildInstanceIndex;
-    buildMesh.instanceMatrix.needsUpdate = true;
-    if (buildMesh.instanceColor) buildMesh.instanceColor.needsUpdate = true;
-
-    if (activeMesh.count === 0) {
-      buildMesh.visible = grassZoomVisible;
-      activeMesh.visible = false;
-    }
-
-    if (rebuildQueue.length === 0) {
-      rebuildQueue = null;
-      swapActiveMesh();
-    }
-  };
-
-  const syncStreamVisibility = (): void => {
-    if (!grassZoomVisible) {
-      activeMesh.visible = false;
-      buildMesh.visible = false;
-      return;
-    }
-
-    if (rebuildQueue && activeMesh.count > 0) {
-      activeMesh.visible = true;
-      buildMesh.visible = false;
-      return;
-    }
-
-    activeMesh.visible = activeMesh.count > 0;
-    buildMesh.visible = false;
+    pendingSlots.splice(0, end);
+    refreshMeshCount();
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
   };
 
   return {
@@ -226,7 +285,7 @@ export function createGrassBladeField(
       firstPersonActive = false,
     ) {
       if (firstPersonActive && !wasFirstPerson) {
-        needsInitialStream = true;
+        needsFullStream = true;
       }
       wasFirstPerson = firstPersonActive;
 
@@ -244,9 +303,9 @@ export function createGrassBladeField(
         }
       }
 
+      mesh.visible = grassZoomVisible;
       if (!grassZoomVisible) {
-        rebuildQueue = null;
-        syncStreamVisibility();
+        pendingSlots = [];
         return;
       }
 
@@ -254,29 +313,20 @@ export function createGrassBladeField(
       const focusZ = firstPersonActive ? cameraPosition.z : cameraTarget.z;
       const centerChunkX = Math.floor(focusX / GRASS_BLADE_CHUNK_SIZE);
       const centerChunkZ = Math.floor(focusZ / GRASS_BLADE_CHUNK_SIZE);
+      streamFocusX = focusX;
+      streamFocusZ = focusZ;
 
-      if (rebuildQueue) {
-        const queueChunkX = Math.floor(buildFocusX / GRASS_BLADE_CHUNK_SIZE);
-        const queueChunkZ = Math.floor(buildFocusZ / GRASS_BLADE_CHUNK_SIZE);
-        if (
-          roadClearanceDirty ||
-          centerChunkX !== queueChunkX ||
-          centerChunkZ !== queueChunkZ
-        ) {
-          startBackgroundRebuild(focusX, focusZ);
-        }
-        stepBackgroundRebuild();
-        syncStreamVisibility();
-        return;
+      const deltaChunkX = Number.isFinite(streamChunkX) ? centerChunkX - streamChunkX : 0;
+      const deltaChunkZ = Number.isFinite(streamChunkZ) ? centerChunkZ - streamChunkZ : 0;
+      const bigJump = Math.abs(deltaChunkX) > 1 || Math.abs(deltaChunkZ) > 1;
+
+      if (needsFullStream || roadClearanceDirty || bigJump || !Number.isFinite(streamChunkX)) {
+        queueFullStream(centerChunkX, centerChunkZ, focusX, focusZ);
+      } else if (deltaChunkX !== 0 || deltaChunkZ !== 0) {
+        shiftStreamGrid(deltaChunkX, deltaChunkZ, centerChunkX, centerChunkZ, focusX, focusZ);
       }
 
-      const chunkChanged = centerChunkX !== streamChunkX || centerChunkZ !== streamChunkZ;
-      if (needsInitialStream || roadClearanceDirty || chunkChanged) {
-        startBackgroundRebuild(focusX, focusZ);
-        stepBackgroundRebuild();
-      }
-
-      syncStreamVisibility();
+      stepPendingSlots();
     },
     dispose() {
       geometry.dispose();
@@ -295,6 +345,30 @@ function createDisabledGrassBladeField(): GrassBladeField {
     updateCameraState() {},
     dispose() {},
   };
+}
+
+function clearSlotRange(mesh: THREE.InstancedMesh, startIndex: number, capacity: number): void {
+  for (let index = 0; index < capacity; index++) {
+    mesh.setMatrixAt(startIndex + index, hiddenMatrix);
+  }
+}
+
+function copySlotRange(
+  mesh: THREE.InstancedMesh,
+  fromSlot: number,
+  toSlot: number,
+  capacity: number,
+): void {
+  const fromStart = fromSlot * capacity;
+  const toStart = toSlot * capacity;
+  for (let index = 0; index < capacity; index++) {
+    mesh.getMatrixAt(fromStart + index, copyMatrix);
+    mesh.setMatrixAt(toStart + index, copyMatrix);
+    if (mesh.instanceColor) {
+      mesh.getColorAt(fromStart + index, copyColor);
+      mesh.setColorAt(toStart + index, copyColor);
+    }
+  }
 }
 
 function chunkSeed(chunkX: number, chunkZ: number): number {
@@ -316,6 +390,7 @@ function writeChunkInstances(
   focusX: number,
   focusZ: number,
   context: GrassFieldContext,
+  maxInstances = Number.POSITIVE_INFINITY,
 ): number {
   const { terrain, extent, forestCores, isBlockedAt, roadEdges } = context;
   const rng = mulberry32(chunkSeed(chunkX, chunkZ));
@@ -339,6 +414,7 @@ function writeChunkInstances(
   const tuftTarget = GRASS_TUFTS_PER_CHUNK + Math.floor(rng() * 9);
 
   for (let attempt = 0; attempt < GRASS_TUFT_SCATTER_ATTEMPTS && localPlacements.length < tuftTarget; attempt++) {
+    if (instanceIndex - startIndex >= maxInstances) break;
     const micro = rng() < 0.42 && localPlacements.length > 2;
     let x: number;
     let z: number;
@@ -405,6 +481,10 @@ function writeChunkInstances(
     instanceIndex++;
   }
 
+  for (let pad = instanceIndex; pad < startIndex + maxInstances && Number.isFinite(maxInstances); pad++) {
+    mesh.setMatrixAt(pad, hiddenMatrix);
+  }
+
   return instanceIndex;
 }
 
@@ -436,13 +516,13 @@ function composeTuftMatrix(
   matrix.compose(position, quaternion, scaleVector);
 }
 
-/** 1 near focus, 0 at outer radius. */
+/** 1 near focus, 0 at outer radius — eased so distant tufts fade in gently. */
 function edgeFadeFromFocusDistance(focusDist: number): number {
   const inner = GRASS_BLADE_NEAR_RADIUS - GRASS_EDGE_FADE_BAND;
   const outer = GRASS_BLADE_NEAR_RADIUS;
   const t = THREE.MathUtils.clamp((focusDist - inner) / (outer - inner), 0, 1);
   const smooth = t * t * (3 - 2 * t);
-  return 1 - smooth;
+  return Math.pow(1 - smooth, 1.35);
 }
 
 function createGrassBladeMaterial(): MeshStandardNodeMaterial {

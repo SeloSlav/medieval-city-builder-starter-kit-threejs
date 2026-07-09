@@ -198,7 +198,15 @@ export function stepFpLocomotion(
     }
   }
 
-  if (walk?.sampleWalkGroundTopY && pos.y < FLOOR_Y + SKIN - 1e-4) {
+  if (walk?.sampleWalkGroundTopY) {
+    const safetyProbeY = pos.y + probeDy;
+    const groundY = walk.sampleWalkGroundTopY(pos.x, pos.z, safetyProbeY, 'descent');
+    if (Number.isFinite(groundY) && pos.y < groundY + SKIN - 1e-4) {
+      pos.y = groundY + SKIN;
+      state.velocity.y = Math.max(0, state.velocity.y);
+      state.grounded = true;
+    }
+  } else if (pos.y < FLOOR_Y + SKIN - 1e-4) {
     pos.y = FLOOR_Y + SKIN;
     state.velocity.y = Math.max(0, state.velocity.y);
     state.grounded = true;

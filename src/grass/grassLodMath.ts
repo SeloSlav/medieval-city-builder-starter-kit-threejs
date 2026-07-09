@@ -18,9 +18,9 @@ export const TERRAIN_DIRT_FAR_DISTANCE =
   BASELINE_CAMERA_DISTANCE / (DIRT_FADE_START_ZOOM_PERCENT / 100);
 
 /** Horizontal radius (world units) where close dirt is visible around the camera. */
-export const DIRT_PROXIMITY_INNER = 22;
+export const DIRT_PROXIMITY_INNER = 26;
 
-export const DIRT_PROXIMITY_OUTER = 64;
+export const DIRT_PROXIMITY_OUTER = 78;
 
 export const DIRT_PROXIMITY_INNER_SQ = DIRT_PROXIMITY_INNER * DIRT_PROXIMITY_INNER;
 
@@ -32,8 +32,8 @@ export const GRASS_BLADE_REVEAL = {
   far: TERRAIN_DIRT_FAR_DISTANCE,
 } as const;
 
-/** Horizontal radius where 3D grass tufts render — shorter than dirt so grass fades first. */
-export const GRASS_BLADE_NEAR_RADIUS = 42;
+/** Horizontal radius where 3D grass tufts render — fades before dirt ends. */
+export const GRASS_BLADE_NEAR_RADIUS = 54;
 
 /** Spatial chunk size for streamed grass batches (larger = fewer pan hitches). */
 export const GRASS_BLADE_CHUNK_SIZE = 8;
@@ -47,15 +47,15 @@ export const GRASS_TUFT_SCATTER_ATTEMPTS = GRASS_TUFTS_PER_CHUNK + 28;
 /** Blade stalks in each tuft mesh (shared geometry). */
 export const GRASS_BLADES_PER_TUFT = 9;
 
-/** World chunks kept loaded around the camera focus (covers the grass patch). */
+/** Visible grass radius plus preload margin (world chunks beyond the fade edge). */
 export const GRASS_STREAM_CHUNK_RADIUS =
-  Math.ceil(GRASS_BLADE_NEAR_RADIUS / GRASS_BLADE_CHUNK_SIZE) + 1;
+  Math.ceil(GRASS_BLADE_NEAR_RADIUS / GRASS_BLADE_CHUNK_SIZE) + 2;
 
-/** Chunks written per frame into the back buffer — keeps pan hitch-free. */
-export const GRASS_STREAM_CHUNKS_PER_FRAME = 10;
+/** Slot columns/rows refreshed per frame when walking across chunk lines. */
+export const GRASS_STREAM_SLOTS_PER_FRAME = 3;
 
 /** Soft falloff band at the outer edge of the grass patch (world units). */
-export const GRASS_EDGE_FADE_BAND = 16;
+export const GRASS_EDGE_FADE_BAND = 24;
 
 /** 0 below 300% zoom → 1 at 400% zoom; controls whether close dirt is allowed at all. */
 export function dirtZoomGate(cameraDistance: number): number {

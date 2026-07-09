@@ -13,6 +13,8 @@ import {
 import { CAM_BOB_DIP_Y } from './fp/fpConstants.ts';
 import {
   createFpLocomotionState,
+  FP_LOCOMOTION_FEET_SKIN_M,
+  FP_WALK_FOOT_RADIUS_XZ,
   fpLocomotionConstants,
   queueFpJump,
   stepFpLocomotion,
@@ -103,7 +105,7 @@ export class FirstPersonController {
     const x = spawn?.x ?? 0;
     const z = spawn?.z ?? 0;
     const terrainY = this.config.getHeightAt(x, z);
-    this.pos.set(x, terrainY + fpLocomotionConstants.eyeStand, z);
+    this.pos.set(x, terrainY + FP_LOCOMOTION_FEET_SKIN_M, z);
     this.look.bodyYaw = spawn?.yaw ?? 0;
     this.look.pitch = spawn?.pitch ?? 0;
     this.look.headLookYaw = 0;
@@ -211,7 +213,7 @@ export class FirstPersonController {
   private applyCameraTransform(eyeLine: number): void {
     const camera = this.config.camera;
     const yaw = this.look.bodyYaw + this.look.headLookYaw;
-    camera.position.set(this.pos.x, this.pos.y - fpLocomotionConstants.eyeStand + eyeLine + this.camBobY, this.pos.z);
+    camera.position.set(this.pos.x, this.pos.y + eyeLine + this.camBobY, this.pos.z);
     camera.rotation.order = 'YXZ';
     camera.rotation.y = yaw;
     camera.rotation.x = this.look.pitch;
@@ -219,7 +221,7 @@ export class FirstPersonController {
   }
 
   private readonly sampleTerrainGround: WalkGroundSampler = (worldX, worldZ) => {
-    return this.config.getHeightAt(worldX, worldZ);
+    return sampleTerrainWalkTop(this.config.getHeightAt, worldX, worldZ);
   };
 
   private clampPositionXZ(): void {
@@ -363,4 +365,19 @@ export class FirstPersonController {
       this.resetTransientInputState();
     }
   };
+}
+
+/** Max terrain under the foot disk — keeps the body on slopes like Mammoth walk AABBs. */
+function sampleTerrainWalkTop(
+  getHeightAt: (x: number, z: number) => number,
+  x: number,
+  z: number,
+): number {
+  const r = FP_WALK_FOOT_RADIUS_XZ;
+  let top = getHeightAt(x, z);
+  top = Math.max(top, getHeightAt(x + r, z));
+  top = Math.max(top, getHeightAt(x - r, z));
+  top = Math.max(top, getHeightAt(x, z + r));
+  top = Math.max(top, getHeightAt(x, z - r));
+  return top;
 }
