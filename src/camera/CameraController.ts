@@ -1,8 +1,8 @@
 ﻿import * as THREE from 'three';
 import type { TerrainBounds } from '../terrain/Terrain.ts';
 
-const DEFAULT_PITCH = THREE.MathUtils.degToRad(10);
-const MIN_PITCH = THREE.MathUtils.degToRad(6);
+const DEFAULT_PITCH = THREE.MathUtils.degToRad(7);
+const MIN_PITCH = THREE.MathUtils.degToRad(5);
 const MAX_PITCH = THREE.MathUtils.degToRad(70);
 const MIN_DISTANCE = 16;
 const MAX_DISTANCE = 185;

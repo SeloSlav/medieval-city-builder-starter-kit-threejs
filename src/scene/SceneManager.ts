@@ -82,7 +82,7 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = null;
     this.scene.fog = new THREE.FogExp2(0xc3d8ef, 0.0012);
-    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1600);
+    this.camera = new THREE.PerspectiveCamera(54, 1, 0.1, 1600);
     this.sunDirection.setFromSphericalCoords(1, THREE.MathUtils.degToRad(43), THREE.MathUtils.degToRad(225));
     this.terrain = new Terrain(materials.terrain);
     this.terrainProjector = new TerrainProjector(this.terrain, this.camera, this.renderer.domElement);
