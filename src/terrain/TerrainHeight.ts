@@ -1,5 +1,4 @@
 import { BuildingTerrainLayout } from '../buildings/BuildingTerrainLayout.ts';
-import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
 import type { RiverLayout } from '../rivers/RiverLayout.ts';
 import type { QuarryLayout } from '../quarries/QuarryLayout.ts';
 
@@ -9,9 +8,6 @@ const TERRAIN_SIZE = 1080;
 let activeRiverLayout: RiverLayout | null = null;
 let activeQuarryLayout: QuarryLayout | null = null;
 let activePlacedBuildingLayout: BuildingTerrainLayout | null = null;
-let activePreviewBuilding: BuildingTerrainSource | null = null;
-let cachedPreviewLayout: BuildingTerrainLayout | null = null;
-let cachedPreviewKey = '';
 
 export function setActiveRiverLayout(layout: RiverLayout | null): void {
   activeRiverLayout = layout;
@@ -35,16 +31,6 @@ export function setActivePlacedBuildingLayout(layout: BuildingTerrainLayout | nu
 
 export function getActivePlacedBuildingLayout(): BuildingTerrainLayout | null {
   return activePlacedBuildingLayout;
-}
-
-export function setActivePreviewBuilding(preview: BuildingTerrainSource | null): void {
-  activePreviewBuilding = preview;
-  cachedPreviewLayout = null;
-  cachedPreviewKey = '';
-}
-
-export function hasActivePreviewBuilding(): boolean {
-  return activePreviewBuilding !== null;
 }
 
 /** @deprecated Use getActivePlacedBuildingLayout — kept for grass blocking call site. */
@@ -173,37 +159,9 @@ export function sampleHeightWithBuildingPads(
   return natural + layout.getPlatformRaise(x, z, natural);
 }
 
-export function samplePreviewTerrainHeight(x: number, z: number): number {
-  const natural = sampleNaturalTerrainHeight(x, z);
-  const preview = activePreviewBuilding;
-  if (!preview) return natural;
-
-  const key = `${preview.kind}:${preview.x.toFixed(2)}:${preview.z.toFixed(2)}`;
-  if (!cachedPreviewLayout || cachedPreviewKey !== key) {
-    cachedPreviewKey = key;
-    cachedPreviewLayout = BuildingTerrainLayout.fromBuildings([preview], sampleNaturalTerrainHeight);
-  }
-
-  return natural + cachedPreviewLayout.getPlatformRaise(x, z, natural);
-}
-
 export function sampleBaseTerrainHeight(x: number, z: number): number {
   const natural = sampleNaturalTerrainHeight(x, z);
-  let height = natural;
-
   const placedLayout = activePlacedBuildingLayout;
-  if (placedLayout && placedLayout.sites.length > 0) {
-    height += placedLayout.getPlatformRaise(x, z, natural);
-  }
-
-  const preview = activePreviewBuilding;
-  if (!preview) return height;
-
-  const key = `${preview.kind}:${preview.x.toFixed(2)}:${preview.z.toFixed(2)}`;
-  if (!cachedPreviewLayout || cachedPreviewKey !== key) {
-    cachedPreviewKey = key;
-    cachedPreviewLayout = BuildingTerrainLayout.fromBuildings([preview], sampleNaturalTerrainHeight);
-  }
-
-  return Math.max(height, natural + cachedPreviewLayout.getPlatformRaise(x, z, natural));
+  if (!placedLayout || placedLayout.sites.length === 0) return natural;
+  return natural + placedLayout.getPlatformRaise(x, z, natural);
 }

@@ -36,7 +36,7 @@ import { GameRuntime } from '../runtime/GameRuntime.ts';
 import { SceneManager } from '../scene/SceneManager.ts';
 import { QuarryMapIcons } from '../map/QuarryMapIcons.ts';
 import { beginStartupTextureLoad } from '../scene/startupTextures.ts';
-import { setActivePlacedBuildingLayout, setActivePreviewBuilding, sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
+import { setActivePlacedBuildingLayout, sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
 import { updateTerrainBuildingPads } from '../terrain/TerrainBuildingPads.ts';
 import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
 import { LoadingScreen } from '../ui/LoadingScreen.ts';
@@ -200,8 +200,8 @@ export class App {
       isWaterAt: (x, z) => sceneManager.riverField.isRenderedWetAt(x, z),
       getNaturalHeightAt: (x, z) => sampleNaturalTerrainHeight(x, z),
       onPreviewChange: (preview) => {
-        setActivePreviewBuilding(preview);
         this.syncBuildingTerrainLayout();
+        this.syncPreviewTerrainPads(preview);
       },
       onModeChanged: () => this.syncToolbar(),
       onPlacementRejected: (reason) => {
@@ -299,7 +299,7 @@ export class App {
           roadTool.setEnabled(false);
           buildingTool.setMode('off');
           this.toastManager?.show(
-            'Click 4 corners — the first edge should face your road. Use +/− for plot count, F to rotate frontage.',
+            'Click two corners along the road for frontage, then click behind them to set depth — the rectangle closes automatically. Use +/− for plot count.',
             { variant: 'info', durationMs: 6500 },
           );
         }
@@ -632,6 +632,17 @@ export class App {
     const placedSources = this.collectPlacedBuildingSources();
     const placedLayout = BuildingTerrainLayout.fromBuildings(placedSources, sampleNaturalTerrainHeight);
     setActivePlacedBuildingLayout(placedSources.length > 0 ? placedLayout : null);
+  }
+
+  private syncPreviewTerrainPads(preview: BuildingTerrainSource | null): void {
+    if (!this.sceneManager) return;
+
+    const placedSources = this.collectPlacedBuildingSources();
+    const sources = preview ? [...placedSources, preview] : placedSources;
+    const layout = sources.length > 0
+      ? BuildingTerrainLayout.fromBuildings(sources, sampleNaturalTerrainHeight)
+      : null;
+    updateTerrainBuildingPads(this.sceneManager.terrain, layout);
   }
 
   private syncPlacedBuildingTerrain(options?: { forceMeshUpdate?: boolean }): void {

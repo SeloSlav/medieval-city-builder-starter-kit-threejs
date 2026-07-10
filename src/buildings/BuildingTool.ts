@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { TerrainProjector } from '../terrain/TerrainProjector.ts';
 import type { BuildingKind, GameState } from '../resources/types.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
@@ -34,6 +35,7 @@ export class BuildingTool {
   private lastPreviewValidation: BuildingPlacementResult | null = null;
   private lastTerrainPreviewX = Number.NaN;
   private lastTerrainPreviewZ = Number.NaN;
+  private readonly previewMoveThreshold = 0.35;
   private readonly terrainPreviewMoveThreshold = 0.45;
 
   constructor(options: BuildingToolOptions) {
@@ -69,8 +71,11 @@ export class BuildingTool {
   }
 
   update(): void {
-    if (this.mode === 'off' || !this.pointerInside) return;
-    this.refreshPreview();
+    if (this.mode === 'off') return;
+    if (this.options.isBlocked()) {
+      this.clearPreview();
+      this.options.onPreviewChange?.(null);
+    }
   }
 
   dispose(): void {
@@ -93,6 +98,22 @@ export class BuildingTool {
   private readonly onPointerMove = (event: MouseEvent): void => {
     this.pointerX = event.clientX;
     this.pointerY = event.clientY;
+    if (this.mode === 'off' || !this.pointerInside || this.options.isBlocked()) return;
+
+    const point = this.options.terrainProjector.pick(event.clientX, event.clientY);
+    if (!point) {
+      this.clearPreview();
+      this.options.onPreviewChange?.(null);
+      return;
+    }
+
+    const dx = point.x - this.lastPreviewX;
+    const dz = point.z - this.lastPreviewZ;
+    if (Number.isFinite(this.lastPreviewX) && Math.hypot(dx, dz) < this.previewMoveThreshold) {
+      return;
+    }
+
+    this.refreshPreviewAt(point);
   };
 
   private readonly onPointerDown = (event: MouseEvent): void => {
@@ -141,11 +162,17 @@ export class BuildingTool {
       return;
     }
 
-    const definition = getBuildingDefinition(this.mode);
+    this.refreshPreviewAt(point);
+  }
+
+  private refreshPreviewAt(point: THREE.Vector3): void {
+    if (this.mode === 'off') return;
+    const kind = this.mode;
+    const definition = getBuildingDefinition(kind);
     const validation = this.validateAt(point.x, point.z);
     this.updateTerrainPreview(point.x, point.z);
     this.options.markers.setPlacementPreview(
-      this.mode,
+      kind,
       point.x,
       point.z,
       definition.workRadius,

@@ -1,7 +1,7 @@
 ﻿import * as THREE from 'three';
 import type { RiverField } from '../rivers/RiverField.ts';
 import type { QuarryLayout } from '../quarries/QuarryLayout.ts';
-import { sampleBaseTerrainHeight, hasActivePreviewBuilding, samplePreviewTerrainHeight } from './TerrainHeight.ts';
+import { sampleBaseTerrainHeight } from './TerrainHeight.ts';
 import { sampleTerrainMeshHeight } from './TerrainMeshHeight.ts';
 import { yieldToMain } from '../utils/yieldToMain.ts';
 
@@ -48,13 +48,7 @@ export class Terrain {
   }
 
   getHeightAt(x: number, z: number): number {
-    if (!hasActivePreviewBuilding()) {
-      return sampleTerrainMeshHeight(this.mesh.geometry, x, z, this.resolution, this.size);
-    }
-
-    const meshHeight = sampleTerrainMeshHeight(this.mesh.geometry, x, z, this.resolution, this.size);
-    const previewHeight = samplePreviewTerrainHeight(x, z);
-    return Math.max(meshHeight, previewHeight);
+    return sampleTerrainMeshHeight(this.mesh.geometry, x, z, this.resolution, this.size);
   }
 
   getPointAt(x: number, z: number, offset = 0): THREE.Vector3 {

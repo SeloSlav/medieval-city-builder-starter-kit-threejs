@@ -49,6 +49,20 @@ function writeLineLoop(geometry: THREE.BufferGeometry, points: THREE.Vector3[]):
   geometry.setFromPoints(points);
 }
 
+function writeDashedLoop(geometry: THREE.BufferGeometry, points: THREE.Vector3[]): void {
+  if (points.length < 2) {
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+    return;
+  }
+  geometry.setFromPoints(points);
+  const line = new THREE.Line(geometry);
+  const distances = line.computeLineDistances();
+  const lineDistance = distances.geometry.getAttribute('lineDistance');
+  if (lineDistance) {
+    geometry.setAttribute('lineDistance', lineDistance);
+  }
+}
+
 function writeLineSegments(geometry: THREE.BufferGeometry, positions: number[]): void {
   if (positions.length === 0) {
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
@@ -73,6 +87,8 @@ function layoutSignature(layout: BurgageLayoutResult | null): string {
 export class BurgagePreview {
   readonly group = new THREE.Group();
   private readonly zoneLine: THREE.Line;
+  private readonly zoneLineSolid: THREE.LineBasicMaterial;
+  private readonly zoneLineDashed: THREE.LineDashedMaterial;
   private readonly zoneFill: THREE.Mesh;
   private readonly parcelFillMeshes: THREE.Mesh[];
   private readonly parcelFillMaterial: THREE.MeshBasicMaterial;
@@ -88,14 +104,23 @@ export class BurgagePreview {
   constructor() {
     this.group.name = 'Residence preview';
 
+    this.zoneLineSolid = new THREE.LineBasicMaterial({
+      color: VALID_ZONE_COLOR,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: false,
+    });
+    this.zoneLineDashed = new THREE.LineDashedMaterial({
+      color: VALID_ZONE_COLOR,
+      transparent: true,
+      opacity: 0.95,
+      dashSize: 2.4,
+      gapSize: 1.4,
+      depthTest: false,
+    });
     this.zoneLine = new THREE.Line(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({
-        color: VALID_ZONE_COLOR,
-        transparent: true,
-        opacity: 0.95,
-        depthTest: false,
-      }),
+      this.zoneLineDashed,
     );
     this.zoneLine.renderOrder = 14;
     this.group.add(this.zoneLine);
@@ -191,20 +216,23 @@ export class BurgagePreview {
     layout: BurgageLayoutResult | null,
     valid: boolean,
     getHeightAt: (x: number, z: number) => number,
+    placing = false,
   ): void {
     if (corners.length === 0) {
       this.clear();
       return;
     }
 
-    const signature = `${cornersSignature(corners)}|${valid ? 1 : 0}|${layoutSignature(layout)}`;
+    const signature = `${cornersSignature(corners)}|${valid ? 1 : 0}|${layoutSignature(layout)}|${placing ? 1 : 0}`;
     if (signature === this.lastSignature) return;
     this.lastSignature = signature;
 
     this.group.visible = true;
     const edgeColor = valid ? VALID_ZONE_COLOR : INVALID_ZONE_COLOR;
     const fillColor = valid ? VALID_ZONE_FILL : INVALID_ZONE_FILL;
-    (this.zoneLine.material as THREE.LineBasicMaterial).color.setHex(edgeColor);
+    const outlineMaterial = placing ? this.zoneLineDashed : this.zoneLineSolid;
+    this.zoneLine.material = outlineMaterial;
+    outlineMaterial.color.setHex(edgeColor);
     (this.zoneFill.material as THREE.MeshBasicMaterial).color.setHex(fillColor);
 
     const placedCornerCount = Math.min(corners.length, 4);
@@ -226,7 +254,11 @@ export class BurgagePreview {
     if (lifted.length >= 2) {
       const loop = [...lifted];
       if (lifted.length >= 4) loop.push(lifted[0]);
-      writeLineLoop(this.zoneLine.geometry, loop);
+      if (placing) {
+        writeDashedLoop(this.zoneLine.geometry, loop);
+      } else {
+        writeLineLoop(this.zoneLine.geometry, loop);
+      }
     } else {
       writeLineLoop(this.zoneLine.geometry, []);
     }
@@ -302,7 +334,8 @@ export class BurgagePreview {
 
   dispose(): void {
     this.zoneLine.geometry.dispose();
-    (this.zoneLine.material as THREE.Material).dispose();
+    this.zoneLineSolid.dispose();
+    this.zoneLineDashed.dispose();
     this.zoneFill.geometry.dispose();
     (this.zoneFill.material as THREE.Material).dispose();
     for (const mesh of this.parcelFillMeshes) {

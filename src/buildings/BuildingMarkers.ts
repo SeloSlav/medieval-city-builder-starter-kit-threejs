@@ -24,6 +24,7 @@ export class BuildingMarkers {
   private previewBuilding: THREE.Group | null = null;
   private previewKind: BuildingKind | null = null;
   private previewValid: boolean | null = null;
+  private lastPreviewSignature = '';
 
   constructor(options: BuildingMarkersOptions) {
     this.terrain = options.terrain;
@@ -48,6 +49,7 @@ export class BuildingMarkers {
     if (this.previewMesh) this.previewMesh.visible = false;
     if (this.previewBuilding) this.previewBuilding.visible = false;
     this.previewValid = null;
+    this.lastPreviewSignature = '';
   }
 
   setPlacementPreview(
@@ -58,6 +60,9 @@ export class BuildingMarkers {
     valid: boolean,
     visible: boolean,
   ): void {
+    const signature = `${kind}|${x.toFixed(2)}|${z.toFixed(2)}|${valid ? 1 : 0}|${visible ? 1 : 0}|${radius.toFixed(1)}`;
+    if (signature === this.lastPreviewSignature) return;
+    this.lastPreviewSignature = signature;
     if (!visible) {
       if (this.previewMesh) this.previewMesh.visible = false;
       if (this.previewBuilding) this.previewBuilding.visible = false;

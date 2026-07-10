@@ -394,8 +394,9 @@ export class BuildToolbar {
         `;
       case 'residences':
         return `
-          <li><span>Place corner</span><span class="road-controls-key">L-click</span></li>
-          <li><span>First edge faces road</span><span class="road-controls-key">A → B</span></li>
+          <li><span>Frontage start</span><span class="road-controls-key">1st click</span></li>
+          <li><span>Frontage end</span><span class="road-controls-key">2nd click</span></li>
+          <li><span>Set depth</span><span class="road-controls-key">3rd click</span></li>
           <li><span>Change plot count</span><span class="road-controls-key">+ / −</span></li>
           <li><span>Rotate frontage</span><span class="road-controls-key">F</span></li>
           <li><span>Build zone</span><span class="road-controls-key">Hammer or Enter</span></li>
@@ -427,7 +428,7 @@ export class BuildToolbar {
       return `Click terrain to place a stonecutter's camp (${formatBuildingCost(getBuildingCost('stone_quarry'))})`;
     }
     if (stats.mode === 'residences') {
-      return stats.statusDetail ?? 'Place 4 corners — first edge faces the road (+/− plots, F rotates frontage)';
+      return stats.statusDetail ?? 'Click two road-frontage corners, then click depth to close the rectangle';
     }
     if (stats.mode !== 'road') return 'Road tool off';
     if (stats.canBuild) return 'Ready to build';

@@ -4,6 +4,10 @@ import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import type { GameState } from '../resources/types.ts';
 import type { BurgageFrontageEdge } from './burgageLayout.ts';
 import { cornersFromPoints, computeBurgageLayout } from './burgageLayout.ts';
+import {
+  rectangleCornersToPoints,
+  rectangleFromFrontageAndBackPoint,
+} from './burgageRectangle.ts';
 import { initialPlotCount } from './burgagePlacementValidation.ts';
 import { BurgagePreview } from './BurgagePreview.ts';
 import {
@@ -104,8 +108,14 @@ export class BurgageTool {
 
   getStatusDetail(): string | null {
     if (!this.enabled) return null;
-    if (this.points.length < 4) {
-      return `Place corner ${this.points.length + 1} of 4 (first two define road frontage)`;
+    if (this.points.length === 0) {
+      return 'Click the first road-frontage corner';
+    }
+    if (this.points.length === 1) {
+      return 'Click the second frontage corner along the road';
+    }
+    if (this.points.length === 2) {
+      return 'Click behind the frontage to set zone depth (rectangle closes automatically)';
     }
     const validation = this.getValidation();
     if (!validation.ok) return 'Adjust zone or plot count';
@@ -180,6 +190,21 @@ export class BurgageTool {
       return;
     }
 
+    if (this.points.length === 2) {
+      const rectangle = this.buildRectangleFromPoint(point);
+      if (!rectangle) {
+        this.options.onPickRejected?.('too_close');
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.points = rectangle;
+      this.syncFrontageAndPlotCount();
+      this.options.onModeChanged();
+      this.refreshPreview();
+      return;
+    }
+
     if (this.points.length > 0) {
       const last = this.points[this.points.length - 1];
       if (Math.hypot(point.x - last.x, point.z - last.z) < MIN_POINT_DISTANCE) {
@@ -191,9 +216,6 @@ export class BurgageTool {
     event.preventDefault();
     event.stopPropagation();
     this.points.push(point);
-    if (this.points.length === 4) {
-      this.syncFrontageAndPlotCount();
-    }
     this.options.onModeChanged();
     this.refreshPreview();
   };
@@ -276,21 +298,40 @@ export class BurgageTool {
   }
 
   private refreshPreview(): void {
-    const corners = [...this.points];
-    if (this.hoverPoint && corners.length > 0 && corners.length < 4) {
-      corners.push(this.hoverPoint);
-    }
+    const corners = this.resolvePreviewCorners();
 
     let layout = null;
-    if (this.points.length === 4) {
-      const cornerPoints = this.points.map((point) => ({ x: point.x, z: point.z }));
+    let previewFrontageEdge = this.frontageEdge;
+    let previewPlotCount = this.plotCount;
+
+    if (corners.length === 4) {
+      const cornerPoints = corners.map((point) => ({ x: point.x, z: point.z }));
       const zoneCorners = cornersFromPoints(cornerPoints);
       if (zoneCorners) {
-        layout = computeBurgageLayout(zoneCorners, this.frontageEdge, this.plotCount);
+        if (this.points.length < 4) {
+          previewFrontageEdge = detectFrontageEdge(zoneCorners, this.options.roadNetwork);
+          if (!this.plotCountTouched) {
+            previewPlotCount = initialPlotCount(zoneCorners, previewFrontageEdge);
+          }
+        }
+        layout = computeBurgageLayout(zoneCorners, previewFrontageEdge, previewPlotCount);
       }
     }
 
-    const validation = this.points.length === 4 ? this.getValidation() : { ok: false as const, reason: 'invalid_shape' as const };
+    const validation = this.points.length === 4
+      ? this.getValidation()
+      : corners.length === 4
+        ? validateBurgagePlacement({
+          corners,
+          frontageEdge: previewFrontageEdge,
+          plotCount: previewPlotCount,
+          stockpile: this.options.getState().stockpile,
+          roadNetwork: this.options.roadNetwork,
+          isWaterAt: this.options.isWaterAt,
+          getNaturalHeightAt: this.options.getNaturalHeightAt,
+        })
+        : { ok: false as const, reason: 'invalid_shape' as const };
+
     if (this.hoverPoint) {
       this.lastHoverPreviewX = this.hoverPoint.x;
       this.lastHoverPreviewZ = this.hoverPoint.z;
@@ -300,7 +341,45 @@ export class BurgageTool {
       layout,
       validation.ok,
       this.options.getHeightAt,
+      this.points.length < 4,
     );
+  }
+
+  private resolvePreviewCorners(): THREE.Vector3[] {
+    if (this.points.length >= 4) {
+      return this.points.map((point) => point.clone());
+    }
+    if (this.points.length === 2) {
+      const backPoint = this.hoverPoint ?? this.points[1];
+      const rectangle = this.buildRectangleFromBackPoint(backPoint);
+      return rectangle ?? [...this.points];
+    }
+    if (this.points.length === 1 && this.hoverPoint) {
+      return [this.points[0].clone(), this.hoverPoint.clone()];
+    }
+    return this.points.map((point) => point.clone());
+  }
+
+  private buildRectangleFromPoint(point: THREE.Vector3): THREE.Vector3[] | null {
+    return this.buildRectangleFromBackPoint(point);
+  }
+
+  private buildRectangleFromBackPoint(backPoint: THREE.Vector3): THREE.Vector3[] | null {
+    if (this.points.length < 2) return null;
+    const frontStart = { x: this.points[0].x, z: this.points[0].z };
+    const frontEnd = { x: this.points[1].x, z: this.points[1].z };
+    const rect = rectangleFromFrontageAndBackPoint(
+      frontStart,
+      frontEnd,
+      { x: backPoint.x, z: backPoint.z },
+      this.options.roadNetwork,
+    );
+    if (!rect) return null;
+
+    return rectangleCornersToPoints(rect).map((corner) => {
+      const y = this.options.getHeightAt(corner.x, corner.z);
+      return new THREE.Vector3(corner.x, y, corner.z);
+    });
   }
 
   private syncFrontageAndPlotCount(): void {
