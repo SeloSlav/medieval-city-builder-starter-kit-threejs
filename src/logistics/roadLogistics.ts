@@ -1,7 +1,7 @@
 import { BUILDING_ROAD_ACCESS_DISTANCE } from '../generated/gameBalance.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import type { BuildingState, ResidenceState } from '../resources/types.ts';
-import { residenceFirewoodRunwaySeconds } from '../resources/resourceTotals.ts';
+import { residenceFirewoodRunwaySeconds, residenceHasFirewoodRoom } from './firewoodLogistics.ts';
 import { distancePointToPolylineXZ } from '../utils/pathGeometry.ts';
 
 type RoadPoint = { x: number; z: number };
@@ -175,18 +175,41 @@ export function sortByRoadPathDistance<T extends { x: number; z: number }>(
 }
 
 /** Lowest firewood runway first; tie-break by road-path distance, then residence id. */
+export function compareResidencesForDelivery(
+  network: RoadNetwork,
+  lodge: { x: number; z: number },
+  a: ResidenceState,
+  b: ResidenceState,
+): number {
+  const runwayA = residenceFirewoodRunwaySeconds(a) ?? Infinity;
+  const runwayB = residenceFirewoodRunwaySeconds(b) ?? Infinity;
+  if (Math.abs(runwayA - runwayB) > 1e-6) return runwayA - runwayB;
+  const distanceA = roadPathDistance(network, lodge.x, lodge.z, a.x, a.z) ?? Infinity;
+  const distanceB = roadPathDistance(network, lodge.x, lodge.z, b.x, b.z) ?? Infinity;
+  if (Math.abs(distanceA - distanceB) > 1e-6) return distanceA - distanceB;
+  return a.id.localeCompare(b.id);
+}
+
 export function sortResidencesForDelivery(
   network: RoadNetwork,
   lodge: { x: number; z: number },
   residences: readonly ResidenceState[],
 ): ResidenceState[] {
-  return [...residences].sort((a, b) => {
-    const runwayA = residenceFirewoodRunwaySeconds(a) ?? Infinity;
-    const runwayB = residenceFirewoodRunwaySeconds(b) ?? Infinity;
-    if (Math.abs(runwayA - runwayB) > 1e-6) return runwayA - runwayB;
-    const distanceA = roadPathDistance(network, lodge.x, lodge.z, a.x, a.z) ?? Infinity;
-    const distanceB = roadPathDistance(network, lodge.x, lodge.z, b.x, b.z) ?? Infinity;
-    if (Math.abs(distanceA - distanceB) > 1e-6) return distanceA - distanceB;
-    return a.id.localeCompare(b.id);
-  });
+  return [...residences].sort((a, b) => compareResidencesForDelivery(network, lodge, a, b));
+}
+
+/** O(n) peek at the next needy residence without sorting the full branch. */
+export function peekNextDeliveryTarget(
+  network: RoadNetwork,
+  lodge: { x: number; z: number },
+  residences: readonly ResidenceState[],
+): ResidenceState | null {
+  let best: ResidenceState | null = null;
+  for (const residence of residences) {
+    if (!residenceHasFirewoodRoom(residence.firewoodStock)) continue;
+    if (best == null || compareResidencesForDelivery(network, lodge, residence, best) < 0) {
+      best = residence;
+    }
+  }
+  return best;
 }

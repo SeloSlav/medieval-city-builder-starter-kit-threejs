@@ -2,8 +2,6 @@ import {
   ABANDON_AFTER_DEFICIT_TICKS,
   BUILDING_DEFINITIONS,
   BUILDING_STORAGE_CAPS,
-  LODGE_DELIVERY_INTERVAL,
-  LODGE_FIREWOOD_PER_DELIVERY,
   POPULATION_PER_RESIDENCE,
   RESIDENCE_FIREWOOD_CAPACITY,
   RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC,
@@ -12,10 +10,20 @@ import {
   type StorageCaps,
 } from '../generated/gameBalance.ts';
 import type { BuildingKind, BuildingState, GameState, ResidenceState } from './types.ts';
+import {
+  formatFirewoodRunwayDays,
+  GAME_DAY_SECONDS,
+  residenceFirewoodRunwayDays,
+  residenceFirewoodRunwaySeconds,
+} from '../logistics/firewoodLogistics.ts';
 
 export {
   ABANDON_AFTER_DEFICIT_TICKS,
+  formatFirewoodRunwayDays,
+  GAME_DAY_SECONDS,
   POPULATION_PER_RESIDENCE,
+  residenceFirewoodRunwayDays,
+  residenceFirewoodRunwaySeconds,
   RESIDENCE_FIREWOOD_CAPACITY,
   RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC,
   SIM_TICK_SECONDS,
@@ -23,9 +31,6 @@ export {
 };
 
 export type { StorageCaps };
-
-/** One in-game day for firewood runway display (60 sim seconds). */
-export const GAME_DAY_SECONDS = 60;
 
 export type ResourceTotals = {
   timber: number;
@@ -56,66 +61,6 @@ export function buildingMaxLabor(kind: BuildingKind): number {
 export function laborScaledInterval(baseInterval: number, assignedLabor: number): number {
   if (assignedLabor <= 0 || baseInterval <= 0) return baseInterval;
   return baseInterval / assignedLabor;
-}
-
-export function residenceFirewoodDemandPerSecond(residence: ResidenceState): number {
-  if (residence.abandoned || residence.population <= 0) return 0;
-  return residence.population * RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC;
-}
-
-export function residenceFirewoodRunwaySeconds(residence: ResidenceState): number | null {
-  const demand = residenceFirewoodDemandPerSecond(residence);
-  if (demand <= 0) return null;
-  return residence.firewoodStock / demand;
-}
-
-export function residenceFirewoodRunwayDays(residence: ResidenceState): number | null {
-  const runwaySeconds = residenceFirewoodRunwaySeconds(residence);
-  if (runwaySeconds == null) return null;
-  return runwaySeconds / GAME_DAY_SECONDS;
-}
-
-export function formatFirewoodRunwayDays(days: number): string {
-  if (days >= 10) return `${Math.round(days)} days`;
-  if (days >= 1) return `${days.toFixed(1)} days`;
-  const runwaySeconds = days * GAME_DAY_SECONDS;
-  if (runwaySeconds >= 3600) return `~${(runwaySeconds / 3600).toFixed(1)} h`;
-  const minutes = runwaySeconds / 60;
-  return `~${Math.max(1, Math.round(minutes))} min`;
-}
-
-export type LodgeLaborSplit = {
-  processing: number;
-  delivering: number;
-  alternates: boolean;
-};
-
-/** One deliverer when possible; remaining workers process. A lone worker alternates roles. */
-export function lodgeLaborSplit(assignedLabor: number): LodgeLaborSplit {
-  if (assignedLabor <= 0) {
-    return { processing: 0, delivering: 0, alternates: false };
-  }
-  if (assignedLabor === 1) {
-    return { processing: 1, delivering: 1, alternates: true };
-  }
-  return { processing: assignedLabor - 1, delivering: 1, alternates: false };
-}
-
-export function formatLodgeCrewSplit(split: LodgeLaborSplit): string {
-  if (split.processing === 0 && split.delivering === 0) return 'None assigned';
-  if (split.alternates) return '1 worker — alternates processing & delivery';
-  if (split.delivering === 0) return `${split.processing} processing`;
-  return `${split.processing} processing · ${split.delivering} delivering`;
-}
-
-export function lodgeFirewoodPerDelivery(deliveryWorkers: number): number {
-  if (deliveryWorkers <= 0) return 0;
-  return LODGE_FIREWOOD_PER_DELIVERY * deliveryWorkers;
-}
-
-export function lodgeDeliveryIntervalSeconds(deliveryWorkers: number): number {
-  if (deliveryWorkers <= 0) return Infinity;
-  return LODGE_DELIVERY_INTERVAL / deliveryWorkers;
 }
 
 export function computeResourceTotals(state: GameState): ResourceTotals {

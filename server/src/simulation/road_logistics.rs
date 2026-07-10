@@ -3,8 +3,15 @@
 use spacetimedb::Identity;
 
 use crate::constants::RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC;
+use crate::economy::residence_firewood_capacity;
 use crate::roads::RoadNetwork;
+use crate::simulation::lodge_logistics::{
+    residence_firewood_runway_seconds as residence_runway_seconds,
+    residence_has_firewood_room as residence_has_room,
+};
 use crate::tables::{building, Building, Residence};
+
+pub use crate::simulation::lodge_logistics::lodge_labor_split;
 
 pub fn road_path_distance(
     network: &RoadNetwork,
@@ -54,14 +61,16 @@ pub fn claim_residences_for_lodges(
 }
 
 pub fn residence_firewood_runway_seconds(residence: &Residence) -> f64 {
-    if residence.abandoned || residence.population == 0 {
-        return f64::INFINITY;
-    }
-    let demand = residence.population as f64 * RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC;
-    if demand <= 1e-9 {
-        return f64::INFINITY;
-    }
-    residence.firewood_stock / demand
+    residence_runway_seconds(
+        residence.abandoned,
+        residence.population,
+        residence.firewood_stock,
+        RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC,
+    )
+}
+
+pub fn residence_has_firewood_room(residence: &Residence) -> bool {
+    residence_has_room(residence.firewood_stock, residence_firewood_capacity())
 }
 
 /// Lowest firewood runway first; tie-break by road-path distance, then residence id.

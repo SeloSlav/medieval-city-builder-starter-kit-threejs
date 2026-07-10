@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "generate:world-bootstrap": "npx tsx scripts/generateWorldBootstrap.mts",
     "generate:game-balance": "npx tsx scripts/generateGameBalance.mts",
+    "test:lodge-logistics": "npx tsx scripts/testLodgeLogistics.mts",
     "deploy:local": "powershell -ExecutionPolicy Bypass -File ./server/deploy-local.ps1",
     "deploy:local-clean": "powershell -ExecutionPolicy Bypass -File ./server/deploy-local-clean.ps1"
   },

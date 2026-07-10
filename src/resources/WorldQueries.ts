@@ -3,11 +3,12 @@ import type { RiverField } from '../rivers/RiverField.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import {
   claimResidencesForLodges,
+  peekNextDeliveryTarget,
   roadPathDistance,
   sortByRoadPathDistance,
   sortResidencesForDelivery,
 } from '../logistics/roadLogistics.ts';
-import { RESIDENCE_FIREWOOD_CAPACITY, lodgeDeliveryIntervalSeconds, lodgeLaborSplit } from './resourceTotals.ts';
+import { lodgeDeliveryIntervalSeconds, lodgeLaborSplit } from '../logistics/lodgeLogistics.ts';
 import { areRoadConnected, formatRoadAccess, nearestRoadDistance } from '../roads/roadConnectivity.ts';
 import type { BuildingState, GameState, InspectableTarget, QuarryNodeState, ResidenceState } from './types.ts';
 import type { WorldLayoutRegistry } from './WorldLayoutRegistry.ts';
@@ -199,8 +200,12 @@ export class WorldQueries {
   }
 
   getNextDeliveryTargetForLodge(lodge: BuildingState): ResidenceState | null {
-    const claimed = this.getClaimedResidencesForLodge(lodge);
-    return claimed.find((residence) => residence.firewoodStock < RESIDENCE_FIREWOOD_CAPACITY - 1e-6) ?? null;
+    const state = this.getGameState();
+    const claims = this.getResidenceLodgeClaims();
+    const residences = [...state.residences.values()].filter(
+      (residence) => !residence.abandoned && claims.get(residence.id) === lodge.id,
+    );
+    return peekNextDeliveryTarget(this.getRoadNetwork(), lodge, residences);
   }
 
   getServingLodgeForResidence(residence: ResidenceState): BuildingState | null {

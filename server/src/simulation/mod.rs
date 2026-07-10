@@ -1,3 +1,4 @@
+mod lodge_logistics;
 mod road_logistics;
 mod lumber_mill;
 mod reforester;
