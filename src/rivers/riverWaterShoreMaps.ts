@@ -31,19 +31,32 @@ export function computeWaterFoamBase(foamSigned: number): number {
     : 1 - smoothstep(-0.28, 0.14, foamSigned);
 }
 
+function encodeFlowComponent(value: number): number {
+  return Math.round(Math.max(0, Math.min(255, (value * 0.5 + 0.5) * 255)));
+}
+
 export function createRiverWaterShoreMaps(riverField: RiverField): RiverWaterShoreMaps {
-  const { resolution, startX, startZ, spanX, spanZ, organicSignedDistance } = riverField;
-  const data = new Uint8Array(resolution * resolution * 2);
+  const { resolution, startX, startZ, spanX, spanZ, organicSignedDistance, layout } = riverField;
+  const stepX = spanX / (resolution - 1);
+  const stepZ = spanZ / (resolution - 1);
+  const data = new Uint8Array(resolution * resolution * 4);
 
   for (let iz = 0; iz < resolution; iz++) {
     for (let ix = 0; ix < resolution; ix++) {
       const i = iz * resolution + ix;
+      const wx = startX + ix * stepX;
+      const wz = startZ + iz * stepZ;
       const foamSigned = organicSignedDistance[i] ?? 0;
       const feather = computeWaterFeatherAlpha(foamSigned);
       const foamBase = Math.min(1, computeWaterFoamBase(foamSigned));
-      const offset = i * 2;
+      const flow = layout.sampleFlowDirection(wx, wz);
+      const flowDx = flow?.dx ?? 0;
+      const flowDz = flow?.dz ?? -1;
+      const offset = i * 4;
       data[offset] = Math.round(feather * 255);
       data[offset + 1] = Math.round(foamBase * 255);
+      data[offset + 2] = encodeFlowComponent(flowDx);
+      data[offset + 3] = encodeFlowComponent(flowDz);
     }
   }
 
@@ -51,7 +64,7 @@ export function createRiverWaterShoreMaps(riverField: RiverField): RiverWaterSho
     data,
     resolution,
     resolution,
-    THREE.RGFormat,
+    THREE.RGBAFormat,
     THREE.UnsignedByteType,
   );
   shoreTexture.colorSpace = THREE.NoColorSpace;

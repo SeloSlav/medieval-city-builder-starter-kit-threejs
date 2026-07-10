@@ -100,6 +100,38 @@ export class RiverLayout {
     return this.sampleRiverMask(x, z) >= 0.48;
   }
 
+  /** Unit vector along the nearest river corridor segment (downstream). */
+  sampleFlowDirection(x: number, z: number): { dx: number; dz: number } | null {
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestHalfWidth = 0;
+    let bestDx = 0;
+    let bestDz = 0;
+
+    for (const corridor of this.corridors) {
+      const points = corridor.points;
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        const hit = distanceToSegment(x, z, a.x, a.z, b.x, b.z);
+        if (hit.distance >= bestDistance) continue;
+        bestDistance = hit.distance;
+        bestHalfWidth = lerp(a.halfWidth, b.halfWidth, hit.t);
+        const segDx = b.x - a.x;
+        const segDz = b.z - a.z;
+        const segLen = Math.hypot(segDx, segDz);
+        if (segLen > 1e-6) {
+          bestDx = segDx / segLen;
+          bestDz = segDz / segLen;
+        }
+      }
+    }
+
+    if (!Number.isFinite(bestDistance) || bestDistance > bestHalfWidth * 0.95) return null;
+    const len = Math.hypot(bestDx, bestDz);
+    if (len < 1e-6) return null;
+    return { dx: bestDx / len, dz: bestDz / len };
+  }
+
   buildRiverMaskGrid(resolution: number): Float32Array {
     const mask = new Float32Array(resolution * resolution);
     const spanX = this.bounds.maxX - this.bounds.minX;

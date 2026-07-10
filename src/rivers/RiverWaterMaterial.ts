@@ -37,6 +37,8 @@ type TslNode = {
   xy: TslNode;
   r: TslNode;
   g: TslNode;
+  b: TslNode;
+  a: TslNode;
   rgb: TslNode;
 };
 
@@ -46,6 +48,32 @@ const SHALLOW_WATER_TINT = vec3(0.24, 0.46, 0.42) as TslNode;
 const DEEP_WATER_TINT = vec3(0.08, 0.17, 0.15) as TslNode;
 const SHORE_LAP_MAX = 0.11;
 const SHORE_FOAM_MAX = 0.72;
+const FLOW_STREAK_STRENGTH = 0.28;
+const FLOW_WAVE_HEIGHT = 0.048;
+
+function decodeFlowDirection(shoreSample: TslNode): { flowDirX: TslNode; flowDirZ: TslNode } {
+  const flowRaw = (vec2(shoreSample.b, shoreSample.a) as TslNode).mul(float(2) as TslNode).sub(float(1) as TslNode) as TslNode;
+  const flowLenSq = dot(flowRaw, flowRaw) as TslNode;
+  const fallbackDir = vec2(float(0) as TslNode, float(-1) as TslNode) as TslNode;
+  const hasFlow = (flowLenSq as TslNode).sub(float(0.0004) as TslNode) as TslNode;
+  const flowDir = mix(
+    fallbackDir,
+    normalize(flowRaw) as TslNode,
+    min(float(1) as TslNode, hasFlow.mul(float(2500) as TslNode) as TslNode) as TslNode,
+  ) as TslNode;
+  return { flowDirX: flowDir.x, flowDirZ: flowDir.y };
+}
+
+function buildFlowCoordinates(
+  wx: TslNode,
+  wz: TslNode,
+  flowDirX: TslNode,
+  flowDirZ: TslNode,
+): { flowAlong: TslNode; flowCross: TslNode } {
+  const flowAlong = wx.mul(flowDirX).add(wz.mul(flowDirZ)) as TslNode;
+  const flowCross = wx.mul(flowDirZ).sub(wz.mul(flowDirX)) as TslNode;
+  return { flowAlong, flowCross };
+}
 
 function buildWorldShoreUv(maps: RiverWaterShoreMaps): TslNode {
   const world = positionWorld as TslNode;
@@ -64,42 +92,53 @@ function buildRiverWaterShaderNodes(shoreMaps: RiverWaterShoreMaps) {
   const shoreSample = texture(shoreMaps.shoreTexture, buildWorldShoreUv(shoreMaps)) as TslNode;
   const featherSample = shoreSample.r;
   const foamBaseAttr = shoreSample.g;
+  const { flowDirX, flowDirZ } = decodeFlowDirection(shoreSample);
 
-  const wx = position.x;
-  const wz = position.z;
+  const wx = worldPos.x;
+  const wz = worldPos.z;
+  const { flowAlong, flowCross } = buildFlowCoordinates(wx, wz, flowDirX, flowDirZ);
   const shoreMask = pow(foamBaseAttr, float(1.05) as TslNode) as TslNode;
   const depthFactor = pow(sub(float(1) as TslNode, foamBaseAttr) as TslNode, float(0.88) as TslNode) as TslNode;
   const shallowFactor = shoreMask;
+  const channelMask = mix(shoreMask, float(1) as TslNode, pow(depthFactor, float(0.62) as TslNode) as TslNode) as TslNode;
 
   const lapA = sin(
-    frameTime.mul(2.35).add(wx.mul(0.34)).add(wz.mul(0.12)) as TslNode,
+    frameTime.mul(2.35).add(flowAlong.mul(0.34)).add(flowCross.mul(0.12)) as TslNode,
   ) as TslNode;
   const lapB = sin(
-    frameTime.mul(3.85).sub(wx.mul(0.21)).add(wz.mul(0.31)) as TslNode,
+    frameTime.mul(3.85).sub(flowAlong.mul(0.21)).add(flowCross.mul(0.31)) as TslNode,
   ) as TslNode;
   const lapC = sin(
-    frameTime.mul(1.65).add(wx.mul(0.11)).sub(wz.mul(0.27)) as TslNode,
+    frameTime.mul(1.65).add(flowAlong.mul(0.11)).sub(flowCross.mul(0.27)) as TslNode,
   ) as TslNode;
-  const lap = shoreMask
+  const lap = channelMask
     .mul(float(SHORE_LAP_MAX) as TslNode)
     .mul(lapA.mul(0.52).add(lapB.mul(0.33)).add(lapC.mul(0.15)) as TslNode) as TslNode;
 
-  const rippleSeed = wx.mul(0.16).add(frameTime.mul(0.28)).add(wz.mul(0.16)).sub(frameTime.mul(0.22)) as TslNode;
-  const ripple = (sin(rippleSeed) as TslNode).mul(0.5).sub(0.25).mul(shoreMask).mul(0.028) as TslNode;
+  const rippleSeed = flowAlong.mul(0.16).add(frameTime.mul(0.28)).add(flowCross.mul(0.16)).sub(frameTime.mul(0.22)) as TslNode;
+  const ripple = (sin(rippleSeed) as TslNode).mul(0.5).sub(0.25).mul(channelMask).mul(0.038) as TslNode;
+
+  const flowWavePrimary = sin(flowAlong.mul(0.38).sub(frameTime.mul(2.05)) as TslNode) as TslNode;
+  const flowWaveSecondary = sin(flowCross.mul(0.72).add(frameTime.mul(1.35)) as TslNode) as TslNode;
+  const flowDisplacement = flowWavePrimary
+    .mul(0.62)
+    .add(flowWaveSecondary.mul(0.38) as TslNode)
+    .mul(depthFactor)
+    .mul(float(FLOW_WAVE_HEIGHT) as TslNode) as TslNode;
 
   const positionNode = vec3(
     position.x,
-    position.y.add(simDeltaAttr.add(lap).add(ripple)),
+    position.y.add(simDeltaAttr.add(lap).add(ripple).add(flowDisplacement)),
     position.z,
   ) as TslNode;
 
-  const foamNoise = (sin(wx.mul(0.19).add(wz.mul(0.17)).add(frameTime.mul(0.44)) as TslNode) as TslNode)
+  const foamNoise = (sin(flowAlong.mul(0.19).add(flowCross.mul(0.17)).add(frameTime.mul(0.44)) as TslNode) as TslNode)
     .mul(0.5)
     .add(0.5) as TslNode;
-  const foamWave = (sin(frameTime.mul(4.4).add(wx.mul(0.19)).sub(wz.mul(0.16)) as TslNode) as TslNode)
+  const foamWave = (sin(frameTime.mul(4.4).add(flowAlong.mul(0.19)).sub(flowCross.mul(0.16)) as TslNode) as TslNode)
     .mul(0.5)
     .add(0.5) as TslNode;
-  const foamPulse = (sin(frameTime.mul(6.1).add(wx.mul(0.11)).sub(wz.mul(0.27)) as TslNode) as TslNode)
+  const foamPulse = (sin(frameTime.mul(6.1).add(flowAlong.mul(0.11)).sub(flowCross.mul(0.27)) as TslNode) as TslNode)
     .mul(0.5)
     .add(0.5) as TslNode;
   const foamStrength = min(
@@ -112,9 +151,20 @@ function buildRiverWaterShaderNodes(shoreMaps: RiverWaterShoreMaps) {
     ) as TslNode,
   ) as TslNode;
 
+  const flowStreakA = (sin(flowAlong.mul(0.44).sub(frameTime.mul(1.95)) as TslNode) as TslNode).mul(0.5).add(0.5) as TslNode;
+  const flowStreakB = (sin(flowCross.mul(1.65).add(frameTime.mul(0.72)) as TslNode) as TslNode).mul(0.5).add(0.5) as TslNode;
+  const flowStreakC = (sin(flowAlong.mul(0.18).sub(frameTime.mul(0.95)).add(flowCross.mul(0.31)) as TslNode) as TslNode)
+    .mul(0.5)
+    .add(0.5) as TslNode;
+  const flowShimmer = depthFactor.mul(
+    flowStreakA.mul(0.42).add(flowStreakB.mul(0.33)).add(flowStreakC.mul(0.25)) as TslNode,
+  ).mul(float(FLOW_STREAK_STRENGTH) as TslNode) as TslNode;
+
   const meniscus = (pow(shoreMask, float(2.6) as TslNode) as TslNode).mul(float(0.38) as TslNode) as TslNode;
   const waterTint = mix(SHALLOW_WATER_TINT, DEEP_WATER_TINT, depthFactor) as TslNode;
-  const bodyColor = mix(waterTint, WATER_FOAM_COLOR, foamStrength) as TslNode;
+  const flowHighlight = vec3(0.34, 0.58, 0.54) as TslNode;
+  const tintedBody = mix(waterTint, flowHighlight, flowShimmer) as TslNode;
+  const bodyColor = mix(tintedBody, WATER_FOAM_COLOR, foamStrength) as TslNode;
   const colorNode = mix(bodyColor, MENISCUS_COLOR, meniscus) as TslNode;
 
   const viewDir = normalize((cameraPosition as TslNode).sub(worldPos) as TslNode) as TslNode;
@@ -132,7 +182,14 @@ function buildRiverWaterShaderNodes(shoreMaps: RiverWaterShoreMaps) {
     bedTint,
   ) as TslNode;
 
-  const refractOffset = (normalView as TslNode).xy.mul(float(0.016) as TslNode) as TslNode;
+  const flowWobble = sin(flowAlong.mul(0.52).sub(frameTime.mul(2.35)) as TslNode) as TslNode;
+  const crossWobble = sin(flowCross.mul(0.41).add(frameTime.mul(1.65)) as TslNode) as TslNode;
+  const refractFlow = vec2(flowWobble.mul(flowDirX), flowWobble.mul(flowDirZ)) as TslNode;
+  const refractCross = vec2(crossWobble.mul(flowDirZ), crossWobble.mul(flowDirX).mul(float(-1) as TslNode)) as TslNode;
+  const refractOffset = (normalView as TslNode).xy
+    .mul(float(0.018) as TslNode)
+    .add(refractFlow.mul(depthFactor.mul(float(0.014) as TslNode) as TslNode) as TslNode)
+    .add(refractCross.mul(depthFactor.mul(float(0.009) as TslNode) as TslNode) as TslNode) as TslNode;
   const refractUv = viewportSafeUV((screenUV as TslNode).add(refractOffset) as TslNode) as TslNode;
   const sceneBehind = (viewportSharedTexture(refractUv) as TslNode).rgb as TslNode;
   const bedVisibility = shallowFactor
@@ -148,14 +205,14 @@ function buildRiverWaterShaderNodes(shoreMaps: RiverWaterShoreMaps) {
 
   const thicknessNode = mix(float(0.05) as TslNode, float(0.78) as TslNode, depthFactor) as TslNode;
   const specularIntensityNode = mix(
-    float(0.7) as TslNode,
-    float(1.2) as TslNode,
-    pow(shoreMask, float(1.55) as TslNode) as TslNode,
+    float(0.72) as TslNode,
+    float(1.35) as TslNode,
+    (pow(shoreMask, float(1.55) as TslNode) as TslNode).add(depthFactor.mul(float(0.28) as TslNode) as TslNode) as TslNode,
   ) as TslNode;
 
   const animatedFeather = pow(featherSample, float(0.92) as TslNode) as TslNode;
-  const volumeOpacity = mix(float(0.42) as TslNode, float(0.68) as TslNode, depthFactor) as TslNode;
-  const surfaceFilm = shoreMask.mul(float(0.24) as TslNode) as TslNode;
+  const volumeOpacity = mix(float(0.46) as TslNode, float(0.74) as TslNode, depthFactor) as TslNode;
+  const surfaceFilm = shoreMask.mul(float(0.24) as TslNode).add(depthFactor.mul(float(0.14) as TslNode) as TslNode) as TslNode;
   const opacityNode = animatedFeather.mul(
     min(float(0.9) as TslNode, volumeOpacity.add(surfaceFilm) as TslNode) as TslNode,
   ) as TslNode;

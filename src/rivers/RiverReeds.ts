@@ -48,6 +48,10 @@ const composeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const composeColor = new THREE.Color();
 /** Caps peak reed opacity so shoreline tufts stay muted against meadow grass. */
 const REED_PEAK_OPACITY = 0.78;
+/** Unit geometry tops out at ~1.28; this maps placement scale to world metres. */
+const REED_HEIGHT_MULTIPLIER = 1.42;
+const REED_SHORE_MIN = 0.55;
+const REED_SHORE_MAX = 4.8;
 
 export function createRiverReeds(
   terrain: Terrain,
@@ -202,10 +206,11 @@ function createReedPlacements(riverField: RiverField, rng: () => number): ReedPl
       if (!riverField.isGrassBlockedAt(px, pz)) continue;
       if (!hasMinimumDistance(placements, px, pz, 0.34 + rng() * 0.22)) continue;
 
+      const shore = riverField.sampleShoreDistance(px, pz);
       placements.push({
         x: px,
         z: pz,
-        scale: THREE.MathUtils.lerp(1.6, 2.8, Math.pow(rng(), 1.05)),
+        scale: resolveReedScale(shore, rng),
         yaw: rng() * Math.PI * 2,
         tiltX: (rng() - 0.5) * 0.14,
         tiltZ: (rng() - 0.5) * 0.12,
@@ -249,7 +254,7 @@ function appendGridReedPlacements(
       placements.push({
         x,
         z,
-        scale: THREE.MathUtils.lerp(1.5, 2.6, Math.pow(rng(), 1.1)),
+        scale: resolveReedScale(shore, rng),
         yaw: rng() * Math.PI * 2,
         tiltX: (rng() - 0.5) * 0.12,
         tiltZ: (rng() - 0.5) * 0.1,
@@ -315,10 +320,26 @@ function composeReedMatrix(
   euler.set(placement.tiltX, placement.yaw, placement.tiltZ);
   quaternion.setFromEuler(euler);
   const fade = THREE.MathUtils.clamp(edgeFade, 0, 1);
-  const width = (0.42 + placement.scale * 0.2) * fade;
-  const height = placement.scale * 1.48 * fade;
+  const width = (0.38 + placement.scale * 0.18) * fade;
+  const height = placement.scale * REED_HEIGHT_MULTIPLIER * fade;
   scaleVector.set(width, height, width);
   matrix.compose(position, quaternion, scaleVector);
+}
+
+/** Taller near the water line, shorter on the outer muddy fringe. */
+function resolveReedScale(shore: number, rng: () => number): number {
+  const shoreT = THREE.MathUtils.clamp((shore - REED_SHORE_MIN) / (REED_SHORE_MAX - REED_SHORE_MIN), 0, 1);
+  const inlandCurve = Math.pow(shoreT, 0.82);
+  const minScale = THREE.MathUtils.lerp(1.28, 0.64, inlandCurve);
+  const maxScale = THREE.MathUtils.lerp(2.28, 1.02, Math.pow(shoreT, 0.72));
+  const roll = Math.pow(rng(), 1.06);
+  let scale = THREE.MathUtils.lerp(minScale, maxScale, roll);
+
+  if (shoreT > 0.5 && rng() < 0.24) {
+    scale *= THREE.MathUtils.lerp(0.58, 0.84, rng());
+  }
+
+  return scale;
 }
 
 function hasMinimumDistance(points: ReedPlacement[], x: number, z: number, minDistance: number): boolean {
@@ -355,7 +376,9 @@ function createReedGeometry(): THREE.BufferGeometry {
 
   for (let blade = 0; blade < blades; blade++) {
     const angle = (blade / blades) * Math.PI * 2 + (blade % 2) * 0.14;
-    appendReedBlade(positions, normals, colors, indices, angle, 0.22 + (blade % 3) * 0.05);
+    const halfWidth = 0.2 + (blade % 3) * 0.045 + (blade % 2) * 0.012;
+    const heightScale = 0.72 + (blade % 4) * 0.085 + (blade % 3) * 0.04;
+    appendReedBlade(positions, normals, colors, indices, angle, halfWidth, heightScale);
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -374,6 +397,7 @@ function appendReedBlade(
   indices: number[],
   angle: number,
   halfWidth: number,
+  heightScale: number,
 ): void {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
@@ -386,7 +410,7 @@ function appendReedBlade(
     { y: 1.02, width: 0.78, shade: 0.84 },
     { y: 1.16, width: 1.08, shade: 0.82 },
     { y: 1.28, width: 0.92, shade: 0.78 },
-  ];
+  ].map((ring) => ({ ...ring, y: ring.y * heightScale }));
 
   for (const ring of rings) {
     positions.push(cos * halfWidth * ring.width, ring.y, sin * halfWidth * ring.width);
