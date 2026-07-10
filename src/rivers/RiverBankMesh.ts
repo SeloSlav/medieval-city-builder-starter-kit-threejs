@@ -3,9 +3,11 @@ import type { MeshStandardNodeMaterial } from 'three/webgpu';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RiverField } from './RiverField.ts';
 
-const Y_OFFSET = 0.048;
+const Y_OFFSET = 0.065;
 const BANK_WIDTH = 6.5;
 const INNER_MARGIN = 0.2;
+/** Tangent half-width as a fraction of shore cell — wider overlap hides per-cell seams at low angles. */
+const PATCH_TANGENT_HALF = 0.78;
 
 type ShoreNode = {
   ix: number;
@@ -27,7 +29,7 @@ export function createRiverBankMeshes(
   const mesh = buildShorePatchMesh(terrain, riverField, material);
   mesh.name = 'River bank shore';
   mesh.renderOrder = 9;
-  mesh.receiveShadow = true;
+  mesh.receiveShadow = false;
   mesh.castShadow = false;
   group.add(mesh);
 
@@ -41,7 +43,7 @@ function buildShorePatchMesh(
 ): THREE.Mesh {
   const shoreNodes = collectShoreNodes(riverField);
   const cellStep = (riverField.stepX + riverField.stepZ) * 0.5;
-  const patchHalf = cellStep * 0.52;
+  const patchHalf = cellStep * PATCH_TANGENT_HALF;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];

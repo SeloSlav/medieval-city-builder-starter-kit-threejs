@@ -55,11 +55,15 @@ function buildBankOpacityNode(textures: TextureSet): TslNode {
 
 function buildRiverBankOpacityNode(textures: TextureSet): TslNode {
   const uvNode = uv() as TslNode;
-  const radialFade = pow(smoothstep(float(0.08) as TslNode, float(0.92) as TslNode, uvNode.x), float(0.55) as TslNode) as TslNode;
+  // Inner strip stays opaque; only the outer ~40% fades to grass — avoids double-fading with terrain.
+  const radialFade = pow(
+    smoothstep(float(0) as TslNode, float(0.36) as TslNode, uvNode.x),
+    float(0.72) as TslNode,
+  ) as TslNode;
   const edgeMaskSample = textures.edgeMask
     ? (texture(textures.edgeMask, uvNode) as TslNode).r
     : (float(1) as TslNode);
-  return radialFade.mul(edgeMaskSample).mul(float(0.96) as TslNode);
+  return radialFade.mul(edgeMaskSample).mul(float(0.94) as TslNode);
 }
 
 export function createRoadCoreMaterial(dirtTextures: TextureSet, bridgeTextures?: TextureSet): MeshStandardNodeMaterial {
@@ -127,8 +131,12 @@ export function createRiverBankMaterial(textures: TextureSet): MeshStandardNodeM
   material.roughness = 0.9;
   material.metalness = 0;
   material.transparent = true;
+  material.premultipliedAlpha = true;
   material.opacity = 1;
   material.depthWrite = false;
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -3;
+  material.polygonOffsetUnits = -8;
   if (textures.edgeMask) material.alphaMap = textures.edgeMask;
   material.colorNode = buildMuddyBankColorNode(textures);
   material.normalNode = normalMap(texture(textures.normal, uv()));
