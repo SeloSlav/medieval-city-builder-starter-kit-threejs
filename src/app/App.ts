@@ -59,8 +59,6 @@ export class App {
   private gameRuntime: GameRuntime | null = null;
   private spacetimeConnected = false;
   private buildingTerrainPreview: BuildingTerrainSource | null = null;
-  private lastBuildingTerrainMeshKey = '';
-  private readonly buildingTerrainMeshMoveThreshold = 0.4;
   private previousTreePhases = new Map<string, string>();
   private previousTreeGrowth = new Map<string, number>();
   private animationId = 0;
@@ -476,60 +474,26 @@ export class App {
   private syncBuildingTerrain(options?: { forceMeshUpdate?: boolean }): void {
     if (!this.sceneManager) return;
 
-    const sources: BuildingTerrainSource[] = [];
+    const previewSources: BuildingTerrainSource[] = [];
+    const placedSources: BuildingTerrainSource[] = [];
     if (this.gameState) {
       for (const building of this.gameState.buildings.values()) {
-        sources.push({ kind: building.kind, x: building.x, z: building.z });
+        placedSources.push({ kind: building.kind, x: building.x, z: building.z });
       }
     }
     if (this.buildingTerrainPreview) {
-      sources.push(this.buildingTerrainPreview);
+      previewSources.push(this.buildingTerrainPreview);
     }
 
-    const layout = BuildingTerrainLayout.fromBuildings(sources, sampleNaturalTerrainHeight);
+    const layoutSources = [...placedSources, ...previewSources];
+    const layout = BuildingTerrainLayout.fromBuildings(layoutSources, sampleNaturalTerrainHeight);
     setActiveBuildingLayout(layout);
 
-    const meshKey = sources
-      .map((source) => `${source.kind}:${source.x.toFixed(2)}:${source.z.toFixed(2)}`)
-      .join('|');
-    const shouldUpdateMesh = options?.forceMeshUpdate === true
-      || this.buildingTerrainPreview !== null
-      || !this.meshKeyWithinThreshold(meshKey, this.lastBuildingTerrainMeshKey);
-
-    if (shouldUpdateMesh) {
-      updateTerrainBuildingPads(this.sceneManager.terrain, layout);
-      this.lastBuildingTerrainMeshKey = meshKey;
+    if (options?.forceMeshUpdate) {
+      const placedLayout = BuildingTerrainLayout.fromBuildings(placedSources, sampleNaturalTerrainHeight);
+      updateTerrainBuildingPads(this.sceneManager.terrain, placedLayout);
+      this.buildingMarkers?.syncBuildings(this.gameState?.buildings.values() ?? []);
     }
-
-    this.buildingMarkers?.syncBuildings(this.gameState?.buildings.values() ?? []);
-  }
-
-  private meshKeyWithinThreshold(nextKey: string, previousKey: string): boolean {
-    if (!previousKey) return false;
-    const next = this.parseBuildingTerrainMeshKey(nextKey);
-    const previous = this.parseBuildingTerrainMeshKey(previousKey);
-    if (next.length !== previous.length) return false;
-
-    for (let i = 0; i < next.length; i++) {
-      const a = next[i];
-      const b = previous[i];
-      if (a.kind !== b.kind) return false;
-      if (Math.hypot(a.x - b.x, a.z - b.z) >= this.buildingTerrainMeshMoveThreshold) return false;
-    }
-
-    return true;
-  }
-
-  private parseBuildingTerrainMeshKey(key: string): BuildingTerrainSource[] {
-    if (!key) return [];
-    return key.split('|').map((entry) => {
-      const [kind, x, z] = entry.split(':');
-      return {
-        kind: kind as BuildingTerrainSource['kind'],
-        x: Number(x),
-        z: Number(z),
-      };
-    });
   }
 
   private syncResourceUi(): void {

@@ -3,16 +3,17 @@ import type { BuildingTerrainLayout } from '../buildings/BuildingTerrainLayout.t
 import type { Terrain, TerrainBounds } from './Terrain.ts';
 import { sampleBaseTerrainHeight } from './TerrainHeight.ts';
 
-let previousBounds: TerrainBounds[] = [];
+let lastAppliedBounds: TerrainBounds[] = [];
 
 export function updateTerrainBuildingPads(terrain: Terrain, layout: BuildingTerrainLayout | null): void {
   const geometry = terrain.mesh.geometry;
   const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+  const normals = geometry.getAttribute('normal') as THREE.BufferAttribute | undefined;
   const currentBounds = layout?.getAffectedBounds() ?? [];
-  const boundsToUpdate = mergeBounds(previousBounds, currentBounds);
+  const boundsToUpdate = mergeBounds(lastAppliedBounds, currentBounds);
 
   if (boundsToUpdate.length === 0) {
-    previousBounds = [];
+    lastAppliedBounds = [];
     return;
   }
 
@@ -21,11 +22,21 @@ export function updateTerrainBuildingPads(terrain: Terrain, layout: BuildingTerr
   const step = size / (resolution - 1);
   const half = size * 0.5;
 
+  let globalMinX = resolution - 1;
+  let globalMaxX = 0;
+  let globalMinZ = resolution - 1;
+  let globalMaxZ = 0;
+
   for (const bounds of boundsToUpdate) {
     const minXIndex = Math.max(0, Math.floor((bounds.minX + half) / step));
     const maxXIndex = Math.min(resolution - 1, Math.ceil((bounds.maxX + half) / step));
     const minZIndex = Math.max(0, Math.floor((bounds.minZ + half) / step));
     const maxZIndex = Math.min(resolution - 1, Math.ceil((bounds.maxZ + half) / step));
+
+    globalMinX = Math.min(globalMinX, minXIndex);
+    globalMaxX = Math.max(globalMaxX, maxXIndex);
+    globalMinZ = Math.min(globalMinZ, minZIndex);
+    globalMaxZ = Math.max(globalMaxZ, maxZIndex);
 
     for (let zIndex = minZIndex; zIndex <= maxZIndex; zIndex++) {
       const rowOffset = zIndex * resolution;
@@ -40,13 +51,57 @@ export function updateTerrainBuildingPads(terrain: Terrain, layout: BuildingTerr
   }
 
   positions.needsUpdate = true;
-  geometry.computeVertexNormals();
+
+  if (normals) {
+    updateHeightfieldNormalsInRegion(positions, normals, resolution, step, globalMinX, globalMaxX, globalMinZ, globalMaxZ);
+  }
+
   geometry.computeBoundingSphere();
-  previousBounds = boundsToUpdate;
+  lastAppliedBounds = currentBounds;
 }
 
 export function resetTerrainBuildingPadHistory(): void {
-  previousBounds = [];
+  lastAppliedBounds = [];
+}
+
+function updateHeightfieldNormalsInRegion(
+  positions: THREE.BufferAttribute,
+  normals: THREE.BufferAttribute,
+  resolution: number,
+  step: number,
+  minXIndex: number,
+  maxXIndex: number,
+  minZIndex: number,
+  maxZIndex: number,
+): void {
+  const pos = positions.array as Float32Array;
+  const norm = normals.array as Float32Array;
+  const padMinX = Math.max(0, minXIndex - 1);
+  const padMaxX = Math.min(resolution - 1, maxXIndex + 1);
+  const padMinZ = Math.max(0, minZIndex - 1);
+  const padMaxZ = Math.min(resolution - 1, maxZIndex + 1);
+
+  for (let zIndex = padMinZ; zIndex <= padMaxZ; zIndex++) {
+    for (let xIndex = padMinX; xIndex <= padMaxX; xIndex++) {
+      const vertexIndex = zIndex * resolution + xIndex;
+      const normalOffset = vertexIndex * 3;
+
+      const yLeft = pos[((zIndex * resolution) + Math.max(0, xIndex - 1)) * 3 + 1];
+      const yRight = pos[((zIndex * resolution) + Math.min(resolution - 1, xIndex + 1)) * 3 + 1];
+      const yDown = pos[(Math.max(0, zIndex - 1) * resolution + xIndex) * 3 + 1];
+      const yUp = pos[(Math.min(resolution - 1, zIndex + 1) * resolution + xIndex) * 3 + 1];
+
+      const dx = (yRight - yLeft) / (2 * step);
+      const dz = (yUp - yDown) / (2 * step);
+      const invLength = 1 / Math.hypot(dx, 1, dz);
+
+      norm[normalOffset] = -dx * invLength;
+      norm[normalOffset + 1] = invLength;
+      norm[normalOffset + 2] = -dz * invLength;
+    }
+  }
+
+  normals.needsUpdate = true;
 }
 
 function mergeBounds(previous: TerrainBounds[], current: TerrainBounds[]): TerrainBounds[] {

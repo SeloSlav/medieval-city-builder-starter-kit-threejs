@@ -32,6 +32,9 @@ export class BuildingTool {
   private lastPreviewX = Number.NaN;
   private lastPreviewZ = Number.NaN;
   private lastPreviewValidation: BuildingPlacementResult | null = null;
+  private lastTerrainPreviewX = Number.NaN;
+  private lastTerrainPreviewZ = Number.NaN;
+  private readonly terrainPreviewMoveThreshold = 0.45;
 
   constructor(options: BuildingToolOptions) {
     this.options = options;
@@ -140,7 +143,7 @@ export class BuildingTool {
 
     const definition = getBuildingDefinition(this.mode);
     const validation = this.validateAt(point.x, point.z);
-    this.options.onPreviewChange?.({ kind: this.mode, x: point.x, z: point.z });
+    this.updateTerrainPreview(point.x, point.z);
     this.options.markers.setPlacementPreview(
       this.mode,
       point.x,
@@ -169,6 +172,20 @@ export class BuildingTool {
     this.lastPreviewX = Number.NaN;
     this.lastPreviewZ = Number.NaN;
     this.lastPreviewValidation = null;
+    this.lastTerrainPreviewX = Number.NaN;
+    this.lastTerrainPreviewZ = Number.NaN;
+  }
+
+  private updateTerrainPreview(x: number, z: number): void {
+    const dx = x - this.lastTerrainPreviewX;
+    const dz = z - this.lastTerrainPreviewZ;
+    if (Number.isFinite(this.lastTerrainPreviewX) && Math.hypot(dx, dz) < this.terrainPreviewMoveThreshold) {
+      return;
+    }
+
+    this.lastTerrainPreviewX = x;
+    this.lastTerrainPreviewZ = z;
+    this.options.onPreviewChange?.({ kind: this.mode as BuildingKind, x, z });
   }
 
   private validate(kind: BuildingKind, x: number, z: number) {
