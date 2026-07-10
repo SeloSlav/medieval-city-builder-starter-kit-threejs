@@ -156,6 +156,39 @@ pub fn place_burgage_zone(
 }
 
 #[reducer]
+pub fn demolish_residence(ctx: &ReducerContext, residence_id: u64) -> Result<(), String> {
+    let owner = ctx.sender();
+    let residence = ctx
+        .db
+        .residence()
+        .id()
+        .find(&residence_id)
+        .ok_or_else(|| "Residence not found.".to_string())?;
+
+    if residence.owner != owner {
+        return Err("You do not own this residence.".to_string());
+    }
+
+    let zone_id = residence.zone_id;
+    let refund = residence_zone_cost(1);
+    let salvage = ResourceAmount {
+        timber: (refund.timber * TIMBER_SALVAGE_FRACTION).round(),
+        stone: (refund.stone * STONE_SALVAGE_FRACTION).round(),
+    };
+    credit_treasury_timber(ctx, owner, salvage.timber);
+    credit_treasury_stone(ctx, owner, salvage.stone);
+
+    ctx.db.residence().id().delete(residence_id);
+
+    let remaining = ctx.db.residence().zone_id().filter(&zone_id).count();
+    if remaining == 0 {
+        ctx.db.burgage_zone().id().delete(zone_id);
+    }
+
+    Ok(())
+}
+
+#[reducer]
 pub fn demolish_burgage_zone(ctx: &ReducerContext, zone_id: u64) -> Result<(), String> {
     let owner = ctx.sender();
     let zone = ctx

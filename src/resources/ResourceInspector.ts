@@ -19,6 +19,7 @@ type ResourceInspectorOptions = {
   worldQueries: WorldQueries;
   getState: () => GameState;
   onDemolishBuilding?: (buildingId: string) => void | Promise<void>;
+  onDemolishResidence?: (residenceId: string) => void | Promise<void>;
   onDemolishBurgageZone?: (zoneId: string) => void | Promise<void>;
   onAssignBuildingLabor?: (buildingId: string, labor: number) => void | Promise<void>;
   isBlocked: () => boolean;
@@ -37,7 +38,9 @@ export class ResourceInspector {
   private readonly laborValue: HTMLElement;
   private readonly demolishSection: HTMLElement;
   private readonly demolishButton: HTMLButtonElement;
+  private readonly demolishSecondaryButton: HTMLButtonElement;
   private readonly demolishHint: HTMLElement;
+  private readonly demolishSecondaryHint: HTMLElement;
   private readonly laborSection: HTMLElement;
   private readonly laborCount: HTMLElement;
   private readonly laborHint: HTMLElement;
@@ -99,10 +102,14 @@ export class ResourceInspector {
           <p class="resource-inspector-labor-hint" data-inspector-labor-hint></p>
         </section>
         <section class="resource-inspector-actions" data-inspector-actions hidden aria-label="Building actions">
-          <button type="button" class="resource-inspector-demolish" data-action="demolish-building">
+          <button type="button" class="resource-inspector-demolish" data-action="demolish-primary">
             Demolish
           </button>
           <p class="resource-inspector-demolish-hint" data-demolish-hint></p>
+          <button type="button" class="resource-inspector-demolish resource-inspector-demolish--secondary" data-action="demolish-secondary" hidden>
+            Demolish plot
+          </button>
+          <p class="resource-inspector-demolish-hint" data-demolish-secondary-hint hidden></p>
         </section>
       </aside>
     `,
@@ -122,8 +129,10 @@ export class ResourceInspector {
     this.populationValue = this.mustElement(options.uiRoot, '[data-stockpile="population"]');
     this.laborValue = this.mustElement(options.uiRoot, '[data-stockpile="labor"]');
     this.demolishSection = this.mustElement(options.uiRoot, '[data-inspector-actions]');
-    this.demolishButton = this.mustButton(options.uiRoot, '[data-action="demolish-building"]');
+    this.demolishButton = this.mustButton(options.uiRoot, '[data-action="demolish-primary"]');
+    this.demolishSecondaryButton = this.mustButton(options.uiRoot, '[data-action="demolish-secondary"]');
     this.demolishHint = this.mustElement(options.uiRoot, '[data-demolish-hint]');
+    this.demolishSecondaryHint = this.mustElement(options.uiRoot, '[data-demolish-secondary-hint]');
     this.laborSection = this.mustElement(options.uiRoot, '[data-inspector-labor]');
     this.laborCount = this.mustElement(options.uiRoot, '[data-inspector-labor-count]');
     this.laborHint = this.mustElement(options.uiRoot, '[data-inspector-labor-hint]');
@@ -135,20 +144,26 @@ export class ResourceInspector {
     this.marker.visible = false;
 
     options.domElement.addEventListener('mousedown', this.onPointerDown, { capture: true });
-    this.demolishButton.addEventListener('click', this.onDemolishClick);
+    this.demolishButton.addEventListener('click', this.onDemolishPrimaryClick);
+    this.demolishSecondaryButton.addEventListener('click', this.onDemolishSecondaryClick);
     this.laborDecrease.addEventListener('click', this.onLaborDecrease);
     this.laborIncrease.addEventListener('click', this.onLaborIncrease);
   }
 
-  private readonly onDemolishClick = (): void => {
+  private readonly onDemolishPrimaryClick = (): void => {
     if (!this.selectedTarget) return;
     if (this.selectedTarget.kind === 'building') {
       void this.options.onDemolishBuilding?.(this.selectedTarget.building.id);
       return;
     }
     if (this.selectedTarget.kind === 'residence') {
-      void this.options.onDemolishBurgageZone?.(this.selectedTarget.zone.id);
+      void this.options.onDemolishResidence?.(this.selectedTarget.residence.id);
     }
+  };
+
+  private readonly onDemolishSecondaryClick = (): void => {
+    if (this.selectedTarget?.kind !== 'residence') return;
+    void this.options.onDemolishBurgageZone?.(this.selectedTarget.zone.id);
   };
 
   private readonly onLaborDecrease = (): void => {
@@ -191,7 +206,7 @@ export class ResourceInspector {
       this.renderTarget(latest);
       return;
     }
-    if (this.selectedTarget.kind === 'residence' && latest.kind === 'residence' && latest.zone.id === this.selectedTarget.zone.id) {
+    if (this.selectedTarget.kind === 'residence' && latest.kind === 'residence' && latest.residence.id === this.selectedTarget.residence.id) {
       this.selectedTarget = latest;
       this.renderTarget(latest);
       return;
@@ -211,7 +226,8 @@ export class ResourceInspector {
 
   dispose(): void {
     this.options.domElement.removeEventListener('mousedown', this.onPointerDown, { capture: true });
-    this.demolishButton.removeEventListener('click', this.onDemolishClick);
+    this.demolishButton.removeEventListener('click', this.onDemolishPrimaryClick);
+    this.demolishSecondaryButton.removeEventListener('click', this.onDemolishSecondaryClick);
     this.laborDecrease.removeEventListener('click', this.onLaborDecrease);
     this.laborIncrease.removeEventListener('click', this.onLaborIncrease);
     this.options.sceneManager.selectionGroup.remove(this.marker);
@@ -284,7 +300,19 @@ export class ResourceInspector {
     this.detailList.innerHTML = view.detailsHtml;
 
     this.demolishSection.hidden = !view.demolish.visible;
+    this.demolishButton.textContent = view.demolish.label ?? 'Demolish';
     this.demolishHint.textContent = view.demolish.hint;
+
+    const secondary = view.demolish.secondary;
+    this.demolishSecondaryButton.hidden = !secondary;
+    this.demolishSecondaryHint.hidden = !secondary;
+    if (secondary) {
+      this.demolishSecondaryButton.textContent = secondary.label;
+      this.demolishSecondaryHint.textContent = secondary.hint;
+    } else {
+      this.demolishSecondaryButton.textContent = '';
+      this.demolishSecondaryHint.textContent = '';
+    }
 
     this.laborSection.hidden = !view.labor.visible;
     if (view.labor.visible) {

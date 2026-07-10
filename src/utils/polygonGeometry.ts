@@ -105,6 +105,18 @@ export function distancePointToSegment2(point: Point2, segStart: Point2, segEnd:
   return Math.hypot(point.x - px, point.z - pz);
 }
 
+export function distancePointToPolygon2(point: Point2, polygon: Point2[]): number {
+  if (polygon.length < 3) return Infinity;
+  if (isPointInPolygon2(point, polygon)) return 0;
+  let minDistance = Infinity;
+  for (let i = 0; i < polygon.length; i++) {
+    const start = polygon[i];
+    const end = polygon[(i + 1) % polygon.length];
+    minDistance = Math.min(minDistance, distancePointToSegment2(point, start, end));
+  }
+  return minDistance;
+}
+
 export function polygonCentroid2(polygon: Point2[]): Point2 {
   let x = 0;
   let z = 0;

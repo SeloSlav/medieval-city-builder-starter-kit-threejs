@@ -390,6 +390,17 @@ button {
   outline: none;
 }
 
+.resource-inspector-demolish--secondary {
+  color: #f0e2d8;
+  background: rgba(88, 58, 48, 0.34);
+  border-color: rgba(188, 148, 128, 0.34);
+}
+
+.resource-inspector-demolish--secondary:hover,
+.resource-inspector-demolish--secondary:focus-visible {
+  background: rgba(108, 72, 58, 0.48);
+}
+
 .resource-inspector-demolish-hint {
   margin: 0;
   color: var(--muted);

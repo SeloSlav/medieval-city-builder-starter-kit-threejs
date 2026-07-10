@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
 import { createForestProps } from '../props/ForestProps.ts';
 import type { ForestManager } from '../props/ForestManager.ts';
 import { createGrassBladeField, GRASS_BLADES_ENABLED, type GrassBladeField } from '../grass/GrassBladeField.ts';
@@ -14,6 +15,7 @@ import { RoadJunctionBuilder } from '../roads/RoadJunctionBuilder.ts';
 import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
 import { RoadMeshBuilder } from '../roads/RoadMeshBuilder.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
+import type { BurgageZoneState } from '../resources/types.ts';
 import type { BridgeSamplingContext } from '../roads/RiverBridgeSpans.ts';
 import { getStillWaterSurfaceY } from '../rivers/RiverWaterLevel.ts';
 import { SkyCloudMesh } from '../sky/SkyCloudMesh.ts';
@@ -51,6 +53,8 @@ export class SceneManager {
   private grassField: GrassBladeField | null = null;
   private vegetationBuilt = false;
   private roadNetworkRef: RoadNetwork | null = null;
+  private forestClearanceBuildings: BuildingTerrainSource[] = [];
+  private forestClearanceBurgageZones: BurgageZoneState[] = [];
   private readonly riverSystem: RiverSystem;
   private readonly quarrySystem: QuarrySystem;
   readonly worldLayout: WorldLayout;
@@ -207,7 +211,7 @@ export class SceneManager {
     this.rebuildRockSpatialIndex();
 
     if (this.roadNetworkRef) {
-      this.forestManager.syncRoadClearance(this.roadNetworkRef);
+      this.refreshForestClearance();
       this.grassField?.syncRoadClearance(this.roadNetworkRef);
       this.refreshShadowMap();
     }
@@ -282,6 +286,15 @@ export class SceneManager {
     return this.forestManager;
   }
 
+  setForestClearanceSources(
+    buildings: Iterable<BuildingTerrainSource>,
+    burgageZones: Iterable<BurgageZoneState>,
+  ): void {
+    this.forestClearanceBuildings = [...buildings];
+    this.forestClearanceBurgageZones = [...burgageZones];
+    this.refreshForestClearance();
+  }
+
   getBridgeSamplingContext(): BridgeSamplingContext {
     const { terrain, riverSystem } = this;
     const riverField = riverSystem.field;
@@ -348,10 +361,18 @@ export class SceneManager {
     }
 
     this.rebuildJunctions(network);
-    this.forestManager?.syncRoadClearance(network);
+    this.refreshForestClearance();
     this.grassField?.syncRoadClearance(network);
     updateTerrainRoadWear(this.terrain, network);
     this.refreshShadowMap();
+  }
+
+  private refreshForestClearance(): void {
+    this.forestManager?.syncPlacementClearance({
+      roadNetwork: this.roadNetworkRef,
+      buildings: this.forestClearanceBuildings,
+      burgageZones: this.forestClearanceBurgageZones,
+    });
   }
 
   private refreshShadowMap(): void {

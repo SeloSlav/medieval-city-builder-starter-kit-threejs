@@ -208,6 +208,14 @@ export class SpacetimeGameStore {
     await this.callReducer('demolishBurgageZone', 'demolish_burgage_zone', { zoneId: serverId });
   }
 
+  async demolishResidence(residenceId: string): Promise<void> {
+    const serverId = parseResidenceServerId(residenceId);
+    if (serverId === null) {
+      throw new Error('Invalid residence id.');
+    }
+    await this.callReducer('demolishResidence', 'demolish_residence', { residenceId: serverId });
+  }
+
   async placeBuilding(kind: BuildingKind, x: number, z: number): Promise<void> {
     await this.callReducer('placeBuilding', 'place_building', { kind, x, z });
   }
@@ -511,6 +519,12 @@ function parseBuildingServerId(buildingId: string): bigint | null {
 
 function parseZoneServerId(zoneId: string): bigint | null {
   const match = /^zone-(\d+)$/.exec(zoneId);
+  if (!match) return null;
+  return BigInt(match[1]);
+}
+
+function parseResidenceServerId(residenceId: string): bigint | null {
+  const match = /^residence-(\d+)$/.exec(residenceId);
   if (!match) return null;
   return BigInt(match[1]);
 }

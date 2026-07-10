@@ -39,6 +39,7 @@ import BootstrapQuarriesReducer from "./bootstrap_quarries_reducer";
 import BootstrapTreesReducer from "./bootstrap_trees_reducer";
 import DemolishBuildingReducer from "./demolish_building_reducer";
 import DemolishBurgageZoneReducer from "./demolish_burgage_zone_reducer";
+import DemolishResidenceReducer from "./demolish_residence_reducer";
 import PlaceBuildingReducer from "./place_building_reducer";
 import PlaceBurgageZoneReducer from "./place_burgage_zone_reducer";
 import RemoveRoadEdgeReducer from "./remove_road_edge_reducer";
@@ -182,6 +183,7 @@ const reducersSchema = __reducers(
   __reducerSchema("bootstrap_trees", BootstrapTreesReducer),
   __reducerSchema("demolish_building", DemolishBuildingReducer),
   __reducerSchema("demolish_burgage_zone", DemolishBurgageZoneReducer),
+  __reducerSchema("demolish_residence", DemolishResidenceReducer),
   __reducerSchema("place_building", PlaceBuildingReducer),
   __reducerSchema("place_burgage_zone", PlaceBurgageZoneReducer),
   __reducerSchema("remove_road_edge", RemoveRoadEdgeReducer),

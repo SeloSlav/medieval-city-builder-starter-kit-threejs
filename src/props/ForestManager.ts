@@ -1,8 +1,14 @@
 import * as THREE from 'three';
+import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
+import { getBuildingPadParams } from '../buildings/BuildingTerrainLayout.ts';
+import { buildingPlacementYaw } from '../buildings/buildingPlacement.ts';
+import { burgageZonePolygon } from '../placement/placementConflicts.ts';
+import type { BurgageZoneState } from '../resources/types.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RoadEdge } from '../roads/RoadEdge.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { distancePointToPolylineXZ, type RockObstacle } from '../utils/pathGeometry.ts';
+import { distancePointToPolygon2 } from '../utils/polygonGeometry.ts';
 import type { UndergrowthInstances, UndergrowthPlacement } from './ForestUndergrowth.ts';
 import {
   computeRoadStumpPlacements,
@@ -16,7 +22,14 @@ import { createTreeSaplingMesh, updateTreeSaplingInstance } from './TreeSaplings
 import type { TreePhase } from '../resources/types.ts';
 
 const ROAD_CLEAR_MARGIN = 1.35;
+const BUILDING_CLEAR_MARGIN = 1.35;
 const UNDERGROWTH_CLEAR_MARGIN = 0.95;
+
+export type ForestPlacementClearance = {
+  roadNetwork?: RoadNetwork | null;
+  buildings?: Iterable<BuildingTerrainSource>;
+  burgageZones?: Iterable<BurgageZoneState>;
+};
 
 type TreePlacement = {
   x: number;
@@ -162,11 +175,26 @@ export class ForestManager {
   }
 
   syncRoadClearance(network: RoadNetwork): void {
-    const edges = [...network.edges.values()];
+    this.syncPlacementClearance({ roadNetwork: network });
+  }
+
+  syncPlacementClearance(clearance: ForestPlacementClearance): void {
+    const edges = clearance.roadNetwork ? [...clearance.roadNetwork.edges.values()] : [];
+    const buildings = clearance.buildings ? [...clearance.buildings] : [];
+    const burgageZones = clearance.burgageZones ? [...clearance.burgageZones] : [];
     const nextRemoved = new Set<number>();
 
     for (let treeIndex = 0; treeIndex < this.placements.length; treeIndex++) {
-      if (this.isTreeNearAnyEdge(this.placements[treeIndex], edges)) {
+      const placement = this.placements[treeIndex];
+      if (this.isTreeNearAnyEdge(placement, edges)) {
+        nextRemoved.add(treeIndex);
+        continue;
+      }
+      if (this.isTreeNearAnyBuilding(placement, buildings)) {
+        nextRemoved.add(treeIndex);
+        continue;
+      }
+      if (this.isTreeNearAnyBurgageZone(placement, burgageZones)) {
         nextRemoved.add(treeIndex);
       }
     }
@@ -179,8 +207,10 @@ export class ForestManager {
       this.applyTreePhase(treeIndex, phase, growthProgress);
     }
 
-    this.syncUndergrowthClearance(edges);
-    this.syncRoadStumps(network);
+    this.syncUndergrowthClearance(edges, buildings, burgageZones);
+    if (clearance.roadNetwork) {
+      this.syncRoadStumps(clearance.roadNetwork);
+    }
   }
 
   dispose(): void {
@@ -193,13 +223,25 @@ export class ForestManager {
     this.disposeResources();
   }
 
-  private syncUndergrowthClearance(edges: RoadEdge[]): void {
+  private syncUndergrowthClearance(
+    edges: RoadEdge[],
+    buildings: BuildingTerrainSource[],
+    burgageZones: BurgageZoneState[],
+  ): void {
     if (!this.undergrowth) return;
 
     const nextRemoved = new Set<number>();
     for (let index = 0; index < this.undergrowthPlacements.length; index++) {
       const placement = this.undergrowthPlacements[index];
       if (isUndergrowthNearAnyEdge(placement.x, placement.z, edges, UNDERGROWTH_CLEAR_MARGIN)) {
+        nextRemoved.add(index);
+        continue;
+      }
+      if (this.isUndergrowthNearAnyBuilding(placement.x, placement.z, buildings)) {
+        nextRemoved.add(index);
+        continue;
+      }
+      if (this.isUndergrowthNearAnyBurgageZone(placement.x, placement.z, burgageZones)) {
         nextRemoved.add(index);
       }
     }
@@ -235,6 +277,35 @@ export class ForestManager {
       if (path.length < 2) continue;
       const distance = distancePointToPolylineXZ(placement.x, placement.z, path);
       if (distance <= treeClearRadius(placement, edge.width)) return true;
+    }
+    return false;
+  }
+
+  private isTreeNearAnyBuilding(placement: TreePlacement, buildings: BuildingTerrainSource[]): boolean {
+    for (const building of buildings) {
+      if (treeWithinBuildingPad(placement, building)) return true;
+    }
+    return false;
+  }
+
+  private isTreeNearAnyBurgageZone(placement: TreePlacement, zones: BurgageZoneState[]): boolean {
+    for (const zone of zones) {
+      if (treeWithinBurgageZone(placement, zone)) return true;
+    }
+    return false;
+  }
+
+  private isUndergrowthNearAnyBuilding(x: number, z: number, buildings: BuildingTerrainSource[]): boolean {
+    for (const building of buildings) {
+      if (pointWithinBuildingPad(x, z, building, 0)) return true;
+    }
+    return false;
+  }
+
+  private isUndergrowthNearAnyBurgageZone(x: number, z: number, zones: BurgageZoneState[]): boolean {
+    for (const zone of zones) {
+      const polygon = burgageZonePolygon(zone);
+      if (distancePointToPolygon2({ x, z }, polygon) <= UNDERGROWTH_CLEAR_MARGIN) return true;
     }
     return false;
   }
@@ -342,12 +413,42 @@ function isConiferSpecies(species: string): boolean {
     || species === 'larch';
 }
 
+function treeCanopyRadius(placement: TreePlacement): number {
+  if (placement.form === 'broad') return 4.1 * placement.scale;
+  if (placement.form === 'young' || placement.form === 'midstory') return 2.3 * placement.scale;
+  return 3.3 * placement.scale;
+}
+
 function treeClearRadius(placement: TreePlacement, roadWidth: number): number {
-  const canopyRadius =
-    placement.form === 'broad'
-      ? 4.1 * placement.scale
-      : placement.form === 'young' || placement.form === 'midstory'
-        ? 2.3 * placement.scale
-        : 3.3 * placement.scale;
-  return roadWidth * 0.5 + canopyRadius + ROAD_CLEAR_MARGIN;
+  return roadWidth * 0.5 + treeCanopyRadius(placement) + ROAD_CLEAR_MARGIN;
+}
+
+function treeWithinBuildingPad(placement: TreePlacement, building: BuildingTerrainSource): boolean {
+  const canopyRadius = treeCanopyRadius(placement) + BUILDING_CLEAR_MARGIN;
+  return pointWithinBuildingPad(placement.x, placement.z, building, canopyRadius);
+}
+
+function treeWithinBurgageZone(placement: TreePlacement, zone: BurgageZoneState): boolean {
+  const polygon = burgageZonePolygon(zone);
+  const distance = distancePointToPolygon2({ x: placement.x, z: placement.z }, polygon);
+  return distance <= treeCanopyRadius(placement) + BUILDING_CLEAR_MARGIN;
+}
+
+function pointWithinBuildingPad(
+  x: number,
+  z: number,
+  building: BuildingTerrainSource,
+  canopyRadius: number,
+): boolean {
+  const params = getBuildingPadParams(building.kind);
+  const rotation = buildingPlacementYaw(building.x, building.z);
+  const dx = x - building.x;
+  const dz = z - building.z;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const localX = dx * cos + dz * sin;
+  const localZ = -dx * sin + dz * cos;
+  const normDist = Math.hypot(localX / params.radiusX, localZ / params.radiusZ);
+  const clearOuter = params.outerFade * 1.04 + canopyRadius / Math.min(params.radiusX, params.radiusZ);
+  return normDist <= clearOuter;
 }

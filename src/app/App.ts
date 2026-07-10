@@ -369,7 +369,19 @@ export class App {
         try {
           await this.spacetimeStore.demolishBurgageZone(zoneId);
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Residence demolition failed.';
+          const message = error instanceof Error ? error.message : 'Residence plot demolition failed.';
+          this.toastManager?.show(message, { variant: 'error' });
+        }
+      },
+      onDemolishResidence: async (residenceId) => {
+        if (!this.spacetimeStore?.isConnected) {
+          this.toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
+          return;
+        }
+        try {
+          await this.spacetimeStore.demolishResidence(residenceId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Residence removal failed.';
           this.toastManager?.show(message, { variant: 'error' });
         }
       },
@@ -578,6 +590,7 @@ export class App {
       (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
     );
     this.syncPlacedBuildingTerrain({ forceMeshUpdate: true });
+    this.syncForestClearance();
     this.syncResourceUi();
     this.exposeDevHandles();
   }
@@ -697,8 +710,17 @@ export class App {
       (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
     );
 
+    this.syncForestClearance();
     this.syncResourceUi();
     this.syncToolbar();
+  }
+
+  private syncForestClearance(): void {
+    if (!this.sceneManager || !this.gameState) return;
+    this.sceneManager.setForestClearanceSources(
+      this.collectPlacedBuildingSources(),
+      this.gameState.burgageZones.values(),
+    );
   }
 
   private syncBuildingTerrainLayout(): void {
@@ -793,6 +815,7 @@ export class App {
           this.sceneManager!.syncRoadNetwork(this.roadNetwork!);
           this.buildingMarkers?.syncBuildings(this.gameState.buildings.values());
           this.syncPlacedBuildingTerrain({ forceMeshUpdate: true });
+          this.syncForestClearance();
           this.forestVisualSync?.syncAll(this.gameState.trees);
           this.roadSelection?.refresh();
           this.syncResourceUi();

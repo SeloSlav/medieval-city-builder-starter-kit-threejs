@@ -16,7 +16,12 @@ export type InspectorLaborView = {
 
 export type InspectorDemolishView = {
   visible: boolean;
+  label?: string;
   hint: string;
+  secondary?: {
+    label: string;
+    hint: string;
+  };
 };
 
 export type InspectorView = {
