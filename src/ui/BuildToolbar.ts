@@ -1,3 +1,8 @@
+import { CompassHud } from './CompassHud.ts';
+import { GameMenu } from './GameMenu.ts';
+import { syncTipCardVisibility } from './tipCards.ts';
+import { subscribeTipCardsPreference } from './tipCardsPreference.ts';
+
 export type ToolbarStats = {
   canBuild: boolean;
   hasDraft: boolean;
@@ -13,7 +18,6 @@ type DeletePopupOptions = {
 
 export class BuildToolbar {
   private readonly roadButton: HTMLButtonElement;
-  private readonly roadControlsPanel: HTMLElement;
   private readonly buildButton: HTMLButtonElement;
   private readonly statusLabel: HTMLElement;
   private readonly deletePopup: HTMLElement;
@@ -23,6 +27,14 @@ export class BuildToolbar {
   private readonly fpsValue: HTMLElement;
   private readonly zoomValue: HTMLElement;
   private readonly fpModePanel: HTMLElement;
+  private readonly roadTools: HTMLElement;
+  private readonly zoomStat: HTMLElement;
+  private readonly root: HTMLElement;
+  private readonly compassHud: CompassHud;
+  private readonly gameMenu: GameMenu;
+  private readonly unsubscribeTipsPreference: () => void;
+  private firstPersonActive = false;
+  private hudMode: ToolbarStats['mode'] = 'idle';
   private deleteCancel: (() => void) | null = null;
   private deleteRemove: (() => void) | null = null;
 
@@ -31,6 +43,7 @@ export class BuildToolbar {
     handlers: {
       onOpenRoads: () => void;
       onBuildRoad: () => void;
+      onMenuOpenChange?: (open: boolean) => void;
     },
   ) {
     root.innerHTML = `
@@ -40,13 +53,55 @@ export class BuildToolbar {
             <strong data-stat="fps">--</strong>
             <span>FPS</span>
           </div>
-          <div class="fps-stat">
+          <div class="fps-stat" data-stat-row="zoom">
             <strong data-stat="zoom">100%</strong>
             <span>Zoom</span>
           </div>
         </div>
 
-        <aside class="road-controls-panel" data-road-controls-panel aria-label="Road placement instructions" hidden>
+        <aside class="fp-controls-panel" data-tip-card="fp" data-fp-controls-panel aria-label="Walk mode controls" hidden>
+          <header class="road-controls-header">
+            <div>
+              <p class="road-controls-eyebrow">Explorer</p>
+              <h2 class="road-controls-title">Walk mode</h2>
+            </div>
+          </header>
+
+          <section class="road-controls-help" aria-label="Walk mode shortcuts">
+            <h3 class="road-controls-help-title">Controls</h3>
+            <ul class="road-controls-list">
+              <li><span>Move</span><span class="road-controls-key">WASD</span></li>
+              <li><span>Sprint</span><span class="road-controls-key">Shift</span></li>
+              <li><span>Jump</span><span class="road-controls-key">Space</span></li>
+              <li><span>Crouch</span><span class="road-controls-key">C</span></li>
+              <li><span>Free look</span><span class="road-controls-key">Alt</span></li>
+              <li><span>Toggle walk</span><span class="road-controls-key">~</span></li>
+              <li><span>Exit walk</span><span class="road-controls-key">Esc</span></li>
+            </ul>
+          </section>
+        </aside>
+
+        <aside class="rts-controls-panel" data-tip-card="rts" data-rts-controls-panel aria-label="Camera controls" hidden>
+          <header class="road-controls-header">
+            <div>
+              <p class="road-controls-eyebrow">Strategist</p>
+              <h2 class="road-controls-title">Camera</h2>
+            </div>
+          </header>
+
+          <section class="road-controls-help" aria-label="Camera shortcuts">
+            <h3 class="road-controls-help-title">Controls</h3>
+            <ul class="road-controls-list">
+              <li><span>Pan map</span><span class="road-controls-key">R-drag / WASD</span></li>
+              <li><span>Rotate view</span><span class="road-controls-key">MMB / Q E</span></li>
+              <li><span>Zoom</span><span class="road-controls-key">Scroll</span></li>
+              <li><span>Walk mode</span><span class="road-controls-key">~</span></li>
+              <li><span>Road tool</span><span class="road-controls-key">R</span></li>
+            </ul>
+          </section>
+        </aside>
+
+        <aside class="road-controls-panel" data-tip-card="road" data-road-controls-panel aria-label="Road placement instructions" hidden>
           <header class="road-controls-header">
             <div>
               <p class="road-controls-eyebrow">Builder</p>
@@ -101,8 +156,14 @@ export class BuildToolbar {
 
     `;
 
+    this.root = root;
+    this.gameMenu = new GameMenu(root, {
+      onTipsPreferenceChange: () => this.syncContextPanels(),
+      onOpenChange: handlers.onMenuOpenChange,
+    });
+    this.unsubscribeTipsPreference = subscribeTipCardsPreference(() => this.syncContextPanels());
+
     this.roadButton = this.mustButton(root, '[data-action="road"]');
-    this.roadControlsPanel = this.mustElement(root, '[data-road-controls-panel]');
     this.buildButton = this.mustButton(root, '[data-action="build"]');
     this.statusLabel = this.mustElement(root, '[data-road-status]');
     this.deletePopup = this.mustElement(root, '[data-delete-popup]');
@@ -112,7 +173,11 @@ export class BuildToolbar {
     this.fpsValue = this.mustElement(root, '[data-stat="fps"]');
     this.zoomValue = this.mustElement(root, '[data-stat="zoom"]');
     this.fpModePanel = this.mustElement(root, '[data-fp-mode-panel]');
+    this.roadTools = this.mustElement(root, '.road-tools');
+    this.zoomStat = this.mustElement(root, '[data-stat-row="zoom"]');
+    this.compassHud = new CompassHud(root);
 
+    this.syncContextPanels();
     this.roadButton.addEventListener('click', handlers.onOpenRoads);
     this.buildButton.addEventListener('click', handlers.onBuildRoad);
     this.deletePopup.addEventListener('mousedown', (event) => event.stopPropagation());
@@ -126,8 +191,8 @@ export class BuildToolbar {
   }
 
   setStats(stats: ToolbarStats): void {
+    this.hudMode = stats.mode;
     const roadMode = stats.mode === 'road';
-    this.roadControlsPanel.hidden = !roadMode;
     this.roadButton.classList.toggle('is-active', roadMode);
     this.roadButton.setAttribute('aria-pressed', String(roadMode));
     this.buildButton.disabled = !stats.canBuild;
@@ -135,6 +200,7 @@ export class BuildToolbar {
     this.buildButton.classList.toggle('has-draft', stats.hasDraft);
     this.statusLabel.textContent = this.describeStatus(stats);
     this.statusLabel.dataset.state = stats.canBuild ? 'ready' : roadMode ? (stats.hasDraft ? 'draft' : 'active') : 'idle';
+    this.syncContextPanels();
   }
 
   setBuildButtonPosition(position: { clientX: number; clientY: number } | null, visible: boolean): void {
@@ -165,8 +231,30 @@ export class BuildToolbar {
     this.zoomValue.textContent = `${displayZoom}%`;
   }
 
+  isGameMenuOpen(): boolean {
+    return this.gameMenu.isOpen();
+  }
+
   setFirstPersonMode(active: boolean): void {
+    this.firstPersonActive = active;
     this.fpModePanel.classList.toggle('is-active', active);
+    this.roadTools.hidden = active;
+    this.zoomStat.hidden = active;
+    this.compassHud.setVisible(active);
+    this.syncContextPanels();
+  }
+
+  private syncContextPanels(): void {
+    syncTipCardVisibility(this.root, {
+      firstPersonActive: this.firstPersonActive,
+      hudMode: this.hudMode,
+    });
+  }
+
+  dispose(): void {
+    this.unsubscribeTipsPreference();
+    this.gameMenu.dispose();
+    this.compassHud.dispose();
   }
 
   showDeletePopup(options: DeletePopupOptions): void {

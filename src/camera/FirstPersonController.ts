@@ -12,6 +12,10 @@ import {
 } from './fp/fpCameraLook.ts';
 import { CAM_BOB_DIP_Y } from './fp/fpConstants.ts';
 import {
+  publishCompassHeadingFromYawRad,
+  resetCompassHeading,
+} from '../ui/compassHeading.ts';
+import {
   createFpLocomotionState,
   FP_LOCOMOTION_FEET_SKIN_M,
   FP_WALK_FOOT_RADIUS_XZ,
@@ -31,6 +35,7 @@ export type FirstPersonControllerConfig = {
   getHeightAt: (x: number, z: number) => number;
   getOrbitSpawn?: () => FirstPersonSpawn;
   onModeChange?: (active: boolean) => void;
+  isMenuOpen?: () => boolean;
 };
 
 export type FirstPersonSpawn = {
@@ -59,11 +64,12 @@ export class FirstPersonController {
   private readonly walkOpts: FpLocomotionWalkOptions;
   private active = false;
   private savedFov = DEFAULT_FOV;
-  private crosshair: HTMLElement | null = null;
+  private reticule: HTMLElement | null = null;
   private toggleRequested = false;
   private crouchToggle = false;
   private camBobY = 0;
   private camBobRoll = 0;
+  private lastEyeLine: number = fpLocomotionConstants.eyeStand;
 
   constructor(config: FirstPersonControllerConfig) {
     this.config = config;
@@ -120,13 +126,14 @@ export class FirstPersonController {
     this.crouchToggle = false;
     this.camBobY = 0;
     this.camBobRoll = 0;
+    this.lastEyeLine = fpLocomotionConstants.eyeStand;
 
     this.config.camera.fov = fpLocomotionConstants.cameraFovDeg;
     this.config.camera.updateProjectionMatrix();
-    this.showCrosshair(true);
     this.config.onModeChange?.(true);
     this.requestPointerLock();
-    this.applyCameraTransform(0);
+    this.applyCameraTransform(this.lastEyeLine);
+    this.syncReticuleVisibility();
   }
 
   deactivate(): void {
@@ -136,6 +143,7 @@ export class FirstPersonController {
     this.crouchToggle = false;
     this.exitPointerLock();
     this.showCrosshair(false);
+    resetCompassHeading();
 
     this.config.camera.fov = this.savedFov;
     this.config.camera.updateProjectionMatrix();
@@ -154,6 +162,7 @@ export class FirstPersonController {
 
   update(dt: number): void {
     if (!this.active) return;
+    if (this.config.isMenuOpen?.()) return;
 
     this.syncInputFromKeys();
     const freeLook = this.resolveFreeLook();
@@ -172,6 +181,7 @@ export class FirstPersonController {
       dt,
       this.walkOpts,
     );
+    this.lastEyeLine = eyeLine;
     this.clampPositionXZ();
 
     const horizontalSpeed = Math.hypot(this.loco.velocity.x, this.loco.velocity.z);
@@ -197,6 +207,7 @@ export class FirstPersonController {
     }
 
     this.applyCameraTransform(eyeLine);
+    this.syncReticuleVisibility();
   }
 
   dispose(): void {
@@ -209,8 +220,8 @@ export class FirstPersonController {
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     this.config.domElement.removeEventListener('click', this.onCanvasClick);
     this.config.domElement.removeEventListener('contextmenu', this.onContextMenu);
-    this.crosshair?.remove();
-    this.crosshair = null;
+    this.reticule?.remove();
+    this.reticule = null;
   }
 
   private applyCameraTransform(eyeLine: number): void {
@@ -221,6 +232,13 @@ export class FirstPersonController {
     camera.rotation.y = yaw;
     camera.rotation.x = this.look.pitch;
     camera.rotation.z = this.camBobRoll;
+    publishCompassHeadingFromYawRad(yaw);
+  }
+
+  private applyLookFromPointer(deltaX: number, deltaY: number): void {
+    const freeLook = this.resolveFreeLook();
+    stepFpLookInertia(this.lookInertia, this.look, deltaX, deltaY, 0, { freeLook });
+    this.applyCameraTransform(this.lastEyeLine);
   }
 
   private readonly sampleTerrainGround: WalkGroundSampler = (worldX, worldZ) => {
@@ -272,13 +290,31 @@ export class FirstPersonController {
   }
 
   private showCrosshair(visible: boolean): void {
-    if (!this.crosshair) {
-      this.crosshair = document.createElement('div');
-      this.crosshair.className = 'fps-crosshair';
-      this.crosshair.setAttribute('aria-hidden', 'true');
-      this.config.domElement.parentElement?.appendChild(this.crosshair);
+    if (!this.reticule) {
+      this.reticule = document.createElement('div');
+      this.reticule.className = 'fps-reticule';
+      this.reticule.setAttribute('aria-hidden', 'true');
+      this.reticule.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <line x1="11" y1="2" x2="11" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <line x1="11" y1="19" x2="11" y2="20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <line x1="2" y1="11" x2="3" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <line x1="19" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <circle cx="11" cy="11" r="1.2" fill="currentColor" opacity="0.35" />
+        </svg>
+      `;
+      this.config.domElement.parentElement?.appendChild(this.reticule);
     }
-    this.crosshair.hidden = !visible;
+    this.reticule.hidden = !visible;
+  }
+
+  private syncReticuleVisibility(): void {
+    if (!this.active) {
+      this.showCrosshair(false);
+      return;
+    }
+    const locked = document.pointerLockElement === this.config.domElement;
+    this.showCrosshair(locked);
   }
 
   private isToggleKey(event: KeyboardEvent): boolean {
@@ -303,6 +339,7 @@ export class FirstPersonController {
     }
 
     if (!this.active) return;
+    if (this.config.isMenuOpen?.()) return;
 
     if (event.code === 'AltLeft' || event.code === 'AltRight') {
       event.preventDefault();
@@ -311,6 +348,7 @@ export class FirstPersonController {
     this.keys.add(event.code);
 
     if (event.code === 'Escape') {
+      if (this.config.isMenuOpen?.()) return;
       event.preventDefault();
       this.deactivate();
       return;
@@ -335,13 +373,14 @@ export class FirstPersonController {
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
-    if (!this.active || document.pointerLockElement !== this.config.domElement) return;
+    if (!this.active || this.config.isMenuOpen?.()) return;
+    if (document.pointerLockElement !== this.config.domElement) return;
     if (event.movementX === 0 && event.movementY === 0) return;
-    const freeLook = this.resolveFreeLook();
-    stepFpLookInertia(this.lookInertia, this.look, event.movementX, event.movementY, 0, { freeLook });
+    this.applyLookFromPointer(event.movementX, event.movementY);
   };
 
   private readonly onPointerLockChange = (): void => {
+    this.syncReticuleVisibility();
     if (!this.active) return;
     if (document.pointerLockElement === this.config.domElement) return;
     if (this.toggleRequested) {

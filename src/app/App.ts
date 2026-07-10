@@ -67,26 +67,6 @@ export class App {
       shouldIgnoreInput: (event) => this.roadTool?.shouldBlockCameraInput(event) ?? false,
     });
 
-    const firstPersonController = new FirstPersonController({
-      camera: sceneManager.camera,
-      domElement: sceneManager.renderer.domElement,
-      bounds: sceneManager.terrain.bounds,
-      getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
-      getOrbitSpawn: () => {
-        const target = cameraController.getTargetPosition();
-        return { x: target.x, z: target.z, yaw: cameraController.getYaw() };
-      },
-      onModeChange: (active) => {
-        cameraController.setInputEnabled(!active);
-        if (active) {
-          if (roadTool.isEnabled()) roadTool.setEnabled(false);
-          return;
-        }
-        const pos = firstPersonController.getPosition();
-        cameraController.syncFromFirstPerson(pos.x, pos.z, firstPersonController.getBodyYaw());
-      },
-    });
-
     const roadSelection = new RoadSelection({
       camera: sceneManager.camera,
       domElement: sceneManager.renderer.domElement,
@@ -126,11 +106,38 @@ export class App {
       },
     });
 
+    let firstPersonController: FirstPersonController;
+
     const toolbar = new BuildToolbar(uiRoot, {
       onOpenRoads: () => roadTool.setEnabled(!roadTool.isEnabled()),
       onBuildRoad: () => roadTool.commitDraft(),
+      onMenuOpenChange: (open) => {
+        cameraController.setInputEnabled(!open && !firstPersonController.isActive());
+      },
     });
     const toastManager = new ToastManager(uiRoot);
+
+    firstPersonController = new FirstPersonController({
+      camera: sceneManager.camera,
+      domElement: sceneManager.renderer.domElement,
+      bounds: sceneManager.terrain.bounds,
+      getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
+      getOrbitSpawn: () => {
+        const target = cameraController.getTargetPosition();
+        return { x: target.x, z: target.z, yaw: cameraController.getYaw() };
+      },
+      isMenuOpen: () => toolbar.isGameMenuOpen(),
+      onModeChange: (active) => {
+        cameraController.setInputEnabled(!active && !toolbar.isGameMenuOpen());
+        toolbar.setFirstPersonMode(active);
+        if (active) {
+          if (roadTool.isEnabled()) roadTool.setEnabled(false);
+          return;
+        }
+        const pos = firstPersonController.getPosition();
+        cameraController.syncFromFirstPerson(pos.x, pos.z, firstPersonController.getBodyYaw());
+      },
+    });
 
     this.sceneManager = sceneManager;
     this.input = input;
@@ -178,6 +185,7 @@ export class App {
     this.toastManager?.dispose();
     this.firstPersonController?.dispose();
     this.cameraController?.dispose();
+    this.toolbar?.dispose();
     this.input?.dispose();
     this.sceneManager?.dispose();
   }

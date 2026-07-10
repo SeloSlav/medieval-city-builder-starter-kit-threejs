@@ -53,53 +53,233 @@ button {
   outline: none;
 }
 
-.fps-crosshair {
-  position: absolute;
+.hud-menu-button {
+  position: fixed;
+  left: max(14px, env(safe-area-inset-left, 0px));
+  top: max(14px, env(safe-area-inset-top, 0px));
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.hud-menu-button:hover,
+.hud-menu-button:focus-visible {
+  border-color: rgba(215, 180, 99, 0.45);
+  outline: none;
+}
+
+.game-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.game-menu-backdrop[hidden] {
+  display: none;
+}
+
+.game-menu-dialog {
+  width: min(92vw, 360px);
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
+  color: var(--ink);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.game-menu-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.game-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.game-menu-option input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.game-menu-return {
+  justify-self: start;
+  padding: 10px 16px;
+  color: #201d15;
+  font-weight: 700;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.game-menu-return:hover,
+.game-menu-return:focus-visible {
+  filter: brightness(1.05);
+  outline: none;
+}
+
+.fps-reticule {
+  position: fixed;
   left: 50%;
   top: 50%;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
   pointer-events: none;
-  z-index: 3;
+  z-index: 6;
+  color: rgba(255, 255, 255, 0.92);
 }
 
-.fps-crosshair::before,
-.fps-crosshair::after {
-  content: '';
+.fps-reticule[hidden] {
+  display: none;
+}
+
+.compass-hud {
+  position: fixed;
+  left: 50%;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(360px, 88vw);
+  height: 40px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.compass-hud[hidden] {
+  display: none;
+}
+
+.compass-hud__frame {
   position: absolute;
-  background: rgba(238, 232, 220, 0.82);
-  border-radius: 1px;
+  inset: 0;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
 }
 
-.fps-crosshair::before {
+.compass-hud__fade {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.55) 0%,
+    transparent 14%,
+    transparent 86%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  pointer-events: none;
+}
+
+.compass-hud__caret {
+  position: absolute;
   left: 50%;
   top: 2px;
-  width: 2px;
-  height: 10px;
-  margin-left: -1px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 10px solid var(--ink);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+  z-index: 2;
 }
 
-.fps-crosshair::after {
-  top: 50%;
-  left: 2px;
-  width: 10px;
-  height: 2px;
-  margin-top: -1px;
-}
-
-.hud-right-stack {
+.compass-hud__viewport {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 4;
+  left: 50%;
+  top: 12px;
+  width: calc(100% + 48px);
+  margin-left: calc(-50% - 24px);
+  height: 26px;
+  overflow: hidden;
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.compass-hud__band {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  will-change: transform;
+}
+
+.compass-hud__tick {
+  flex: none;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  width: min(280px, calc(100vw - 28px));
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
 }
 
+.compass-hud__label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  margin-bottom: 1px;
+}
+
+.compass-hud__label.is-cardinal {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0;
+}
+
+.compass-hud__mark {
+  width: 2px;
+  background: var(--muted);
+  opacity: 0.85;
+  border-radius: 1px;
+  margin-bottom: 4px;
+}
+
+.compass-hud__mark.is-minor {
+  width: 1px;
+  opacity: 0.45;
+}
+
+.fp-controls-panel,
+.rts-controls-panel,
 .road-controls-panel {
   width: 100%;
   display: grid;
@@ -112,8 +292,22 @@ button {
   backdrop-filter: blur(14px);
 }
 
+.fp-controls-panel[hidden],
+.rts-controls-panel[hidden],
 .road-controls-panel[hidden] {
   display: none;
+}
+
+.hud-right-stack {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: min(280px, calc(100vw - 28px));
 }
 
 .road-controls-header {
@@ -478,6 +672,8 @@ button {
     width: min(260px, calc(100vw - 20px));
   }
 
+  .fp-controls-panel,
+  .rts-controls-panel,
   .road-controls-panel {
     padding: 12px;
     gap: 12px;
