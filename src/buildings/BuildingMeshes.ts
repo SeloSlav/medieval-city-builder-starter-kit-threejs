@@ -9,15 +9,15 @@ import {
   timberMaterial,
 } from './buildingMaterials.ts';
 
-/** Long timber sawmill — white stone plinth, plank walls, red terracotta tile roof. */
+/** Long timber sawmill — stone plinth, plank walls, red terracotta gabled roof. */
 export function createLumberMillMesh(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Lumber mill';
 
-  const length = 16;
-  const width = 6.2;
-  const stoneHeight = 1.15;
-  const wallHeight = 3.35;
+  const length = 18;
+  const width = 7;
+  const stoneHeight = 1.2;
+  const wallHeight = 3.6;
   const halfL = length * 0.5;
   const halfW = width * 0.5;
   const totalWall = stoneHeight + wallHeight;
@@ -92,79 +92,80 @@ export function createLumberMillMesh(): THREE.Group {
     new THREE.Vector3(halfL + 0.02, stoneHeight + 1.35, 0),
   );
 
-  // Red terracotta tile roof — gabled, runs along the long axis.
-  const roofPitch = Math.atan2(2.15, halfW);
-  const slopeLength = halfW / Math.cos(roofPitch) + 0.35;
+  // Red terracotta tile roof — ridge along the long axis, triangular gable ends.
+  const ridgeHeight = 2.6;
+  const roofPitch = Math.atan2(ridgeHeight, halfW);
+  const slopeLength = halfW / Math.cos(roofPitch) + 0.3;
   const roofY = stoneHeight + wallHeight;
 
   for (const side of [-1, 1] as const) {
     addMesh(
       group,
-      new THREE.BoxGeometry(length + 0.7, 0.14, slopeLength),
+      new THREE.BoxGeometry(length + 0.65, 0.12, slopeLength),
       tileMaterial(0),
-      new THREE.Vector3(0, roofY + halfW * Math.tan(roofPitch) * 0.5, side * halfW * 0.42),
+      new THREE.Vector3(0, roofY + ridgeHeight * 0.5, side * halfW * 0.46),
       new THREE.Euler(side > 0 ? -roofPitch : roofPitch, 0, 0),
     );
   }
 
-  // Ridge cap tiles.
   addMesh(
     group,
-    new THREE.BoxGeometry(length + 0.85, 0.22, 0.38),
+    new THREE.BoxGeometry(length + 0.8, 0.22, 0.36),
     tileMaterial(2),
-    new THREE.Vector3(0, roofY + 2.15 + 0.08, 0),
+    new THREE.Vector3(0, roofY + ridgeHeight + 0.06, 0),
   );
 
-  // Tile courses — subtle strips along both roof slopes.
   const tileStripCount = 7;
   for (let i = 0; i < tileStripCount; i++) {
     const t = i / (tileStripCount - 1);
-    const stripY = roofY + 0.12 + t * 2.05;
-    const stripZ = halfW * 0.38 * (1 - t * 0.55);
+    const stripY = roofY + 0.1 + t * (ridgeHeight - 0.15);
+    const stripZ = halfW * 0.44 * (1 - t * 0.58);
     const variant = (i % 3) as 0 | 1 | 2;
     for (const side of [-1, 1] as const) {
       addMesh(
         group,
-        new THREE.BoxGeometry(length + 0.5, 0.06, 0.28),
+        new THREE.BoxGeometry(length + 0.45, 0.06, 0.26),
         tileMaterial(variant),
         new THREE.Vector3(0, stripY, side * stripZ),
-        new THREE.Euler(side > 0 ? -roofPitch * 0.92 : roofPitch * 0.92, 0, 0),
+        new THREE.Euler(side > 0 ? -roofPitch : roofPitch, 0, 0),
       );
     }
   }
 
-  // Gable end tile fills.
+  // Triangular gable ends — two sloped faces meeting at the ridge (visible ^ profile).
   for (const xSign of [-1, 1] as const) {
-    addMesh(
-      group,
-      new THREE.BoxGeometry(0.18, 2.1, width * 0.92),
-      tileMaterial(1),
-      new THREE.Vector3(xSign * (halfL + 0.08), roofY + 1.05, 0),
-      new THREE.Euler(0, 0, xSign * 0.12),
-    );
+    for (const zSide of [-1, 1] as const) {
+      addMesh(
+        group,
+        new THREE.BoxGeometry(0.16, 0.12, slopeLength * 0.96),
+        tileMaterial(1),
+        new THREE.Vector3(xSign * (halfL + 0.06), roofY + ridgeHeight * 0.48, zSide * halfW * 0.46),
+        new THREE.Euler(0, 0, zSide * -roofPitch),
+      );
+    }
   }
 
   // Stone chimney — common in the region.
   addMesh(
     group,
-    new THREE.BoxGeometry(0.85, 2.6, 0.85),
+    new THREE.BoxGeometry(0.9, 2.8, 0.9),
     stoneMaterial('mid'),
-    new THREE.Vector3(-halfL + 1.4, totalWall + 1.25, halfW - 1.1),
+    new THREE.Vector3(-halfL + 1.5, totalWall + 1.35, halfW - 1.2),
   );
   addMesh(
     group,
-    new THREE.BoxGeometry(0.95, 0.18, 0.95),
-    stoneMaterial('light'),
-    new THREE.Vector3(-halfL + 1.4, totalWall + 2.55, halfW - 1.1),
+    new THREE.BoxGeometry(1.0, 0.18, 1.0),
+    stoneMaterial('mid'),
+    new THREE.Vector3(-halfL + 1.5, totalWall + 2.75, halfW - 1.2),
   );
 
   // Timber log stack beside the mill.
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     addMesh(
       group,
-      new THREE.CylinderGeometry(0.22, 0.26, 2.8, 8),
+      new THREE.CylinderGeometry(0.24, 0.28, 3.2, 8),
       timberMaterial('weathered'),
-      new THREE.Vector3(halfL - 2.2 - i * 0.08, stoneHeight + 0.55, halfW + 1.35),
+      new THREE.Vector3(halfL - 2.4 - i * 0.08, stoneHeight + 0.6, halfW + 1.5),
       new THREE.Euler(0, 0, Math.PI * 0.5),
     );
   }
@@ -302,83 +303,121 @@ export function createReforesterHutMesh(): THREE.Group {
   return group;
 }
 
-/** Open-pit stone quarry — terraced cut blocks, timber hoist frame, stone ramp. */
+/** Open-pit stone quarry — terraced cut blocks, timber hoist frame, foreman's shed. */
 export function createStoneQuarryMesh(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Stone quarry';
 
-  const pitRadius = 5.5;
-  const terraceCount = 3;
+  const pitRadius = 8.5;
+  const terraceCount = 4;
+  const terraceStep = 0.65;
 
-  // Terraced pit ring — cut stone benches stepping down.
+  // Terraced pit ring — cut stone benches stepping down (weathered grey limestone).
   for (let tier = 0; tier < terraceCount; tier++) {
-    const scale = 1 - tier * 0.22;
-    const y = tier * 0.55;
+    const scale = 1 - tier * 0.18;
+    const y = tier * terraceStep;
     const inner = pitRadius * scale;
+    const shade = tier === 0 ? 'mid' : tier === terraceCount - 1 ? 'mortar' : 'mid';
     addMesh(
       group,
-      new THREE.CylinderGeometry(inner, inner + 0.85, 0.48, 10, 1, false),
-      stoneMaterial(tier === 0 ? 'light' : 'mid'),
-      new THREE.Vector3(0, y + 0.24, 0),
+      new THREE.CylinderGeometry(inner, inner + 1.05, 0.58, 12, 1, false),
+      stoneMaterial(shade),
+      new THREE.Vector3(0, y + 0.29, 0),
     );
   }
 
   // Central spoil heap.
   addMesh(
     group,
-    new THREE.ConeGeometry(2.2, 1.6, 8),
+    new THREE.ConeGeometry(3.2, 2.2, 10),
     stoneMaterial('mortar'),
-    new THREE.Vector3(0.8, 0.8, -0.6),
+    new THREE.Vector3(1.2, 1.1, -0.9),
   );
 
-  // Timber hoist frame over the pit edge.
-  const frameX = pitRadius * 0.55;
-  for (const z of [-1.8, 1.8] as const) {
+  // Timber hoist frame over the pit edge — tall enough to read against pit depth.
+  const frameX = pitRadius * 0.62;
+  const frameSpan = 3.4;
+  const frameHeight = 5.8;
+  for (const z of [-frameSpan, frameSpan] as const) {
     addMesh(
       group,
-      new THREE.BoxGeometry(0.28, 4.2, 0.28),
+      new THREE.BoxGeometry(0.34, frameHeight, 0.34),
       timberMaterial('dark'),
-      new THREE.Vector3(frameX, 2.1, z),
+      new THREE.Vector3(frameX, frameHeight * 0.5, z),
     );
   }
   addMesh(
     group,
-    new THREE.BoxGeometry(0.22, 0.22, 4.2),
+    new THREE.BoxGeometry(0.26, 0.26, frameSpan * 2 + 0.5),
     timberMaterial('weathered'),
-    new THREE.Vector3(frameX, 4.05, 0),
+    new THREE.Vector3(frameX, frameHeight - 0.15, 0),
   );
   addMesh(
     group,
-    new THREE.BoxGeometry(0.14, 0.14, 3.6),
+    new THREE.BoxGeometry(0.16, 0.16, frameSpan * 1.7),
     timberMaterial('mid'),
-    new THREE.Vector3(frameX - 0.35, 3.2, 0),
+    new THREE.Vector3(frameX - 0.45, frameHeight * 0.72, 0),
     new THREE.Euler(0, 0, 0.28),
   );
 
-  // Cut stone blocks stacked beside ramp.
-  for (let i = 0; i < 5; i++) {
-    const bx = -pitRadius - 0.6 - (i % 2) * 0.4;
-    const bz = -1.4 + i * 0.65;
+  // Cut stone blocks stacked beside ramp — roughly knee-to-waist height per block.
+  for (let i = 0; i < 7; i++) {
+    const bx = -pitRadius - 0.85 - (i % 2) * 0.55;
+    const bz = -2.2 + i * 0.85;
     addMesh(
       group,
-      new THREE.BoxGeometry(0.85, 0.55 + (i % 3) * 0.12, 0.75),
-      stoneMaterial(i % 2 === 0 ? 'light' : 'mid'),
-      new THREE.Vector3(bx, 0.28 + Math.floor(i / 2) * 0.5, bz),
+      new THREE.BoxGeometry(1.1, 0.72 + (i % 3) * 0.14, 0.95),
+      stoneMaterial(i % 2 === 0 ? 'mid' : 'mortar'),
+      new THREE.Vector3(bx, 0.36 + Math.floor(i / 2) * 0.68, bz),
     );
   }
 
-  // Low stone office / tool shed on rim.
+  // Foreman's stone shed on rim — ~2.5× player height, door ~2 m.
+  const shedX = -pitRadius + 1.8;
+  const shedZ = pitRadius * 0.42;
+  const shedW = 5.2;
+  const shedD = 4.2;
+  const shedWallH = 2.55;
+  const shedHalfW = shedW * 0.5;
+  const shedHalfD = shedD * 0.5;
+  const shedRidgeH = 1.35;
+
   addMesh(
     group,
-    new THREE.BoxGeometry(2.8, 1.35, 2.2),
-    stoneMaterial('light'),
-    new THREE.Vector3(-pitRadius + 0.2, 0.68, pitRadius * 0.35),
+    new THREE.BoxGeometry(shedW + 0.35, 0.32, shedD + 0.35),
+    stoneMaterial('mortar'),
+    new THREE.Vector3(shedX, 0.16, shedZ),
   );
   addMesh(
     group,
-    new THREE.BoxGeometry(3.0, 0.18, 2.35),
-    tileMaterial(),
-    new THREE.Vector3(-pitRadius + 0.2, 1.42, pitRadius * 0.35),
+    new THREE.BoxGeometry(shedW, shedWallH, shedD),
+    stoneMaterial('mid'),
+    new THREE.Vector3(shedX, 0.32 + shedWallH * 0.5, shedZ),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.95, 2.05, 0.12),
+    timberMaterial('weathered'),
+    new THREE.Vector3(shedX + 0.6, 0.32 + 1.05, shedZ + shedHalfD - 0.04),
+  );
+
+  const shedRoofPitch = Math.atan2(shedRidgeH, shedHalfW);
+  const shedSlopeLen = shedHalfW / Math.cos(shedRoofPitch) + 0.2;
+  const shedRoofY = 0.32 + shedWallH;
+  for (const side of [-1, 1] as const) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(shedD + 0.3, 0.1, shedSlopeLen),
+      tileMaterial(side > 0 ? 1 : 0),
+      new THREE.Vector3(shedX, shedRoofY + shedRidgeH * 0.5, shedZ + side * shedHalfW * 0.46),
+      new THREE.Euler(side > 0 ? -shedRoofPitch : shedRoofPitch, 0, 0),
+    );
+  }
+  addMesh(
+    group,
+    new THREE.BoxGeometry(shedD + 0.4, 0.16, 0.28),
+    tileMaterial(2),
+    new THREE.Vector3(shedX, shedRoofY + shedRidgeH + 0.04, shedZ),
   );
 
   return group;
