@@ -59,3 +59,34 @@ pub struct RoadNetworkState {
     pub owner: Identity,
     pub snapshot_json: String,
 }
+
+#[spacetimedb::table(accessor = burgage_zone, public, index(accessor = owner, btree(columns = [owner])))]
+pub struct BurgageZone {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    pub owner: Identity,
+    pub corner_ax: f64,
+    pub corner_az: f64,
+    pub corner_bx: f64,
+    pub corner_bz: f64,
+    pub corner_cx: f64,
+    pub corner_cz: f64,
+    pub corner_dx: f64,
+    pub corner_dz: f64,
+    pub frontage_edge: u8,
+    pub plot_count: u32,
+}
+
+#[spacetimedb::table(accessor = residence, public, index(accessor = zone_id, btree(columns = [zone_id])), index(accessor = owner, btree(columns = [owner])))]
+pub struct Residence {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    pub zone_id: u64,
+    pub owner: Identity,
+    pub parcel_index: u32,
+    pub x: f64,
+    pub z: f64,
+    pub yaw: f64,
+}

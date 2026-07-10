@@ -61,6 +61,27 @@ export type BuildingState = {
   actionCooldown: number;
 };
 
+export type BurgageFrontageEdge = 0 | 1 | 2 | 3;
+
+export type BurgageZoneState = {
+  id: string;
+  cornerA: { x: number; z: number };
+  cornerB: { x: number; z: number };
+  cornerC: { x: number; z: number };
+  cornerD: { x: number; z: number };
+  frontageEdge: BurgageFrontageEdge;
+  plotCount: number;
+};
+
+export type ResidenceState = {
+  id: string;
+  zoneId: string;
+  parcelIndex: number;
+  x: number;
+  z: number;
+  yaw: number;
+};
+
 export type ResourceStockpile = Record<ResourceKind, number>;
 
 export type GameStateSnapshotV1 = {
@@ -90,6 +111,8 @@ export type GameState = {
   quarries: Map<string, QuarryNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
+  burgageZones: Map<string, BurgageZoneState>;
+  residences: Map<string, ResidenceState>;
   nextBuildingId: number;
 };
 

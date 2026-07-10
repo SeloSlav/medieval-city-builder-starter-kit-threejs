@@ -4,8 +4,16 @@ import { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
 import { BuildingTerrainLayout } from '../buildings/BuildingTerrainLayout.ts';
 import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
 import { BuildingTool } from '../buildings/BuildingTool.ts';
+import { BurgageTool } from '../residences/BurgageTool.ts';
+import { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
 import { SpacetimeGameStore } from '../data/spacetimeGameStore.ts';
 import { InputManager } from '../input/InputManager.ts';
+import {
+  isBurgagePlacementBlocked,
+  isBuildingPlacementBlocked,
+  isWorldInspectionBlocked,
+  type PlacementInteractionGate,
+} from '../input/PlacementInteractionGate.ts';
 import {
   createInitialGameState,
   deserializeGameState,
@@ -33,7 +41,7 @@ import { updateTerrainBuildingPads } from '../terrain/TerrainBuildingPads.ts';
 import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
 import { LoadingScreen } from '../ui/LoadingScreen.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
-import { roadPlacementReasonToToastId, buildingPlacementReasonToToastId } from '../ui/toastMessages.ts';
+import { roadPlacementReasonToToastId, buildingPlacementReasonToToastId, burgagePlacementReasonToToastId } from '../ui/toastMessages.ts';
 
 const TARGET_MAX_FPS = 90;
 const TARGET_FRAME_MS = 1000 / TARGET_MAX_FPS;
@@ -48,7 +56,9 @@ export class App {
   private roadTool: RoadTool | null = null;
   private roadSelection: RoadSelection | null = null;
   private buildingTool: BuildingTool | null = null;
+  private burgageTool: BurgageTool | null = null;
   private buildingMarkers: BuildingMarkers | null = null;
+  private residenceMarkers: ResidenceMarkers | null = null;
   private toolbar: BuildToolbar | null = null;
   private toastManager: ToastManager | null = null;
   private resourceInspector: ResourceInspector | null = null;
@@ -110,13 +120,25 @@ export class App {
       terrain: sceneManager.terrain,
       parent: sceneManager.selectionGroup,
     });
+    const placementGate: PlacementInteractionGate = {
+      isRoadToolEnabled: () => false,
+      isBuildingToolEnabled: () => false,
+      isBurgageToolEnabled: () => false,
+      isFirstPersonActive: () => false,
+      isMenuOpen: () => false,
+    };
     const cameraController = new CameraController({
       camera: sceneManager.camera,
       target: sceneManager.cameraTarget,
       domElement: sceneManager.renderer.domElement,
       bounds: sceneManager.terrain.bounds,
       getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
-      getCursorOverride: () => this.firstPersonController?.isActive() ? 'default' : this.roadTool?.getCursor() ?? null,
+      getCursorOverride: () => {
+        if (this.firstPersonController?.isActive()) return 'default';
+        return this.burgageTool?.getCursor()
+          ?? this.roadTool?.getCursor()
+          ?? null;
+      },
       shouldIgnoreInput: (event) => this.roadTool?.shouldBlockCameraInput(event) ?? false,
     });
 
@@ -188,32 +210,99 @@ export class App {
       onPlacementFailed: (message) => {
         this.toastManager?.show(message, { variant: 'error' });
       },
-      isBlocked: () =>
-        roadTool.isEnabled()
-        || firstPersonController.isActive()
-        || toolbar.isGameMenuOpen(),
+      isBlocked: () => isBuildingPlacementBlocked(placementGate),
     });
+
+    const burgageTool = new BurgageTool({
+      domElement: sceneManager.renderer.domElement,
+      camera: sceneManager.camera,
+      terrainProjector: sceneManager.terrainProjector,
+      roadNetwork,
+      getState: () => this.gameState ?? gameState,
+      getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
+      getNaturalHeightAt: (x, z) => sampleNaturalTerrainHeight(x, z),
+      isWaterAt: (x, z) => sceneManager.riverField.isRenderedWetAt(x, z),
+      onCommit: async (commit) => {
+        if (!this.spacetimeStore?.isConnected) {
+          throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
+        }
+        await this.spacetimeStore.placeBurgageZone({
+          corners: commit.corners.map((corner) => ({ x: corner.x, z: corner.z })),
+          frontageEdge: commit.frontageEdge,
+          plotCount: commit.plotCount,
+        });
+      },
+      onModeChanged: () => this.syncToolbar(),
+      onPlacementRejected: (reason) => {
+        this.toastManager?.showMessageId(burgagePlacementReasonToToastId(reason), { variant: 'error' });
+      },
+      onPlacementFailed: (message) => {
+        this.toastManager?.show(message, { variant: 'error' });
+      },
+      onPickRejected: (reason) => {
+        if (reason === 'missed_terrain') {
+          this.toastManager?.show('Click on terrain to place a corner.', { variant: 'info', durationMs: 2200 });
+          return;
+        }
+        this.toastManager?.show('Move farther from the last corner.', { variant: 'info', durationMs: 2200 });
+      },
+      isBlocked: () => isBurgagePlacementBlocked(placementGate),
+    });
+    burgageTool.attachTo(sceneManager.previewGroup);
+
+    const residenceMarkers = new ResidenceMarkers(sceneManager.selectionGroup);
 
     const toolbar = new BuildToolbar(uiRoot, {
       onOpenRoads: () => {
         roadTool.setEnabled(!roadTool.isEnabled());
-        if (roadTool.isEnabled()) buildingTool.setMode('off');
+        if (roadTool.isEnabled()) {
+          buildingTool.setMode('off');
+          burgageTool.setEnabled(false);
+        }
         this.syncToolbar();
       },
-      onBuildRoad: () => roadTool.commitDraft(),
+      onBuildRoad: () => {
+        if (burgageTool.isEnabled()) {
+          burgageTool.commitDraft();
+          return;
+        }
+        roadTool.commitDraft();
+      },
       onToggleLumberMill: () => {
         buildingTool.toggleMode('lumber_mill');
-        if (buildingTool.isEnabled()) roadTool.setEnabled(false);
+        if (buildingTool.isEnabled()) {
+          roadTool.setEnabled(false);
+          burgageTool.setEnabled(false);
+        }
         this.syncToolbar();
       },
       onToggleReforester: () => {
         buildingTool.toggleMode('reforester');
-        if (buildingTool.isEnabled()) roadTool.setEnabled(false);
+        if (buildingTool.isEnabled()) {
+          roadTool.setEnabled(false);
+          burgageTool.setEnabled(false);
+        }
         this.syncToolbar();
       },
       onToggleStoneQuarry: () => {
         buildingTool.toggleMode('stone_quarry');
-        if (buildingTool.isEnabled()) roadTool.setEnabled(false);
+        if (buildingTool.isEnabled()) {
+          roadTool.setEnabled(false);
+          burgageTool.setEnabled(false);
+        }
+        this.syncToolbar();
+      },
+      onToggleResidences: () => {
+        const wasEnabled = burgageTool.isEnabled();
+        burgageTool.setEnabled(!wasEnabled);
+        if (burgageTool.isEnabled()) {
+          roadTool.setEnabled(false);
+          buildingTool.setMode('off');
+          this.toastManager?.show(
+            'Click 4 corners — the first edge should face your road. Use +/− for plot count, F to rotate frontage.',
+            { variant: 'info', durationMs: 6500 },
+          );
+        }
         this.syncToolbar();
       },
       onMenuOpenChange: (open) => {
@@ -242,11 +331,7 @@ export class App {
           this.toastManager?.show(message, { variant: 'error' });
         }
       },
-      isBlocked: () =>
-        roadTool.isEnabled()
-        || buildingTool.isEnabled()
-        || firstPersonController.isActive()
-        || toolbar.isGameMenuOpen(),
+      isBlocked: () => isWorldInspectionBlocked(placementGate),
     });
     resourceInspector.setStockpile(gameState.stockpile);
 
@@ -258,11 +343,7 @@ export class App {
       getCamera: () => sceneManager.camera,
       getZoomPercent: () => this.cameraController?.getZoomPercent() ?? 100,
       onQuarrySelect: (quarryId) => resourceInspector.selectQuarry(quarryId),
-      isBlocked: () =>
-        roadTool.isEnabled()
-        || buildingTool.isEnabled()
-        || firstPersonController.isActive()
-        || toolbar.isGameMenuOpen(),
+      isBlocked: () => isWorldInspectionBlocked(placementGate),
     });
 
     firstPersonController = new FirstPersonController({
@@ -282,12 +363,19 @@ export class App {
         if (active) {
           if (roadTool.isEnabled()) roadTool.setEnabled(false);
           if (buildingTool.isEnabled()) buildingTool.setMode('off');
+          if (burgageTool.isEnabled()) burgageTool.setEnabled(false);
           return;
         }
         const pos = firstPersonController.getPosition();
         cameraController.syncFromFirstPerson(pos.x, pos.z, firstPersonController.getBodyYaw());
       },
     });
+
+    placementGate.isRoadToolEnabled = () => roadTool.isEnabled();
+    placementGate.isBuildingToolEnabled = () => buildingTool.isEnabled();
+    placementGate.isBurgageToolEnabled = () => burgageTool.isEnabled();
+    placementGate.isFirstPersonActive = () => firstPersonController.isActive();
+    placementGate.isMenuOpen = () => toolbar.isGameMenuOpen();
 
     this.sceneManager = sceneManager;
     this.input = input;
@@ -297,7 +385,9 @@ export class App {
     this.roadTool = roadTool;
     this.roadSelection = roadSelection;
     this.buildingTool = buildingTool;
+    this.burgageTool = burgageTool;
     this.buildingMarkers = buildingMarkers;
+    this.residenceMarkers = residenceMarkers;
     this.toolbar = toolbar;
     this.toastManager = toastManager;
     this.resourceInspector = resourceInspector;
@@ -360,7 +450,9 @@ export class App {
     this.roadTool?.dispose();
     this.roadSelection?.dispose();
     this.buildingTool?.dispose();
+    this.burgageTool?.dispose();
     this.buildingMarkers?.dispose();
+    this.residenceMarkers?.dispose();
     this.gameRuntime?.dispose();
     this.resourceInspector?.dispose();
     this.quarryMapIcons?.dispose();
@@ -391,6 +483,7 @@ export class App {
       this.toolbar?.setFirstPersonMode(true);
       this.roadTool?.update(dt);
       this.buildingTool?.update();
+      this.burgageTool?.update();
       this.updateBuildButtonPosition();
       this.quarryMapIcons?.update();
       this.sceneManager?.render(dt, 12, true);
@@ -400,6 +493,7 @@ export class App {
       this.toolbar?.setZoomPercent(this.cameraController?.getZoomPercent() ?? 100);
       this.roadTool?.update(dt);
       this.buildingTool?.update();
+      this.burgageTool?.update();
       this.updateBuildButtonPosition();
       this.quarryMapIcons?.update();
       this.sceneManager?.render(dt, this.cameraController?.getOrbitDistance());
@@ -415,6 +509,10 @@ export class App {
     this.treeRegistry = TreeRegistry.fromForestManager(forestManager);
     this.forestVisualSync = new ForestVisualSync(forestManager);
     this.buildingMarkers?.syncBuildings(this.gameState.buildings.values());
+    this.residenceMarkers?.syncResidences(
+      this.gameState.residences.values(),
+      (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
+    );
     this.syncPlacedBuildingTerrain({ forceMeshUpdate: true });
     this.syncResourceUi();
     this.exposeDevHandles();
@@ -425,16 +523,20 @@ export class App {
   };
 
   private syncToolbar(): void {
-    if (!this.toolbar || !this.roadNetwork || !this.roadTool || !this.roadSelection || !this.buildingTool) return;
+    if (!this.toolbar || !this.roadNetwork || !this.roadTool || !this.roadSelection || !this.buildingTool || !this.burgageTool) return;
     const buildingMode = this.buildingTool.getMode();
+    const burgageEnabled = this.burgageTool.isEnabled();
     const stats: ToolbarStats = {
-      canBuild: this.roadTool.isDraftBuildable(),
-      hasDraft: this.roadTool.hasDraft(),
-      mode: this.roadTool.isEnabled()
-        ? 'road'
-        : buildingMode === 'off'
-          ? 'idle'
-          : buildingMode,
+      canBuild: burgageEnabled ? this.burgageTool.isDraftBuildable() : this.roadTool.isDraftBuildable(),
+      hasDraft: burgageEnabled ? this.burgageTool.hasDraft() : this.roadTool.hasDraft(),
+      mode: burgageEnabled
+        ? 'residences'
+        : this.roadTool.isEnabled()
+          ? 'road'
+          : buildingMode === 'off'
+            ? 'idle'
+            : buildingMode,
+      statusDetail: burgageEnabled ? this.burgageTool.getStatusDetail() : null,
     };
     this.toolbar.setStats(stats);
     this.updateBuildButtonPosition();
@@ -442,11 +544,15 @@ export class App {
 
   private updateBuildButtonPosition(): void {
     const roadTool = this.roadTool;
-    if (!this.toolbar || !roadTool) return;
-    this.toolbar.setBuildButtonPosition(
-      roadTool.getBuildButtonPosition(),
-      roadTool.isDraftBuildable(),
-    );
+    const burgageTool = this.burgageTool;
+    if (!this.toolbar || !roadTool || !burgageTool) return;
+    const position = burgageTool.isEnabled()
+      ? burgageTool.getBuildButtonPosition()
+      : roadTool.getBuildButtonPosition();
+    const visible = burgageTool.isEnabled()
+      ? burgageTool.isDraftBuildable()
+      : roadTool.isDraftBuildable();
+    this.toolbar.setBuildButtonPosition(position, visible);
   }
 
   private updateFps(time: number, dt: number): void {
@@ -505,6 +611,11 @@ export class App {
       this.buildingMarkers?.syncBuildings(state.buildings.values());
       this.syncPlacedBuildingTerrain({ forceMeshUpdate: true });
     }
+
+    this.residenceMarkers?.syncResidences(
+      state.residences.values(),
+      (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
+    );
 
     this.syncResourceUi();
     this.syncToolbar();

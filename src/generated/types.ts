@@ -21,6 +21,22 @@ export const Building = __t.object("Building", {
 });
 export type Building = __Infer<typeof Building>;
 
+export const BurgageZone = __t.object("BurgageZone", {
+  id: __t.u64(),
+  owner: __t.identity(),
+  cornerAx: __t.f64(),
+  cornerAz: __t.f64(),
+  cornerBx: __t.f64(),
+  cornerBz: __t.f64(),
+  cornerCx: __t.f64(),
+  cornerCz: __t.f64(),
+  cornerDx: __t.f64(),
+  cornerDz: __t.f64(),
+  frontageEdge: __t.u8(),
+  plotCount: __t.u32(),
+});
+export type BurgageZone = __Infer<typeof BurgageZone>;
+
 export const PlayerResources = __t.object("PlayerResources", {
   owner: __t.identity(),
   wood: __t.f64(),
@@ -45,6 +61,17 @@ export const QuarryBootstrap = __t.object("QuarryBootstrap", {
   maxYield: __t.f64(),
 });
 export type QuarryBootstrap = __Infer<typeof QuarryBootstrap>;
+
+export const Residence = __t.object("Residence", {
+  id: __t.u64(),
+  zoneId: __t.u64(),
+  owner: __t.identity(),
+  parcelIndex: __t.u32(),
+  x: __t.f64(),
+  z: __t.f64(),
+  yaw: __t.f64(),
+});
+export type Residence = __Infer<typeof Residence>;
 
 export const RoadNetworkState = __t.object("RoadNetworkState", {
   owner: __t.identity(),

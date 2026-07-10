@@ -12,11 +12,22 @@ export const STARTING_STONE = 140;
 export const STONE_SALVAGE_FRACTION = 0.92;
 export const WOOD_SALVAGE_FRACTION = 0.7;
 
-/** Planned cottage-scale residence cost (not buildable yet). */
+/** Per main house in a burgage zone — cost scales with residence count at placement. */
+export const RESIDENCE_WOOD_COST = 8;
+export const RESIDENCE_STONE_COST = 12;
+
+/** Planned cottage-scale residence footprint reference. */
 export const ESTIMATED_COTTAGE_COST: BuildingResourceCost = {
-  wood: 50,
-  stone: 80,
+  wood: RESIDENCE_WOOD_COST,
+  stone: RESIDENCE_STONE_COST,
 };
+
+export function residenceZoneCost(residenceCount: number): BuildingResourceCost {
+  return {
+    wood: RESIDENCE_WOOD_COST * residenceCount,
+    stone: RESIDENCE_STONE_COST * residenceCount,
+  };
+}
 
 export const BUILDING_COSTS: Record<BuildingKind, BuildingResourceCost> = {
   lumber_mill: { wood: 45, stone: 15 },

@@ -37,6 +37,8 @@ export function createInitialGameState(registry: WorldLayoutRegistry, seed: numb
     quarries,
     trees: new Map(),
     buildings: new Map(),
+    burgageZones: new Map(),
+    residences: new Map(),
     nextBuildingId: 1,
   };
 }
@@ -90,6 +92,8 @@ export function restoreGameState(
     quarries,
     trees,
     buildings,
+    burgageZones: new Map(),
+    residences: new Map(),
     nextBuildingId: inferNextBuildingId(buildings),
   };
 }
@@ -192,6 +196,8 @@ function restoreFromV1(
     quarries,
     trees,
     buildings: new Map(),
+    burgageZones: new Map(),
+    residences: new Map(),
     nextBuildingId: 1,
   };
 }

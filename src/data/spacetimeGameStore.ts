@@ -7,8 +7,10 @@
 import type { DbConnection } from '../generated/index.ts';
 import type {
   Building,
+  BurgageZone,
   PlayerResources,
   Quarry,
+  Residence,
   TreeEntity,
 } from '../generated/types.ts';
 import {
@@ -27,8 +29,11 @@ import type { RoadNetworkSnapshot } from '../roads/RoadNetwork.ts';
 import type {
   BuildingKind,
   BuildingState,
+  BurgageFrontageEdge,
+  BurgageZoneState,
   GameState,
   QuarryNodeState,
+  ResidenceState,
   ResourceStockpile,
   TreeEntityState,
   TreePhase,
@@ -43,6 +48,8 @@ export type SpacetimeGameSnapshot = {
   quarries: Map<string, QuarryNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
+  burgageZones: Map<string, BurgageZoneState>;
+  residences: Map<string, ResidenceState>;
   roads: RoadNetworkSnapshot | null;
   simTick: number;
 };
@@ -64,6 +71,8 @@ export class SpacetimeGameStore {
   private quarries = new Map<string, QuarryNodeState>();
   private trees = new Map<string, TreeEntityState>();
   private buildings = new Map<string, BuildingState>();
+  private burgageZones = new Map<string, BurgageZoneState>();
+  private residences = new Map<string, ResidenceState>();
   private roads: RoadNetworkSnapshot | null = null;
   private simTick = 0;
   private roadSyncTimer: number | null = null;
@@ -89,6 +98,8 @@ export class SpacetimeGameStore {
       quarries: new Map(this.quarries),
       trees: new Map(this.trees),
       buildings: new Map(this.buildings),
+      burgageZones: new Map(this.burgageZones),
+      residences: new Map(this.residences),
       roads: this.roads ? structuredClone(this.roads) : null,
       simTick: this.simTick,
     };
@@ -163,8 +174,38 @@ export class SpacetimeGameStore {
       quarries,
       trees: new Map(this.trees),
       buildings: new Map(this.buildings),
+      burgageZones: new Map(this.burgageZones),
+      residences: new Map(this.residences),
       nextBuildingId: inferNextBuildingId(this.buildings),
     };
+  }
+
+  async placeBurgageZone(input: {
+    corners: Array<{ x: number; z: number }>;
+    frontageEdge: BurgageFrontageEdge;
+    plotCount: number;
+  }): Promise<void> {
+    const [a, b, c, d] = input.corners;
+    await this.callReducer('placeBurgageZone', 'place_burgage_zone', {
+      cornerAx: a.x,
+      cornerAz: a.z,
+      cornerBx: b.x,
+      cornerBz: b.z,
+      cornerCx: c.x,
+      cornerCz: c.z,
+      cornerDx: d.x,
+      cornerDz: d.z,
+      frontageEdge: input.frontageEdge,
+      plotCount: input.plotCount,
+    });
+  }
+
+  async demolishBurgageZone(zoneId: string): Promise<void> {
+    const serverId = parseZoneServerId(zoneId);
+    if (serverId === null) {
+      throw new Error('Invalid residence zone id.');
+    }
+    await this.callReducer('demolishBurgageZone', 'demolish_burgage_zone', { zoneId: serverId });
   }
 
   async placeBuilding(kind: BuildingKind, x: number, z: number): Promise<void> {
@@ -233,6 +274,8 @@ export class SpacetimeGameStore {
     connection.subscriptionBuilder().subscribe('SELECT * FROM quarry');
     connection.subscriptionBuilder().subscribe('SELECT * FROM tree_entity');
     connection.subscriptionBuilder().subscribe('SELECT * FROM building');
+    connection.subscriptionBuilder().subscribe('SELECT * FROM burgage_zone');
+    connection.subscriptionBuilder().subscribe('SELECT * FROM residence');
     connection.subscriptionBuilder().subscribe('SELECT * FROM road_network_state');
 
     this.syncAllFromDb(connection);
@@ -246,6 +289,8 @@ export class SpacetimeGameStore {
       quarry?: TableHandle;
       tree_entity?: TableHandle;
       building?: TableHandle;
+      burgage_zone?: TableHandle;
+      residence?: TableHandle;
       road_network_state?: TableHandle;
     };
 
@@ -262,6 +307,12 @@ export class SpacetimeGameStore {
     db.building?.onInsert(() => this.syncAllFromDb(connection));
     db.building?.onUpdate(() => this.syncAllFromDb(connection));
     db.building?.onDelete(() => this.syncAllFromDb(connection));
+    db.burgage_zone?.onInsert(() => this.syncAllFromDb(connection));
+    db.burgage_zone?.onUpdate(() => this.syncAllFromDb(connection));
+    db.burgage_zone?.onDelete(() => this.syncAllFromDb(connection));
+    db.residence?.onInsert(() => this.syncAllFromDb(connection));
+    db.residence?.onUpdate(() => this.syncAllFromDb(connection));
+    db.residence?.onDelete(() => this.syncAllFromDb(connection));
     db.road_network_state?.onInsert(() => this.syncAllFromDb(connection));
     db.road_network_state?.onUpdate(() => this.syncAllFromDb(connection));
     db.road_network_state?.onDelete(() => this.syncAllFromDb(connection));
@@ -274,6 +325,8 @@ export class SpacetimeGameStore {
       quarry?: { iter: () => Iterable<Quarry> };
       tree_entity?: { iter: () => Iterable<TreeEntity> };
       building?: { iter: () => Iterable<Building> };
+      burgage_zone?: { iter: () => Iterable<BurgageZone> };
+      residence?: { iter: () => Iterable<Residence> };
       road_network_state?: { iter: () => Iterable<{ owner: { toHexString: () => string }; snapshotJson: string }> };
     };
 
@@ -335,6 +388,37 @@ export class SpacetimeGameStore {
           z: row.z,
           workRadius: row.workRadius,
           actionCooldown: row.actionCooldown,
+        });
+      }
+    }
+
+    this.burgageZones = new Map();
+    if (db.burgage_zone && this.identityHex) {
+      for (const row of db.burgage_zone.iter()) {
+        if (row.owner.toHexString() !== this.identityHex) continue;
+        this.burgageZones.set(`zone-${row.id}`, {
+          id: `zone-${row.id}`,
+          cornerA: { x: row.cornerAx, z: row.cornerAz },
+          cornerB: { x: row.cornerBx, z: row.cornerBz },
+          cornerC: { x: row.cornerCx, z: row.cornerCz },
+          cornerD: { x: row.cornerDx, z: row.cornerDz },
+          frontageEdge: row.frontageEdge as BurgageFrontageEdge,
+          plotCount: Number(row.plotCount),
+        });
+      }
+    }
+
+    this.residences = new Map();
+    if (db.residence && this.identityHex) {
+      for (const row of db.residence.iter()) {
+        if (row.owner.toHexString() !== this.identityHex) continue;
+        this.residences.set(`residence-${row.id}`, {
+          id: `residence-${row.id}`,
+          zoneId: `zone-${row.zoneId}`,
+          parcelIndex: Number(row.parcelIndex),
+          x: row.x,
+          z: row.z,
+          yaw: row.yaw,
         });
       }
     }
@@ -401,6 +485,12 @@ function inferNextBuildingId(buildings: Map<string, BuildingState>): number {
 
 function parseBuildingServerId(buildingId: string): number | null {
   const match = /^building-(\d+)$/.exec(buildingId);
+  if (!match) return null;
+  return Number.parseInt(match[1], 10);
+}
+
+function parseZoneServerId(zoneId: string): number | null {
+  const match = /^zone-(\d+)$/.exec(zoneId);
   if (!match) return null;
   return Number.parseInt(match[1], 10);
 }

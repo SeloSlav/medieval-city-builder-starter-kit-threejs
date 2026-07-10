@@ -41,6 +41,27 @@ button {
   background: #171a15;
 }
 
+[data-ui-root] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+[data-ui-root] .hud-menu-button,
+[data-ui-root] .road-tools,
+[data-ui-root] .road-tool-button,
+[data-ui-root] .floating-build-button,
+[data-ui-root] .delete-popup,
+[data-ui-root] .resource-stockpile-hud,
+[data-ui-root] .resource-inspector-panel,
+[data-ui-root] .game-menu-backdrop,
+[data-ui-root] .quarry-map-icon,
+[data-ui-root] .toast--clickable,
+[data-ui-root] .builder-status-bar {
+  pointer-events: auto;
+}
+
 .scene-root {
   position: absolute;
   inset: 0;
@@ -574,6 +595,36 @@ button {
   background: rgba(23, 25, 21, 0.58);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(12px);
+}
+
+.builder-status-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: min(520px, calc(100vw - 28px));
+  padding: 8px 12px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(23, 25, 21, 0.82);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.builder-status-bar[data-state='ready'] {
+  border-color: rgba(132, 166, 107, 0.65);
+  color: #d9e8cf;
+}
+
+.builder-status-bar[data-state='draft'],
+.builder-status-bar[data-state='active'] {
+  border-color: rgba(215, 180, 99, 0.55);
 }
 
 .road-tool-button,

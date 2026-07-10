@@ -7,7 +7,8 @@ import { subscribeTipCardsPreference } from './tipCardsPreference.ts';
 export type ToolbarStats = {
   canBuild: boolean;
   hasDraft: boolean;
-  mode: 'road' | 'lumber_mill' | 'reforester' | 'stone_quarry' | 'idle';
+  mode: 'road' | 'lumber_mill' | 'reforester' | 'stone_quarry' | 'residences' | 'idle';
+  statusDetail?: string | null;
 };
 
 type DeletePopupOptions = {
@@ -22,6 +23,7 @@ export class BuildToolbar {
   private readonly lumberMillButton: HTMLButtonElement;
   private readonly reforesterButton: HTMLButtonElement;
   private readonly stoneQuarryButton: HTMLButtonElement;
+  private readonly residencesButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
   private readonly statusLabel: HTMLElement;
   private readonly deletePopup: HTMLElement;
@@ -33,6 +35,9 @@ export class BuildToolbar {
   private readonly fpModePanel: HTMLElement;
   private readonly roadTools: HTMLElement;
   private readonly zoomStat: HTMLElement;
+  private readonly builderPanelTitle: HTMLElement;
+  private readonly builderHelpList: HTMLElement;
+  private readonly builderStatusBar: HTMLElement;
   private readonly root: HTMLElement;
   private readonly compassHud: CompassHud;
   private readonly gameMenu: GameMenu;
@@ -50,6 +55,7 @@ export class BuildToolbar {
       onToggleLumberMill: () => void;
       onToggleReforester: () => void;
       onToggleStoneQuarry: () => void;
+      onToggleResidences: () => void;
       onMenuOpenChange?: (open: boolean) => void;
       canOpenMenuFromKeyboard?: () => boolean;
       onExportGameState?: () => void;
@@ -138,6 +144,8 @@ export class BuildToolbar {
         </aside>
       </div>
 
+      <div class="builder-status-bar" data-builder-status hidden aria-live="polite"></div>
+
       <div class="road-tools" aria-label="Build tools">
         <button type="button" class="road-tool-button" data-action="road" title="Roads (R)">
           Roads <span class="road-tool-button-key">(R)</span>
@@ -150,6 +158,9 @@ export class BuildToolbar {
         </button>
         <button type="button" class="road-tool-button" data-action="stone-quarry" title="Place stonecutter's camp">
           Stonecutter's camp
+        </button>
+        <button type="button" class="road-tool-button" data-action="residences" title="Place residences">
+          Residences
         </button>
       </div>
 
@@ -191,6 +202,7 @@ export class BuildToolbar {
     this.lumberMillButton = this.mustButton(root, '[data-action="lumber-mill"]');
     this.reforesterButton = this.mustButton(root, '[data-action="reforester"]');
     this.stoneQuarryButton = this.mustButton(root, '[data-action="stone-quarry"]');
+    this.residencesButton = this.mustButton(root, '[data-action="residences"]');
     this.buildButton = this.mustButton(root, '[data-action="build"]');
     this.statusLabel = this.mustElement(root, '[data-road-status]');
     this.deletePopup = this.mustElement(root, '[data-delete-popup]');
@@ -202,6 +214,9 @@ export class BuildToolbar {
     this.fpModePanel = this.mustElement(root, '[data-fp-mode-panel]');
     this.roadTools = this.mustElement(root, '.road-tools');
     this.zoomStat = this.mustElement(root, '[data-stat-row="zoom"]');
+    this.builderPanelTitle = this.mustElement(root, '[data-road-controls-panel] .road-controls-title');
+    this.builderHelpList = this.mustElement(root, '[data-road-controls-panel] .road-controls-list');
+    this.builderStatusBar = this.mustElement(root, '[data-builder-status]');
     this.compassHud = new CompassHud(root);
 
     this.syncContextPanels();
@@ -209,6 +224,7 @@ export class BuildToolbar {
     this.lumberMillButton.addEventListener('click', handlers.onToggleLumberMill);
     this.reforesterButton.addEventListener('click', handlers.onToggleReforester);
     this.stoneQuarryButton.addEventListener('click', handlers.onToggleStoneQuarry);
+    this.residencesButton.addEventListener('click', handlers.onToggleResidences);
     this.buildButton.addEventListener('click', handlers.onBuildRoad);
     this.deletePopup.addEventListener('mousedown', (event) => event.stopPropagation());
     this.deletePopup.addEventListener('click', (event) => event.stopPropagation());
@@ -226,6 +242,7 @@ export class BuildToolbar {
     const lumberMode = stats.mode === 'lumber_mill';
     const reforesterMode = stats.mode === 'reforester';
     const stoneQuarryMode = stats.mode === 'stone_quarry';
+    const residencesMode = stats.mode === 'residences';
     this.roadButton.classList.toggle('is-active', roadMode);
     this.roadButton.setAttribute('aria-pressed', String(roadMode));
     this.lumberMillButton.classList.toggle('is-active', lumberMode);
@@ -234,11 +251,25 @@ export class BuildToolbar {
     this.reforesterButton.setAttribute('aria-pressed', String(reforesterMode));
     this.stoneQuarryButton.classList.toggle('is-active', stoneQuarryMode);
     this.stoneQuarryButton.setAttribute('aria-pressed', String(stoneQuarryMode));
+    this.residencesButton.classList.toggle('is-active', residencesMode);
+    this.residencesButton.setAttribute('aria-pressed', String(residencesMode));
     this.buildButton.disabled = !stats.canBuild;
     this.buildButton.classList.toggle('is-ready', stats.canBuild);
     this.buildButton.classList.toggle('has-draft', stats.hasDraft);
     this.statusLabel.textContent = this.describeStatus(stats);
-    this.statusLabel.dataset.state = stats.canBuild ? 'ready' : roadMode ? (stats.hasDraft ? 'draft' : 'active') : 'idle';
+    this.statusLabel.dataset.state = stats.canBuild
+      ? 'ready'
+      : (roadMode || residencesMode)
+        ? (stats.hasDraft ? 'draft' : 'active')
+        : 'idle';
+    if (this.isBuilderHudMode(stats.mode)) {
+      this.builderPanelTitle.textContent = this.describeBuilderTitle(stats.mode);
+      this.builderHelpList.innerHTML = this.describeBuilderHelp(stats.mode);
+    }
+    const statusText = this.describeStatus(stats);
+    this.builderStatusBar.textContent = statusText;
+    this.builderStatusBar.hidden = !this.isBuilderHudMode(stats.mode);
+    this.builderStatusBar.dataset.state = this.statusLabel.dataset.state;
     this.syncContextPanels();
   }
 
@@ -284,11 +315,42 @@ export class BuildToolbar {
   }
 
   private syncContextPanels(): void {
-    const tipHudMode = this.hudMode === 'road' ? 'road' : 'idle';
+    const builderActive = this.isBuilderHudMode(this.hudMode);
+    const tipHudMode = builderActive ? 'road' : 'idle';
     syncTipCardVisibility(this.root, {
       firstPersonActive: this.firstPersonActive,
       hudMode: tipHudMode,
+      builderModeActive: builderActive,
     });
+  }
+
+  private isBuilderHudMode(mode: ToolbarStats['mode']): boolean {
+    return mode === 'road'
+      || mode === 'lumber_mill'
+      || mode === 'reforester'
+      || mode === 'stone_quarry'
+      || mode === 'residences';
+  }
+
+  private describeBuilderTitle(mode: ToolbarStats['mode']): string {
+    switch (mode) {
+      case 'road':
+        return 'Roads';
+      case 'lumber_mill':
+        return 'Lumber mill';
+      case 'reforester':
+        return 'Reforester';
+      case 'stone_quarry':
+        return "Stonecutter's camp";
+      case 'residences':
+        return 'Residences';
+      case 'idle':
+        return 'Builder';
+      default: {
+        const unhandled: never = mode;
+        return unhandled;
+      }
+    }
   }
 
   dispose(): void {
@@ -320,6 +382,40 @@ export class BuildToolbar {
     if (runCancel) cancel?.();
   }
 
+  private describeBuilderHelp(mode: ToolbarStats['mode']): string {
+    switch (mode) {
+      case 'road':
+        return `
+          <li><span>Toggle road tool</span><span class="road-controls-key">R</span></li>
+          <li><span>Place point</span><span class="road-controls-key">L-click</span></li>
+          <li><span>Undo last point</span><span class="road-controls-key">R-click</span></li>
+          <li><span>Build road</span><span class="road-controls-key">Hammer or Enter</span></li>
+          <li><span>Cancel / exit</span><span class="road-controls-key">Esc</span></li>
+        `;
+      case 'residences':
+        return `
+          <li><span>Place corner</span><span class="road-controls-key">L-click</span></li>
+          <li><span>First edge faces road</span><span class="road-controls-key">A → B</span></li>
+          <li><span>Change plot count</span><span class="road-controls-key">+ / −</span></li>
+          <li><span>Rotate frontage</span><span class="road-controls-key">F</span></li>
+          <li><span>Build zone</span><span class="road-controls-key">Hammer or Enter</span></li>
+        `;
+      case 'lumber_mill':
+      case 'reforester':
+      case 'stone_quarry':
+        return `
+          <li><span>Place building</span><span class="road-controls-key">L-click</span></li>
+          <li><span>Cancel tool</span><span class="road-controls-key">Esc</span></li>
+        `;
+      case 'idle':
+        return '';
+      default: {
+        const unhandled: never = mode;
+        return unhandled;
+      }
+    }
+  }
+
   private describeStatus(stats: ToolbarStats): string {
     if (stats.mode === 'lumber_mill') {
       return `Click terrain to place a lumber mill (${formatBuildingCost(getBuildingCost('lumber_mill'))})`;
@@ -329,6 +425,9 @@ export class BuildToolbar {
     }
     if (stats.mode === 'stone_quarry') {
       return `Click terrain to place a stonecutter's camp (${formatBuildingCost(getBuildingCost('stone_quarry'))})`;
+    }
+    if (stats.mode === 'residences') {
+      return stats.statusDetail ?? 'Place 4 corners — first edge faces the road (+/− plots, F rotates frontage)';
     }
     if (stats.mode !== 'road') return 'Road tool off';
     if (stats.canBuild) return 'Ready to build';

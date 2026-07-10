@@ -3,5 +3,6 @@ pub use spacetimedb::Table;
 
 pub use crate::schedule::sim_tick_schedule;
 pub use crate::tables::{
-    building, player_resources, quarry, road_network_state, tree_entity, world_config,
+    building, burgage_zone, player_resources, quarry, residence, road_network_state, tree_entity,
+    world_config,
 };

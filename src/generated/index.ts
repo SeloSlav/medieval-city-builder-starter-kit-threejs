@@ -37,7 +37,9 @@ import {
 import BootstrapQuarriesReducer from "./bootstrap_quarries_reducer";
 import BootstrapTreesReducer from "./bootstrap_trees_reducer";
 import DemolishBuildingReducer from "./demolish_building_reducer";
+import DemolishBurgageZoneReducer from "./demolish_burgage_zone_reducer";
 import PlaceBuildingReducer from "./place_building_reducer";
+import PlaceBurgageZoneReducer from "./place_burgage_zone_reducer";
 import RemoveRoadEdgeReducer from "./remove_road_edge_reducer";
 import SyncRoadNetworkReducer from "./sync_road_network_reducer";
 import TickSimReducer from "./tick_sim_reducer";
@@ -46,8 +48,10 @@ import TickSimReducer from "./tick_sim_reducer";
 
 // Import all table schema definitions
 import BuildingRow from "./building_table";
+import BurgageZoneRow from "./burgage_zone_table";
 import PlayerResourcesRow from "./player_resources_table";
 import QuarryRow from "./quarry_table";
+import ResidenceRow from "./residence_table";
 import RoadNetworkStateRow from "./road_network_state_table";
 import SimTickScheduleRow from "./sim_tick_schedule_table";
 import TreeEntityRow from "./tree_entity_table";
@@ -71,6 +75,20 @@ const tablesSchema = __schema({
       { name: 'building_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, BuildingRow),
+  burgage_zone: __table({
+    name: 'burgage_zone',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'owner', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+    ],
+    constraints: [
+      { name: 'burgage_zone_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, BurgageZoneRow),
   player_resources: __table({
     name: 'player_resources',
     indexes: [
@@ -93,6 +111,23 @@ const tablesSchema = __schema({
       { name: 'quarry_quarry_id_key', constraint: 'unique', columns: ['quarryId'] },
     ],
   }, QuarryRow),
+  residence: __table({
+    name: 'residence',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'owner', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+      { name: 'zone_id', algorithm: 'btree', columns: [
+        'zoneId',
+      ] },
+    ],
+    constraints: [
+      { name: 'residence_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ResidenceRow),
   road_network_state: __table({
     name: 'road_network_state',
     indexes: [
@@ -144,7 +179,9 @@ const reducersSchema = __reducers(
   __reducerSchema("bootstrap_quarries", BootstrapQuarriesReducer),
   __reducerSchema("bootstrap_trees", BootstrapTreesReducer),
   __reducerSchema("demolish_building", DemolishBuildingReducer),
+  __reducerSchema("demolish_burgage_zone", DemolishBurgageZoneReducer),
   __reducerSchema("place_building", PlaceBuildingReducer),
+  __reducerSchema("place_burgage_zone", PlaceBurgageZoneReducer),
   __reducerSchema("remove_road_edge", RemoveRoadEdgeReducer),
   __reducerSchema("sync_road_network", SyncRoadNetworkReducer),
   __reducerSchema("tick_sim", TickSimReducer),

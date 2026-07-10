@@ -39,6 +39,16 @@ pub fn building_salvage_refund(kind: &str) -> Result<ResourceAmount, String> {
     })
 }
 
+pub const RESIDENCE_WOOD_COST: f64 = 8.0;
+pub const RESIDENCE_STONE_COST: f64 = 12.0;
+
+pub fn residence_zone_cost(residence_count: u32) -> ResourceAmount {
+    ResourceAmount {
+        wood: RESIDENCE_WOOD_COST * residence_count as f64,
+        stone: RESIDENCE_STONE_COST * residence_count as f64,
+    }
+}
+
 pub fn can_afford(resources: &ResourceAmount, cost: &ResourceAmount) -> bool {
     resources.wood >= cost.wood && resources.stone >= cost.stone
 }
