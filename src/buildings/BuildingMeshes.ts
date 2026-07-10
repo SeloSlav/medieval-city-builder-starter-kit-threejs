@@ -169,131 +169,228 @@ export function createLumberMillMesh(): THREE.Group {
   return group;
 }
 
-/** Small A-frame forester hut — stone knee wall, timber frame, mossy roof. */
+/** A-frame forester hut — stone plinth, timber walls, shingled roof with moss. */
 export function createReforesterHutMesh(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Reforester hut';
 
-  const width = 3.4;
-  const depth = 3.1;
-  const stoneHeight = 0.72;
+  const width = 6.4;
+  const depth = 5.8;
+  const stoneHeight = 1.0;
+  const wallHeight = 2.15;
   const halfW = width * 0.5;
   const halfD = depth * 0.5;
-  const ridgeHeight = 2.85;
+  const wallTop = stoneHeight + wallHeight;
+  const ridgeHeight = 3.35;
   const roofPitch = Math.atan2(ridgeHeight, halfW);
-  const slopeLen = halfW / Math.cos(roofPitch) + 0.2;
+  const slopeLen = halfW / Math.cos(roofPitch) + 0.25;
+  const wallInset = 0.1;
+  const plankHeight = 0.38;
+  const plankRows = Math.floor(wallHeight / plankHeight);
 
-  // Stone foundation pad.
+  // Limestone plinth — continuous base tying the shell together.
   addMesh(
     group,
-    new THREE.BoxGeometry(width + 0.5, 0.28, depth + 0.5),
+    new THREE.BoxGeometry(width + 0.38, stoneHeight, depth + 0.38),
     stoneMaterial('light'),
-    new THREE.Vector3(0, 0.14, 0),
-  );
-
-  // White stone knee walls on three sides.
-  addMesh(
-    group,
-    new THREE.BoxGeometry(width, stoneHeight, 0.28),
-    stoneMaterial('mid'),
-    new THREE.Vector3(0, stoneHeight * 0.5 + 0.28, -halfD + 0.14),
+    new THREE.Vector3(0, stoneHeight * 0.5, 0),
   );
   addMesh(
     group,
-    new THREE.BoxGeometry(0.28, stoneHeight, depth - 0.2),
-    stoneMaterial('mid'),
-    new THREE.Vector3(-halfW + 0.14, stoneHeight * 0.5 + 0.28, 0.08),
-  );
-  addMesh(
-    group,
-    new THREE.BoxGeometry(0.28, stoneHeight, depth - 0.2),
-    stoneMaterial('mid'),
-    new THREE.Vector3(halfW - 0.14, stoneHeight * 0.5 + 0.28, 0.08),
+    new THREE.BoxGeometry(width + 0.1, 0.16, depth + 0.1),
+    stoneMaterial('mortar'),
+    new THREE.Vector3(0, stoneHeight + 0.08, 0),
   );
 
-  const baseY = stoneHeight + 0.28;
-
-  // Exposed A-frame timbers.
-  for (const xSign of [-1, 1] as const) {
+  // Corner quoins and posts — frame every wall corner.
+  for (const [sx, sz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]] as const) {
     addMesh(
       group,
-      new THREE.BoxGeometry(0.14, ridgeHeight + 0.4, 0.14),
-      timberMaterial('dark'),
-      new THREE.Vector3(xSign * (halfW - 0.18), baseY + ridgeHeight * 0.48, -halfD + 0.22),
-      new THREE.Euler(0, 0, xSign * -roofPitch),
+      new THREE.BoxGeometry(0.42, wallHeight + 0.14, 0.42),
+      stoneMaterial('mid'),
+      new THREE.Vector3(sx * (halfW - 0.14), stoneHeight + (wallHeight + 0.14) * 0.5, sz * (halfD - 0.14)),
     );
     addMesh(
       group,
-      new THREE.BoxGeometry(0.14, ridgeHeight + 0.4, 0.14),
+      new THREE.BoxGeometry(0.2, wallHeight, 0.2),
       timberMaterial('dark'),
-      new THREE.Vector3(xSign * (halfW - 0.18), baseY + ridgeHeight * 0.48, halfD - 0.22),
-      new THREE.Euler(0, 0, xSign * roofPitch),
+      new THREE.Vector3(sx * (halfW - wallInset), stoneHeight + wallHeight * 0.5, sz * (halfD - wallInset)),
     );
+  }
+
+  // Side walls — horizontal plank cladding between corner posts.
+  for (let row = 0; row < plankRows; row++) {
+    const y = stoneHeight + plankHeight * 0.5 + row * plankHeight;
+    const shade = row % 2 === 0 ? timberMaterial('mid') : timberMaterial('weathered');
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.18, plankHeight * 0.88, depth - 0.42),
+      shade,
+      new THREE.Vector3(-halfW + 0.09, y, 0),
+    );
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.18, plankHeight * 0.88, depth - 0.42),
+      shade,
+      new THREE.Vector3(halfW - 0.09, y, 0),
+    );
+  }
+
+  // Back wall planks.
+  for (let row = 0; row < plankRows; row++) {
+    const y = stoneHeight + plankHeight * 0.5 + row * plankHeight;
+    const shade = row % 2 === 0 ? timberMaterial('mid') : timberMaterial('weathered');
+    addMesh(
+      group,
+      new THREE.BoxGeometry(width - 0.42, plankHeight * 0.88, 0.18),
+      shade,
+      new THREE.Vector3(0, y, -halfD + 0.09),
+    );
+  }
+
+  // Front wall with door — plank sections flanking a framed opening.
+  const doorWidth = 1.15;
+  const doorHeight = 1.95;
+  const doorCenterX = 0.12;
+  const doorLeft = doorCenterX - doorWidth * 0.5;
+  const doorRight = doorCenterX + doorWidth * 0.5;
+  const frontZ = halfD - 0.09;
+  const leftPanelWidth = doorLeft - (-halfW + 0.21);
+  const rightPanelWidth = halfW - 0.21 - doorRight;
+
+  for (let row = 0; row < plankRows; row++) {
+    const y = stoneHeight + plankHeight * 0.5 + row * plankHeight;
+    const shade = row % 2 === 0 ? timberMaterial('mid') : timberMaterial('weathered');
+    const rowTop = y + plankHeight * 0.44;
+    const doorTop = stoneHeight + doorHeight;
+
+    if (rowTop <= doorTop) {
+      addMesh(
+        group,
+        new THREE.BoxGeometry(leftPanelWidth, plankHeight * 0.88, 0.18),
+        shade,
+        new THREE.Vector3(-halfW + 0.21 + leftPanelWidth * 0.5, y, frontZ),
+      );
+      addMesh(
+        group,
+        new THREE.BoxGeometry(rightPanelWidth, plankHeight * 0.88, 0.18),
+        shade,
+        new THREE.Vector3(halfW - 0.21 - rightPanelWidth * 0.5, y, frontZ),
+      );
+    } else {
+      addMesh(
+        group,
+        new THREE.BoxGeometry(width - 0.42, plankHeight * 0.88, 0.18),
+        shade,
+        new THREE.Vector3(0, y, frontZ),
+      );
+    }
+  }
+
+  // Door frame and panel — same timber-frame language as the lumber mill.
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.14, doorHeight + 0.12, 0.22),
+    timberMaterial('dark'),
+    new THREE.Vector3(doorLeft - 0.04, stoneHeight + doorHeight * 0.5, frontZ + 0.04),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.14, doorHeight + 0.12, 0.22),
+    timberMaterial('dark'),
+    new THREE.Vector3(doorRight + 0.04, stoneHeight + doorHeight * 0.5, frontZ + 0.04),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(doorWidth + 0.32, 0.14, 0.22),
+    timberMaterial('dark'),
+    new THREE.Vector3(doorCenterX, stoneHeight + doorHeight + 0.04, frontZ + 0.04),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(doorWidth - 0.08, doorHeight - 0.1, 0.1),
+    timberMaterial('weathered'),
+    new THREE.Vector3(doorCenterX, stoneHeight + doorHeight * 0.5 - 0.02, frontZ + 0.01),
+  );
+
+  // Wall plate tying the front and back walls to the side posts.
+  for (const zSign of [-1, 1] as const) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(width - 0.24, 0.16, 0.16),
+      timberMaterial('dark'),
+      new THREE.Vector3(0, wallTop - 0.04, zSign * (halfD - wallInset)),
+    );
+  }
+
+  // Exposed A-frame rafters — anchored to the wall plate at each gable corner.
+  for (const zSign of [-1, 1] as const) {
+    for (const xSign of [-1, 1] as const) {
+      addMesh(
+        group,
+        new THREE.BoxGeometry(0.16, ridgeHeight + 0.32, 0.16),
+        timberMaterial('dark'),
+        new THREE.Vector3(xSign * (halfW - wallInset), wallTop + ridgeHeight * 0.48, zSign * (halfD - wallInset)),
+        new THREE.Euler(0, 0, xSign * -roofPitch),
+      );
+    }
   }
 
   // Ridge beam.
   addMesh(
     group,
-    new THREE.BoxGeometry(0.16, 0.16, depth + 0.15),
+    new THREE.BoxGeometry(0.18, 0.18, depth - 0.12),
     timberMaterial('dark'),
-    new THREE.Vector3(0, baseY + ridgeHeight, 0),
+    new THREE.Vector3(0, wallTop + ridgeHeight, 0),
   );
 
-  // Cross beam at front (open porch feel).
-  addMesh(
-    group,
-    new THREE.BoxGeometry(width - 0.2, 0.12, 0.12),
-    timberMaterial('mid'),
-    new THREE.Vector3(0, baseY + 1.05, halfD - 0.12),
-  );
-
-  // Wooden shingle roof planes.
+  // Shingled roof slopes.
   for (const side of [-1, 1] as const) {
     addMesh(
       group,
-      new THREE.BoxGeometry(slopeLen, 0.1, depth + 0.35),
+      new THREE.BoxGeometry(slopeLen, 0.11, depth + 0.28),
       shingleMaterial(),
-      new THREE.Vector3(side * halfW * 0.46, baseY + ridgeHeight * 0.48, 0),
+      new THREE.Vector3(side * halfW * 0.46, wallTop + ridgeHeight * 0.48, 0),
       new THREE.Euler(0, 0, side * -roofPitch),
     );
   }
 
-  // Moss and grass patches on the roof — typical of mountain huts in the region.
-  const mossPatches = [
-    { x: -0.35, z: -0.4, sx: 1.1, sz: 0.85, kind: 'moss' as const },
-    { x: 0.45, z: 0.15, sx: 0.95, sz: 1.2, kind: 'grass' as const },
-    { x: -0.15, z: 0.55, sx: 0.8, sz: 0.7, kind: 'moss' as const },
-    { x: 0.6, z: -0.25, sx: 0.75, sz: 0.65, kind: 'grass' as const },
-    { x: 0, z: 0, sx: 1.3, sz: 0.55, kind: 'moss' as const },
-  ];
-
-  for (const patch of mossPatches) {
-    const side = patch.x >= 0 ? 1 : -1;
-    const localY = baseY + ridgeHeight * 0.62 + patch.z * 0.25;
-    const localX = patch.x * 0.55 + side * 0.25;
-    addMesh(
-      group,
-      new THREE.BoxGeometry(patch.sx, 0.07, patch.sz),
-      mossMaterial(patch.kind),
-      new THREE.Vector3(localX, localY, patch.z * 0.35),
-      new THREE.Euler(-roofPitch * 0.85 * side, patch.z * 0.15, 0),
-    );
+  // Gable infill — closes the front and back triangles beneath the roof.
+  const gableSlopeLen = halfW / Math.cos(roofPitch);
+  for (const zSign of [-1, 1] as const) {
+    for (const xSign of [-1, 1] as const) {
+      addMesh(
+        group,
+        new THREE.BoxGeometry(gableSlopeLen * 0.94, 0.12, 0.16),
+        shingleMaterial(),
+        new THREE.Vector3(xSign * halfW * 0.46, wallTop + ridgeHeight * 0.48, zSign * (halfD - 0.06)),
+        new THREE.Euler(0, 0, xSign * -roofPitch),
+      );
+    }
   }
 
-  // Low timber door on front.
+  // Light moss on the north-facing roof slope.
   addMesh(
     group,
-    new THREE.BoxGeometry(0.85, 1.45, 0.08),
-    timberMaterial('weathered'),
-    new THREE.Vector3(0.15, baseY + 0.78, halfD - 0.04),
+    new THREE.BoxGeometry(slopeLen * 0.55, 0.07, depth * 0.42),
+    mossMaterial('moss'),
+    new THREE.Vector3(-halfW * 0.38, wallTop + ridgeHeight * 0.58, -0.15),
+    new THREE.Euler(0, 0, roofPitch * 0.88),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(slopeLen * 0.38, 0.06, depth * 0.28),
+    mossMaterial('grass'),
+    new THREE.Vector3(-halfW * 0.32, wallTop + ridgeHeight * 0.72, 0.45),
+    new THREE.Euler(0, 0.08, roofPitch * 0.88),
   );
 
-  // Small stacked forestry tools — axe block.
+  // Axe block beside the door, resting on the plinth.
   addMesh(
     group,
-    new THREE.BoxGeometry(0.45, 0.38, 0.45),
+    new THREE.BoxGeometry(0.55, 0.42, 0.55),
     timberMaterial('dark'),
-    new THREE.Vector3(halfW + 0.35, baseY + 0.19, halfD - 0.55),
+    new THREE.Vector3(halfW - 0.55, stoneHeight + 0.21, halfD - 0.45),
   );
 
   return group;
