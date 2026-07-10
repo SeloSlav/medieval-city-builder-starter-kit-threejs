@@ -2,12 +2,108 @@ import * as THREE from 'three';
 import type { BuildingKind } from '../resources/types.ts';
 import {
   addMesh,
-  mossMaterial,
+  metalMaterial,
   shingleMaterial,
   stoneMaterial,
   tileMaterial,
   timberMaterial,
 } from './buildingMaterials.ts';
+
+function addLogPile(
+  group: THREE.Group,
+  baseX: number,
+  baseZ: number,
+  floorY: number,
+  pileRows: number,
+  logLength: number,
+  logRadius: number,
+): void {
+  const logSpacing = logRadius * 1.72;
+  const rowSpacing = logRadius * 1.82;
+
+  for (let row = 0; row < pileRows; row++) {
+    const logsInRow = pileRows - row;
+    const rowY = floorY + logRadius + row * rowSpacing;
+    const rowSpan = (logsInRow - 1) * logSpacing;
+    for (let col = 0; col < logsInRow; col++) {
+      addMesh(
+        group,
+        new THREE.CylinderGeometry(logRadius * 0.93, logRadius * 1.05, logLength, 8),
+        (row + col) % 2 === 0 ? timberMaterial('weathered') : timberMaterial('mid'),
+        new THREE.Vector3(baseX, rowY, baseZ - rowSpan * 0.5 + col * logSpacing),
+        new THREE.Euler(0, 0, Math.PI * 0.5),
+      );
+    }
+  }
+}
+
+function addCircularSaw(group: THREE.Group, x: number, z: number, floorY: number): void {
+  const bladeRadius = 1.35;
+  const tableY = floorY + 0.25;
+
+  // Heavy timber bed and cast-iron table top.
+  addMesh(
+    group,
+    new THREE.BoxGeometry(3.8, 0.24, 1.9),
+    timberMaterial('dark'),
+    new THREE.Vector3(x, floorY + 0.12, z),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(3.55, 0.07, 1.72),
+    metalMaterial('iron'),
+    new THREE.Vector3(x, tableY, z),
+  );
+
+  // Vertical blade facing the log intake bay.
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(bladeRadius, bladeRadius, 0.05, 28),
+    metalMaterial('steel'),
+    new THREE.Vector3(x + 0.18, tableY + bladeRadius * 0.82, z),
+    new THREE.Euler(0, 0, Math.PI * 0.5),
+  );
+
+  // Timber guard frame over the upper blade arc.
+  const guardX = x + 0.18;
+  const guardBaseY = tableY + bladeRadius * 0.15;
+  const guardTopY = tableY + bladeRadius * 1.75;
+  for (const zSign of [-1, 1] as const) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.14, guardTopY - guardBaseY, 0.14),
+      timberMaterial('dark'),
+      new THREE.Vector3(guardX, (guardBaseY + guardTopY) * 0.5, z + zSign * bladeRadius * 0.62),
+    );
+  }
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.14, 0.14, bladeRadius * 1.32),
+    timberMaterial('dark'),
+    new THREE.Vector3(guardX, guardTopY, z),
+  );
+
+  // Drive pulley and crank wheel beside the table.
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(0.62, 0.62, 0.14, 18),
+    metalMaterial('iron'),
+    new THREE.Vector3(x - 1.25, floorY + 0.62, z - 0.75),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.12, 0.85, 0.12),
+    timberMaterial('mid'),
+    new THREE.Vector3(x - 1.25, floorY + 0.62, z - 0.75),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.55, 0.1, 0.1),
+    timberMaterial('light'),
+    new THREE.Vector3(x - 1.25, floorY + 1.02, z - 0.75),
+  );
+}
 
 /** Long timber sawmill — stone plinth, plank walls, red terracotta gabled roof. */
 export function createLumberMillMesh(): THREE.Group {
@@ -92,11 +188,39 @@ export function createLumberMillMesh(): THREE.Group {
     new THREE.Vector3(halfL + 0.02, stoneHeight + 1.35, 0),
   );
 
+  const roofY = stoneHeight + wallHeight;
+  const floorY = stoneHeight;
+
+  // Main-floor circular saw — visible through the open intake bay.
+  addCircularSaw(group, halfL - 4.8, 0.35, floorY);
+
+  // Interior log piles awaiting the blade.
+  addLogPile(group, -halfL + 3.8, -1.6, floorY, 4, 2.4, 0.22);
+  addLogPile(group, -1.2, 1.85, floorY, 3, 2.0, 0.2);
+  addLogPile(group, halfL - 8.2, -0.4, floorY, 4, 2.2, 0.21);
+
+  // Loft deck — horizontal ceiling where the wall frame meets the roof attic.
+  addMesh(
+    group,
+    new THREE.BoxGeometry(length - 0.55, 0.14, width - 0.45),
+    timberMaterial('light'),
+    new THREE.Vector3(0, roofY - 0.06, 0),
+  );
+
+  // Loft joists visible from the main floor below.
+  for (let x = -halfL + 2.2; x <= halfL - 2.2; x += 2.8) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.16, 0.2, width - 0.52),
+      timberMaterial('dark'),
+      new THREE.Vector3(x, roofY - 0.2, 0),
+    );
+  }
+
   // Red terracotta tile roof — ridge along the long axis, triangular gable ends.
   const ridgeHeight = 2.6;
   const roofPitch = Math.atan2(ridgeHeight, halfW);
   const slopeLength = halfW / Math.cos(roofPitch) + 0.3;
-  const roofY = stoneHeight + wallHeight;
 
   for (const side of [-1, 1] as const) {
     addMesh(
@@ -143,33 +267,12 @@ export function createLumberMillMesh(): THREE.Group {
   );
 
   // Triangular log pile beside the mill — stacked rows tapering to a point.
-  const logRadius = 0.26;
-  const logLength = 3.0;
-  const logSpacing = logRadius * 1.72;
-  const rowSpacing = logRadius * 1.82;
-  const pileRows = 5;
-  const pileX = halfL - 1.8;
-  const pileZ = halfW + 1.6;
-
-  for (let row = 0; row < pileRows; row++) {
-    const logsInRow = pileRows - row;
-    const rowY = logRadius + row * rowSpacing;
-    const rowSpan = (logsInRow - 1) * logSpacing;
-    for (let col = 0; col < logsInRow; col++) {
-      addMesh(
-        group,
-        new THREE.CylinderGeometry(logRadius * 0.93, logRadius * 1.05, logLength, 8),
-        (row + col) % 2 === 0 ? timberMaterial('weathered') : timberMaterial('mid'),
-        new THREE.Vector3(pileX, rowY, pileZ - rowSpan * 0.5 + col * logSpacing),
-        new THREE.Euler(0, 0, Math.PI * 0.5),
-      );
-    }
-  }
+  addLogPile(group, halfL - 1.8, halfW + 1.6, 0, 5, 3.0, 0.26);
 
   return group;
 }
 
-/** A-frame forester hut — stone plinth, timber walls, shingled roof with moss. */
+/** A-frame forester hut — stone plinth, timber walls, shingled roof. */
 export function createReforesterHutMesh(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Reforester hut';
@@ -323,19 +426,6 @@ export function createReforesterHutMesh(): THREE.Group {
     );
   }
 
-  // Exposed A-frame rafters — anchored to the wall plate at each gable corner.
-  for (const zSign of [-1, 1] as const) {
-    for (const xSign of [-1, 1] as const) {
-      addMesh(
-        group,
-        new THREE.BoxGeometry(0.16, ridgeHeight + 0.32, 0.16),
-        timberMaterial('dark'),
-        new THREE.Vector3(xSign * (halfW - wallInset), wallTop + ridgeHeight * 0.48, zSign * (halfD - wallInset)),
-        new THREE.Euler(0, 0, xSign * -roofPitch),
-      );
-    }
-  }
-
   // Ridge beam.
   addMesh(
     group,
@@ -368,22 +458,6 @@ export function createReforesterHutMesh(): THREE.Group {
       );
     }
   }
-
-  // Light moss on the north-facing roof slope.
-  addMesh(
-    group,
-    new THREE.BoxGeometry(slopeLen * 0.55, 0.07, depth * 0.42),
-    mossMaterial('moss'),
-    new THREE.Vector3(-halfW * 0.38, wallTop + ridgeHeight * 0.58, -0.15),
-    new THREE.Euler(0, 0, roofPitch * 0.88),
-  );
-  addMesh(
-    group,
-    new THREE.BoxGeometry(slopeLen * 0.38, 0.06, depth * 0.28),
-    mossMaterial('grass'),
-    new THREE.Vector3(-halfW * 0.32, wallTop + ridgeHeight * 0.72, 0.45),
-    new THREE.Euler(0, 0.08, roofPitch * 0.88),
-  );
 
   // Axe block beside the door, resting on the plinth.
   addMesh(

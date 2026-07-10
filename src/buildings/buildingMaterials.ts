@@ -62,6 +62,11 @@ export function mossMaterial(kind: 'moss' | 'grass' = 'moss'): THREE.MeshStandar
   });
 }
 
+export function metalMaterial(shade: 'iron' | 'steel' = 'iron'): THREE.MeshStandardMaterial {
+  const color = shade === 'steel' ? 0x6b7078 : 0x4a4846;
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.72 });
+}
+
 export function addMesh(
   group: THREE.Group,
   geometry: THREE.BufferGeometry,
