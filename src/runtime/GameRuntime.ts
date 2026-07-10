@@ -4,7 +4,6 @@
  */
 
 import type { SpacetimeGameSnapshot, SpacetimeGameStore } from '../data/spacetimeGameStore.ts';
-import { getOrCreateAnonymousToken } from '../network/identityPersistence.ts';
 import type { RoadNetworkSnapshot } from '../roads/RoadNetwork.ts';
 import type { GameState } from '../resources/types.ts';
 import type { WorldLayoutRegistry } from '../resources/WorldLayoutRegistry.ts';
@@ -36,9 +35,8 @@ export class GameRuntime {
   }
 
   start(): void {
-    const token = getOrCreateAnonymousToken();
     try {
-      this.store.connectWithToken(token);
+      this.store.connect();
     } catch (error) {
       this.callbacks.onConnectError(error);
       return;

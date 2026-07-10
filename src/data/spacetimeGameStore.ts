@@ -11,7 +11,18 @@ import type {
   Quarry,
   TreeEntity,
 } from '../generated/types.ts';
-import { connect, getConnection, isConnected } from '../network/spacetimedbClient.ts';
+import {
+  clearStoredSpacetimeToken,
+  getStoredSpacetimeToken,
+  setStoredSpacetimeToken,
+} from '../network/identityPersistence.ts';
+import {
+  connect,
+  getConnection,
+  getSpacetimeConfig,
+  isConnected,
+  isUnauthorizedConnectError,
+} from '../network/spacetimedbClient.ts';
 import type { RoadNetworkSnapshot } from '../roads/RoadNetwork.ts';
 import type {
   BuildingKind,
@@ -89,24 +100,43 @@ export class SpacetimeGameStore {
     return () => this.listeners.delete(listener);
   }
 
-  connectWithToken(token: string): DbConnection {
-    this.connection = connect(
-      token,
-      (identity) => {
+  connect(): DbConnection {
+    return this.connectWithOptionalToken(getStoredSpacetimeToken(getSpacetimeConfig().dbName) ?? undefined, false);
+  }
+
+  private connectWithOptionalToken(token: string | undefined, isRetry: boolean): DbConnection {
+    const { dbName } = getSpacetimeConfig();
+
+    this.connection = connect(token, {
+      onIdentity: (identity) => {
         this.identityHex = identity.toHexString();
         this.startSubscriptions();
         this.emit();
       },
-      (error) => {
+      onToken: (serverToken) => {
+        setStoredSpacetimeToken(dbName, serverToken);
+      },
+      onConnectError: (error) => {
+        if (!isRetry && isUnauthorizedConnectError(error)) {
+          clearStoredSpacetimeToken(dbName);
+          console.warn('[SpacetimeGameStore] Stale token cleared, retrying anonymous connect');
+          this.connectWithOptionalToken(undefined, true);
+          return;
+        }
         console.warn('[SpacetimeGameStore] connect error', error);
         this.emit();
       },
-      () => {
+      onDisconnect: () => {
         this.identityHex = null;
         this.emit();
       },
-    );
+    });
     return this.connection;
+  }
+
+  /** @deprecated Use {@link connect} — tokens are server-issued, not client-generated. */
+  connectWithToken(token: string): DbConnection {
+    return this.connectWithOptionalToken(token, false);
   }
 
   toGameState(seed: number, registry: WorldLayoutRegistry): GameState {

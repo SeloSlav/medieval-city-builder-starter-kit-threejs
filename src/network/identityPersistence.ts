@@ -1,37 +1,42 @@
 /**
- * Anonymous SpacetimeDB identity for local dev.
+ * SpacetimeDB identity persistence for local dev.
  *
- * SpacetimeDB maps `.withToken(token)` to a stable Identity — no login required.
- * We persist the token in localStorage so refresh keeps the same player, stockpile,
- * buildings, and roads.
+ * SpacetimeDB 2.x issues a signed JWT on connect. Store that token (keyed by
+ * database name) so refresh keeps the same player identity. Do not invent tokens
+ * client-side — random UUIDs are rejected with 401 Unauthorized.
  *
- * Migration path: replace `getOrCreateAnonymousToken()` with an OAuth/OpenAuth token
+ * Migration path: replace `getStoredSpacetimeToken` with an OAuth/OpenAuth token
  * from a real auth provider (see selo-empire AuthContext + SpacetimeDBContext).
- * The connection layer stays the same; only the token source changes.
  */
 
-const STORAGE_KEY = 'medieval-road-system:spacetime-token';
+const STORAGE_PREFIX = 'medieval-road-system:spacetime-token';
 
-export function getOrCreateAnonymousToken(): string {
+function storageKey(dbName: string): string {
+  return `${STORAGE_PREFIX}:${dbName}`;
+}
+
+export function getStoredSpacetimeToken(dbName: string): string | null {
   try {
-    const existing = localStorage.getItem(STORAGE_KEY);
+    const existing = localStorage.getItem(storageKey(dbName));
     if (existing && existing.length > 0) return existing;
   } catch {
-    // Private browsing or blocked storage — fall through to ephemeral token.
+    // Private browsing or blocked storage.
   }
+  return null;
+}
 
-  const token = crypto.randomUUID();
+export function setStoredSpacetimeToken(dbName: string, token: string): void {
+  if (!token) return;
   try {
-    localStorage.setItem(STORAGE_KEY, token);
+    localStorage.setItem(storageKey(dbName), token);
   } catch {
     // Session-only if storage unavailable.
   }
-  return token;
 }
 
-export function clearAnonymousToken(): void {
+export function clearStoredSpacetimeToken(dbName: string): void {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(storageKey(dbName));
   } catch {
     // ignore
   }

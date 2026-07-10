@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /**
- * SpacetimeDB client — connects with anonymous/local token, subscribes to tables, invokes reducers.
+ * SpacetimeDB client — connects with server-issued token, subscribes to tables, invokes reducers.
  */
 
 import { DbConnection } from '../generated/index.ts';
@@ -22,15 +22,18 @@ type ConnectHandlers = {
   onIdentity?: (identity: Identity) => void;
   onConnectError?: (error: unknown) => void;
   onDisconnect?: () => void;
+  onToken?: (token: string) => void;
 };
 
-export function connect(
-  token: string,
-  onIdentity?: (identity: Identity) => void,
-  onConnectError?: (error: unknown) => void,
-  onDisconnect?: () => void,
-): DbConnection {
-  if (connection && connectionToken === token && connectionStatus !== 'disconnected') {
+export function isUnauthorizedConnectError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('Unauthorized') || message.includes('401');
+}
+
+export function connect(token: string | undefined, handlers?: ConnectHandlers): DbConnection {
+  const { onIdentity, onConnectError, onDisconnect, onToken } = handlers ?? {};
+
+  if (connection && connectionToken === (token ?? null) && connectionStatus !== 'disconnected') {
     const conn = connection as { identity?: Identity };
     if (conn.identity && onIdentity) onIdentity(conn.identity);
     return connection;
@@ -48,18 +51,19 @@ export function connect(
   }
 
   const connectionId = ++activeConnectionId;
-  connectionToken = token;
+  connectionToken = token ?? null;
   connectionStatus = 'connecting';
 
-  const conn = DbConnection.builder()
+  const builder = DbConnection.builder()
     .withUri(SPACETIME_URI)
     .withDatabaseName(DB_NAME)
-    .withToken(token)
     .withConfirmedReads(false)
-    .onConnect((_conn, identity) => {
+    .onConnect((_conn, identity, serverToken) => {
       if (connectionId !== activeConnectionId) return;
       connectionStatus = 'connected';
+      connectionToken = serverToken;
       console.log('[SpacetimeDB] Connected, identity:', identity.toHexString());
+      onToken?.(serverToken);
       onIdentity?.(identity);
     })
     .onConnectError((_ctx, error) => {
@@ -77,8 +81,13 @@ export function connect(
       connectionToken = null;
       console.log('[SpacetimeDB] Disconnected');
       onDisconnect?.();
-    })
-    .build();
+    });
+
+  if (token) {
+    builder.withToken(token);
+  }
+
+  const conn = builder.build();
 
   connection = conn;
   return conn;
@@ -106,13 +115,13 @@ export function getConnectionToken(): string | null {
   return connectionToken;
 }
 
-export function createIsolatedConnection(token: string, handlers?: ConnectHandlers): DbConnection {
-  return DbConnection.builder()
+export function createIsolatedConnection(token: string | undefined, handlers?: ConnectHandlers): DbConnection {
+  const builder = DbConnection.builder()
     .withUri(SPACETIME_URI)
     .withDatabaseName(DB_NAME)
-    .withToken(token)
     .withConfirmedReads(false)
-    .onConnect((_conn, identity) => {
+    .onConnect((_conn, identity, serverToken) => {
+      handlers?.onToken?.(serverToken);
       handlers?.onIdentity?.(identity);
     })
     .onConnectError((_ctx, error) => {
@@ -120,8 +129,13 @@ export function createIsolatedConnection(token: string, handlers?: ConnectHandle
     })
     .onDisconnect(() => {
       handlers?.onDisconnect?.();
-    })
-    .build();
+    });
+
+  if (token) {
+    builder.withToken(token);
+  }
+
+  return builder.build();
 }
 
 export function getSpacetimeConfig(): { uri: string; dbName: string } {
