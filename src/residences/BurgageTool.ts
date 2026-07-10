@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { TerrainProjector } from '../terrain/TerrainProjector.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import type { GameState } from '../resources/types.ts';
+import { computeResourceTotals } from '../resources/resourceTotals.ts';
 import type { BurgageFrontageEdge } from './burgageLayout.ts';
 import { cornersFromPoints, resolveBurgageLayout } from './burgageLayout.ts';
 import {
@@ -134,12 +135,12 @@ export class BurgageTool {
     if (!validation.ok) {
       if (validation.reason === 'too_small') return 'Draw the zone deeper behind the road (~14m minimum)';
       if (validation.reason === 'no_fit') return 'Too many plots — press − to reduce plot count';
-      if (validation.reason === 'insufficient_resources') return 'Not enough wood or stone';
+      if (validation.reason === 'insufficient_resources') return 'Not enough timber or stone';
       return 'Adjust zone or plot count';
     }
     const count = validation.layout.residences.length;
     const cost = validation.layout.totalCost;
-    return `${count} ${count === 1 ? 'residence' : 'residences'} — ${cost.wood} wood, ${cost.stone} stone`;
+    return `${count} ${count === 1 ? 'residence' : 'residences'} — ${cost.timber} timber, ${cost.stone} stone`;
   }
 
   commitDraft(): void {
@@ -374,7 +375,7 @@ export class BurgageTool {
       corners: this.points,
       frontageEdge: this.frontageEdge,
       plotCount: this.plotCount,
-      stockpile: this.options.getState().stockpile,
+      stockpile: computeResourceTotals(this.options.getState()),
       existingZones: this.options.getState().burgageZones.values(),
       existingBuildings: this.options.getState().buildings.values(),
       roadNetwork: this.options.roadNetwork,
@@ -413,7 +414,7 @@ export class BurgageTool {
           corners,
           frontageEdge: previewFrontageEdge,
           plotCount: previewPlotCount,
-          stockpile: this.options.getState().stockpile,
+          stockpile: computeResourceTotals(this.options.getState()),
           existingZones: this.options.getState().burgageZones.values(),
           existingBuildings: this.options.getState().buildings.values(),
           roadNetwork: this.options.roadNetwork,

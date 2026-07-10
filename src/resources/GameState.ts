@@ -128,6 +128,10 @@ export function placeBuilding(state: GameState, kind: BuildingKind, x: number, z
     z,
     workRadius: definition.workRadius,
     actionCooldown: 0,
+    timber: 0,
+    firewood: 0,
+    stone: 0,
+    assignedLabor: 0,
   };
 
   const buildings = new Map(state.buildings);
@@ -302,6 +306,10 @@ function restoreBuildings(buildings: BuildingState[]): Map<string, BuildingState
       z: building.z,
       workRadius: definition.workRadius,
       actionCooldown: Math.max(0, building.actionCooldown),
+      timber: building.timber ?? 0,
+      firewood: building.firewood ?? 0,
+      stone: building.stone ?? 0,
+      assignedLabor: building.assignedLabor ?? 0,
     });
   }
   return map;
@@ -355,11 +363,14 @@ function validateSnapshot(value: Partial<GameStateSnapshot | GameStateSnapshotV1
   };
 }
 
-function normalizeStockpile(value: Partial<ResourceStockpile>): ResourceStockpile {
+function normalizeStockpile(value: Partial<ResourceStockpile> & { wood?: number }): ResourceStockpile {
   const stockpile = createEmptyStockpile();
   for (const kind of RESOURCE_KINDS) {
     const amount = value[kind];
     stockpile[kind] = typeof amount === 'number' && Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  }
+  if (typeof value.wood === 'number' && Number.isFinite(value.wood) && stockpile.timber === 0) {
+    stockpile.timber = Math.max(0, value.wood);
   }
   return stockpile;
 }

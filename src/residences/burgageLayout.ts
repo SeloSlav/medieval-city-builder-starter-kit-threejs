@@ -32,7 +32,7 @@ export type BurgageLayoutResult = {
   plotCount: number;
   parcels: BurgageParcelLayout[];
   residences: ResidencePlacement[];
-  totalCost: { wood: number; stone: number };
+  totalCost: { timber: number; stone: number };
 };
 
 export const MIN_PLOT_FRONTAGE = 8;
@@ -42,7 +42,7 @@ export const MAIN_HOUSE_DEPTH = 7.4;
 export const RESIDENCE_PICK_RADIUS = 5.5;
 export const MIN_PARCEL_DEPTH = MAIN_HOUSE_DEPTH + HOUSE_SETBACK + 2.5;
 export const MIN_ZONE_DEPTH = MIN_PARCEL_DEPTH;
-export const MAX_ROAD_FRONTAGE_DISTANCE = 10;
+export const MAX_ROAD_FRONTAGE_DISTANCE = 16;
 
 const CORNER_KEYS = ['a', 'b', 'c', 'd'] as const;
 const EDGE_PAIRS: ReadonlyArray<readonly [keyof BurgageZoneCorners, keyof BurgageZoneCorners]> = [
@@ -76,7 +76,7 @@ export function suggestPlotCount(frontageLength: number): number {
   return Math.max(1, Math.floor(frontageLength / MIN_PLOT_FRONTAGE));
 }
 
-export function residenceZoneCostForLayout(residenceCount: number): { wood: number; stone: number } {
+export function residenceZoneCostForLayout(residenceCount: number): { timber: number; stone: number } {
   return residenceZoneCost(residenceCount);
 }
 

@@ -1,8 +1,11 @@
-import type { BuildingKind, BuildingState, BurgageZoneState, QuarryNodeState, ResourceStockpile } from '../resources/types.ts';
+import type { BuildingKind, BuildingState, BurgageZoneState, QuarryNodeState } from '../resources/types.ts';
+import type { ResourceTotals } from '../resources/resourceTotals.ts';
 import { canAffordBuilding } from '../resources/buildingEconomy.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
 import { sampleBuildingFootprintHeights } from './BuildingTerrainLayout.ts';
 import { buildingOverlapsResidenceZone } from '../placement/placementConflicts.ts';
+import type { RoadNetwork } from '../roads/RoadNetwork.ts';
+import { hasRoadAccess } from '../roads/roadConnectivity.ts';
 
 export type BuildingPlacementFailureReason =
   | 'water'
@@ -13,6 +16,7 @@ export type BuildingPlacementFailureReason =
   | 'on_quarry_pit'
   | 'no_quarry_in_range'
   | 'no_trees_in_range'
+  | 'no_road_access'
   | 'insufficient_resources';
 
 export type BuildingPlacementResult =
@@ -25,11 +29,12 @@ type BuildingPlacementContext = {
   buildings: Iterable<BuildingState>;
   burgageZones: Iterable<BurgageZoneState>;
   quarries: Iterable<QuarryNodeState>;
-  stockpile: ResourceStockpile;
+  stockpile: Pick<ResourceTotals, 'timber' | 'stone'>;
   isWaterAt: (x: number, z: number) => boolean;
   isQuarryPitAt?: (x: number, z: number) => boolean;
   getNaturalHeightAt: (x: number, z: number) => number;
   countMatureTreesInRadius?: (x: number, z: number, radius: number) => number;
+  roadNetwork?: RoadNetwork;
 };
 
 export function validateBuildingPlacement(
@@ -68,6 +73,14 @@ export function validateBuildingPlacement(
     if (matureTrees <= 0) {
       return { ok: false, reason: 'no_trees_in_range' };
     }
+  }
+
+  if (
+    (kind === 'lumber_mill' || kind === 'woodcutters_lodge')
+    && context.roadNetwork
+    && !hasRoadAccess(x, z, context.roadNetwork)
+  ) {
+    return { ok: false, reason: 'no_road_access' };
   }
 
   if (!canAffordBuilding(context.stockpile, kind)) {

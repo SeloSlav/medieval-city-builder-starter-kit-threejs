@@ -1,7 +1,14 @@
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RiverField } from '../rivers/RiverField.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
-import type { GameState, InspectableTarget, QuarryNodeState, ResidenceState } from './types.ts';
+import {
+  areRoadConnected,
+  findRoadConnectedBuildings,
+  findRoadConnectedResidences,
+  formatRoadAccess,
+  nearestRoadDistance,
+} from '../roads/roadConnectivity.ts';
+import type { BuildingState, GameState, InspectableTarget, QuarryNodeState, ResidenceState } from './types.ts';
 import type { WorldLayoutRegistry } from './WorldLayoutRegistry.ts';
 import { buildingKindLabel, findNearestBuilding as findBuilding } from './WorldLayoutRegistry.ts';
 import { countTreesNearBuilding } from './ForestVisualSync.ts';
@@ -9,7 +16,7 @@ import type { TreeRegistry } from './TreeRegistry.ts';
 import { RESIDENCE_PICK_RADIUS } from '../residences/burgageLayout.ts';
 
 const RIVER_INSPECT_MAX_SHORE = 8;
-const NEAREST_ROAD_MAX_DISTANCE = 18;
+const NEAREST_ROAD_MAX_DISTANCE = 24;
 
 function findNearestResidenceTarget(
   state: GameState,
@@ -148,15 +155,37 @@ export class WorldQueries {
 
   getNearestRoadNodeDistance(x: number, z: number): number | null {
     const network = this.getRoadNetwork();
-    let best: number | null = null;
+    const distance = nearestRoadDistance(x, z, network);
+    if (!Number.isFinite(distance) || distance > NEAREST_ROAD_MAX_DISTANCE) return null;
+    return distance;
+  }
 
-    for (const node of network.nodes.values()) {
-      const distance = Math.hypot(x - node.position.x, z - node.position.z);
-      if (distance > NEAREST_ROAD_MAX_DISTANCE) continue;
-      if (best == null || distance < best) best = distance;
-    }
+  getRoadAccessLabel(x: number, z: number): string {
+    return formatRoadAccess(nearestRoadDistance(x, z, this.getRoadNetwork()));
+  }
 
-    return best;
+  getRoadConnectedMills(lodge: { x: number; z: number }): BuildingState[] {
+    const state = this.getGameState();
+    return findRoadConnectedBuildings(
+      lodge,
+      state.buildings.values(),
+      this.getRoadNetwork(),
+      (building) => building.kind === 'lumber_mill',
+    );
+  }
+
+  getRoadConnectedResidencesForLodge(lodge: { x: number; z: number }): ResidenceState[] {
+    const state = this.getGameState();
+    return findRoadConnectedResidences(
+      lodge,
+      state.residences.values(),
+      this.getRoadNetwork(),
+      (residence) => !residence.abandoned,
+    );
+  }
+
+  isRoadConnected(ax: number, az: number, bx: number, bz: number): boolean {
+    return areRoadConnected(ax, az, bx, bz, this.getRoadNetwork());
   }
 
   getBuildingLabel(kind: Parameters<typeof buildingKindLabel>[0]): string {

@@ -225,6 +225,62 @@ button {
   color: var(--accent-2);
 }
 
+.resource-stockpile-item--population {
+  min-width: 88px;
+}
+
+.resource-stockpile-sub {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.resource-inspector-labor {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.resource-inspector-labor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.resource-inspector-labor-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-inspector-labor-button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.resource-inspector-labor-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.resource-inspector-labor-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .resource-inspector-panel {
   position: absolute;
   top: 64px;
@@ -536,6 +592,10 @@ button {
 
 .road-controls-status[data-state='draft'] {
   color: #d7b463;
+}
+
+.road-controls-status[data-state='warning'] {
+  color: #d9a441;
 }
 
 .road-controls-status[data-state='ready'] {

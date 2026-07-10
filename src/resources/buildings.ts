@@ -31,7 +31,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingKind, BuildingDefinition> = {
     label: "Woodcutter's lodge",
     workRadius: 0,
     pickRadius: 8,
-    harvestInterval: 0,
+    harvestInterval: 5,
     regrowRatePerSecond: 0,
   },
   stone_quarry: {

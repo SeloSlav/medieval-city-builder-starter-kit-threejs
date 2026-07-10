@@ -5,11 +5,16 @@ use crate::constants::{
     LUMBER_MILL_PICK_RADIUS, LUMBER_MILL_RADIUS, REFORESTER_PICK_RADIUS, STONE_QUARRY_PICK_RADIUS,
     STONE_QUARRY_RADIUS, WOODCUTTERS_LODGE_PICK_RADIUS,
 };
-use crate::economy::{building_cost, building_salvage_refund, credit, spend};
+use crate::economy::{
+    assign_building_labor as set_building_labor, building_cost, building_salvage_refund,
+    credit_treasury_stone, credit_treasury_timber, spend_aggregate_stone, spend_aggregate_timber,
+    total_stone, total_timber, ResourceAmount,
+};
 use crate::lifecycle::ensure_player_resources;
 use crate::placement_validation::{building_overlaps_residence_zone, is_on_quarry_pit};
+use crate::roads::has_building_road_access;
 use crate::simulation::building_params;
-use crate::tables::{Building, PlayerResources, WorldConfig};
+use crate::tables::{Building, WorldConfig};
 
 fn pick_radius(kind: &str) -> Result<f64, String> {
     match kind {
@@ -23,7 +28,7 @@ fn pick_radius(kind: &str) -> Result<f64, String> {
 
 fn is_within_same_kind_work_radius(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
     for building in ctx.db.building().iter() {
-        if building.kind != kind {
+        if building.kind != kind || building.work_radius <= 0.0 {
             continue;
         }
         let dx = building.x - x;
@@ -85,23 +90,6 @@ fn has_quarry_stone_in_radius(ctx: &ReducerContext, x: f64, z: f64, radius: f64)
     false
 }
 
-fn player_resources_amount(resources: &PlayerResources) -> crate::economy::ResourceAmount {
-    crate::economy::ResourceAmount {
-        wood: resources.wood,
-        stone: resources.stone,
-    }
-}
-
-fn update_player_resources(ctx: &ReducerContext, owner: spacetimedb::Identity, amount: crate::economy::ResourceAmount) {
-    if let Some(existing) = ctx.db.player_resources().owner().find(&owner) {
-        ctx.db.player_resources().owner().update(PlayerResources {
-            wood: amount.wood,
-            stone: amount.stone,
-            ..existing
-        });
-    }
-}
-
 #[reducer]
 pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Result<(), String> {
     let (work_radius, _) = building_params(&kind)?;
@@ -132,16 +120,27 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         return Err("Too close to another building.".to_string());
     }
 
+    if matches!(kind.as_str(), "lumber_mill" | "woodcutters_lodge")
+        && !has_building_road_access(ctx, owner, x, z)
+    {
+        return Err("Building must be placed near a road.".to_string());
+    }
+
     let cost = building_cost(&kind)?;
-    let resources = ctx
-        .db
-        .player_resources()
-        .owner()
-        .find(&owner)
-        .ok_or_else(|| "Player resources not found.".to_string())?;
-    let mut amount = player_resources_amount(&resources);
-    spend(&mut amount, &cost)?;
-    update_player_resources(ctx, owner, amount);
+    if total_timber(ctx, owner) + 1e-6 < cost.timber {
+        return Err(format!(
+            "Not enough timber (need {} timber).",
+            cost.timber.round() as i64
+        ));
+    }
+    if total_stone(ctx, owner) + 1e-6 < cost.stone {
+        return Err(format!(
+            "Not enough stone (need {} stone).",
+            cost.stone.round() as i64
+        ));
+    }
+    spend_aggregate_timber(ctx, owner, cost.timber)?;
+    spend_aggregate_stone(ctx, owner, cost.stone)?;
 
     let config = ctx
         .db
@@ -159,6 +158,10 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         z,
         work_radius,
         action_cooldown: 0.0,
+        timber: 0.0,
+        firewood: 0.0,
+        stone: 0.0,
+        assigned_labor: 0,
     });
 
     ctx.db.world_config().id().update(WorldConfig {
@@ -167,6 +170,17 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     });
 
     Ok(())
+}
+
+#[reducer]
+pub fn assign_building_labor(
+    ctx: &ReducerContext,
+    building_id: u64,
+    labor: u32,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    ensure_player_resources(ctx, owner);
+    set_building_labor(ctx, owner, building_id, labor)
 }
 
 #[reducer]
@@ -186,15 +200,14 @@ pub fn demolish_building(ctx: &ReducerContext, building_id: u64) -> Result<(), S
     }
 
     let refund = building_salvage_refund(&building.kind)?;
-    let resources = ctx
-        .db
-        .player_resources()
-        .owner()
-        .find(&owner)
-        .ok_or_else(|| "Player resources not found.".to_string())?;
-    let mut amount = player_resources_amount(&resources);
-    credit(&mut amount, &refund);
-    update_player_resources(ctx, owner, amount);
+    credit_treasury_timber(ctx, owner, refund.timber + building.timber);
+    credit_treasury_stone(ctx, owner, refund.stone + building.stone);
+    if building.firewood > 0.0 {
+        if let Some(mut treasury) = ctx.db.player_resources().owner().find(&owner) {
+            treasury.firewood += building.firewood;
+            ctx.db.player_resources().owner().update(treasury);
+        }
+    }
 
     ctx.db.building().id().delete(building_id);
 

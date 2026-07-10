@@ -26,6 +26,7 @@ import type { SpacetimeGameSnapshot } from '../data/spacetimeGameStore.ts';
 import type { BuildingState, GameState } from '../resources/types.ts';
 import { ForestVisualSync, countTreesNearBuilding } from '../resources/ForestVisualSync.ts';
 import { ResourceInspector } from '../resources/ResourceInspector.ts';
+import { computePopulationStats, computeResourceTotals } from '../resources/resourceTotals.ts';
 import { TreeRegistry } from '../resources/TreeRegistry.ts';
 import { WorldLayoutRegistry } from '../resources/WorldLayoutRegistry.ts';
 import { WorldQueries } from '../resources/WorldQueries.ts';
@@ -219,6 +220,7 @@ export class App {
         if (!registry) return 0;
         return countTreesNearBuilding(state, registry, x, z, radius).matureTrees;
       },
+      getRoadNetwork: () => roadNetwork,
       onPreviewChange: (preview) => {
         this.syncBuildingTerrainLayout();
         this.syncPreviewTerrainPads(preview);
@@ -346,6 +348,7 @@ export class App {
       sceneManager,
       terrainProjector: sceneManager.terrainProjector,
       worldQueries,
+      getState: () => this.gameState!,
       onDemolishBuilding: async (buildingId) => {
         if (!this.spacetimeStore?.isConnected) {
           this.toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
@@ -370,9 +373,24 @@ export class App {
           this.toastManager?.show(message, { variant: 'error' });
         }
       },
+      onAssignBuildingLabor: async (buildingId, labor) => {
+        if (!this.spacetimeStore?.isConnected) {
+          this.toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
+          return;
+        }
+        try {
+          await this.spacetimeStore.assignBuildingLabor(buildingId, labor);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Labor assignment failed.';
+          this.toastManager?.show(message, { variant: 'error' });
+        }
+      },
       isBlocked: () => isWorldInspectionBlocked(placementGate),
     });
-    resourceInspector.setStockpile(gameState.stockpile);
+    resourceInspector.setHud(
+      computeResourceTotals(gameState),
+      computePopulationStats(gameState),
+    );
 
     const quarryMapIcons = new QuarryMapIcons({
       uiRoot,
@@ -736,7 +754,10 @@ export class App {
 
   private syncResourceUi(): void {
     if (!this.gameState || !this.resourceInspector) return;
-    this.resourceInspector.setStockpile(this.gameState.stockpile);
+    this.resourceInspector.setHud(
+      computeResourceTotals(this.gameState),
+      computePopulationStats(this.gameState),
+    );
     this.resourceInspector.refreshSelection();
   }
 

@@ -212,6 +212,17 @@ export class SpacetimeGameStore {
     await this.callReducer('placeBuilding', 'place_building', { kind, x, z });
   }
 
+  async assignBuildingLabor(buildingId: string, labor: number): Promise<void> {
+    const serverId = parseBuildingServerId(buildingId);
+    if (serverId === null) {
+      throw new Error('Invalid building id.');
+    }
+    await this.callReducer('assignBuildingLabor', 'assign_building_labor', {
+      buildingId: serverId,
+      labor: Math.max(0, Math.floor(labor)),
+    });
+  }
+
   async demolishBuilding(buildingId: string): Promise<void> {
     const serverId = parseBuildingServerId(buildingId);
     if (serverId === null) {
@@ -340,8 +351,9 @@ export class SpacetimeGameStore {
       for (const row of db.player_resources.iter()) {
         if (row.owner.toHexString() !== this.identityHex) continue;
         this.stockpile = {
-          wood: row.wood,
+          timber: row.timber,
           stone: row.stone,
+          firewood: row.firewood,
           water: row.water,
         };
         break;
@@ -388,6 +400,10 @@ export class SpacetimeGameStore {
           z: row.z,
           workRadius: row.workRadius,
           actionCooldown: row.actionCooldown,
+          timber: row.timber,
+          firewood: row.firewood,
+          stone: row.stone,
+          assignedLabor: Number(row.assignedLabor),
         });
       }
     }
@@ -419,6 +435,10 @@ export class SpacetimeGameStore {
           x: row.x,
           z: row.z,
           yaw: row.yaw,
+          population: Number(row.population),
+          firewoodStock: row.firewoodStock,
+          abandoned: row.abandoned,
+          needsDeficitTicks: Number(row.needsDeficitTicks),
         });
       }
     }

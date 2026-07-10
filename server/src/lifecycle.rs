@@ -1,7 +1,7 @@
 use spacetimedb::{reducer, Identity, ReducerContext, ScheduleAt, TimeDuration};
 
 use crate::constants::{DEFAULT_WORLD_SEED, TICK_MICROS};
-use crate::economy::{STARTING_STONE, STARTING_WOOD};
+use crate::economy::{STARTING_STONE, STARTING_TIMBER};
 use crate::db::*;
 use crate::schedule::SimTickSchedule;
 use crate::tables::{PlayerResources, Quarry, TreeEntity, WorldConfig};
@@ -62,8 +62,9 @@ pub fn ensure_player_resources(ctx: &ReducerContext, owner: Identity) {
     }
     ctx.db.player_resources().insert(PlayerResources {
         owner,
-        wood: STARTING_WOOD,
+        timber: STARTING_TIMBER,
         stone: STARTING_STONE,
+        firewood: 0.0,
         water: 0.0,
     });
 }

@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import type { TerrainProjector } from '../terrain/TerrainProjector.ts';
 import type { BuildingKind, GameState } from '../resources/types.ts';
+import { computeResourceTotals } from '../resources/resourceTotals.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
 import type { BuildingPlacementFailureReason, BuildingPlacementResult } from './BuildingPlacementValidation.ts';
 import { validateBuildingPlacement } from './BuildingPlacementValidation.ts';
 import type { BuildingMarkers } from './BuildingMarkers.ts';
 import type { BuildingTerrainSource } from './BuildingTerrainLayout.ts';
+import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 
 export type BuildingToolMode = BuildingKind | 'off';
 
@@ -25,6 +27,7 @@ type BuildingToolOptions = {
   isQuarryPitAt?: (x: number, z: number) => boolean;
   getNaturalHeightAt: (x: number, z: number) => number;
   countMatureTreesInRadius?: (x: number, z: number, radius: number) => number;
+  getRoadNetwork?: () => RoadNetwork;
   onPreviewChange?: (preview: BuildingTerrainSource | null) => void;
   onModeChanged: () => void;
   onPlacementRejected?: (reason: BuildingPlacementFailureReason) => void;
@@ -235,15 +238,17 @@ export class BuildingTool {
 
   private validate(kind: BuildingKind, x: number, z: number) {
     const state = this.options.getState();
+    const totals = computeResourceTotals(state);
     return validateBuildingPlacement(kind, x, z, {
       buildings: state.buildings.values(),
       burgageZones: state.burgageZones.values(),
       quarries: state.quarries.values(),
-      stockpile: state.stockpile,
+      stockpile: totals,
       isWaterAt: this.options.isWaterAt,
       isQuarryPitAt: this.options.isQuarryPitAt,
       getNaturalHeightAt: this.options.getNaturalHeightAt,
       countMatureTreesInRadius: this.options.countMatureTreesInRadius,
+      roadNetwork: this.options.getRoadNetwork?.(),
     });
   }
 

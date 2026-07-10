@@ -1,32 +1,15 @@
-use spacetimedb::{reducer, ReducerContext};
+use spacetimedb::{reducer, ReducerContext, Table};
 
 use crate::burgage::{compute_burgage_layout, convex_zones_overlap, zone_corners_polygon, ZoneCorners};
 use crate::db::*;
-use crate::economy::{residence_zone_cost, spend};
+use crate::economy::{
+    credit_treasury_stone, credit_treasury_timber, residence_population, residence_zone_cost,
+    spend_aggregate_stone, spend_aggregate_timber, total_stone, total_timber,
+    TIMBER_SALVAGE_FRACTION, STONE_SALVAGE_FRACTION, ResourceAmount,
+};
 use crate::lifecycle::ensure_player_resources;
 use crate::placement_validation::{burgage_zone_overlaps_buildings, is_on_quarry_pit};
-use crate::tables::{BurgageZone, PlayerResources, Residence};
-
-fn player_resources_amount(resources: &PlayerResources) -> crate::economy::ResourceAmount {
-    crate::economy::ResourceAmount {
-        wood: resources.wood,
-        stone: resources.stone,
-    }
-}
-
-fn update_player_resources(
-    ctx: &ReducerContext,
-    owner: spacetimedb::Identity,
-    amount: crate::economy::ResourceAmount,
-) {
-    if let Some(existing) = ctx.db.player_resources().owner().find(&owner) {
-        ctx.db.player_resources().owner().update(PlayerResources {
-            wood: amount.wood,
-            stone: amount.stone,
-            ..existing
-        });
-    }
-}
+use crate::tables::{BurgageZone, Residence};
 
 #[reducer]
 pub fn place_burgage_zone(
@@ -100,18 +83,23 @@ pub fn place_burgage_zone(
     }
 
     let layout = compute_burgage_layout(&corners, frontage_edge, plot_count)
-    .ok_or_else(|| "Could not fit residences in this zone.".to_string())?;
+        .ok_or_else(|| "Could not fit residences in this zone.".to_string())?;
 
     let cost = residence_zone_cost(layout.plot_count);
-    let resources = ctx
-        .db
-        .player_resources()
-        .owner()
-        .find(&owner)
-        .ok_or_else(|| "Player resources not found.".to_string())?;
-    let mut amount = player_resources_amount(&resources);
-    spend(&mut amount, &cost)?;
-    update_player_resources(ctx, owner, amount);
+    if total_timber(ctx, owner) + 1e-6 < cost.timber {
+        return Err(format!(
+            "Not enough timber (need {} timber).",
+            cost.timber.round() as i64
+        ));
+    }
+    if total_stone(ctx, owner) + 1e-6 < cost.stone {
+        return Err(format!(
+            "Not enough stone (need {} stone).",
+            cost.stone.round() as i64
+        ));
+    }
+    spend_aggregate_timber(ctx, owner, cost.timber)?;
+    spend_aggregate_stone(ctx, owner, cost.stone)?;
 
     ctx.db.burgage_zone().insert(BurgageZone {
         id: 0,
@@ -136,6 +124,7 @@ pub fn place_burgage_zone(
         .max()
         .ok_or_else(|| "Failed to resolve residence zone id.".to_string())?;
 
+    let population = residence_population();
     for residence in layout.residences {
         ctx.db.residence().insert(Residence {
             id: 0,
@@ -145,6 +134,10 @@ pub fn place_burgage_zone(
             x: residence.x,
             z: residence.z,
             yaw: residence.yaw,
+            population,
+            firewood_stock: 0.0,
+            abandoned: false,
+            needs_deficit_ticks: 0,
         });
     }
 
@@ -172,16 +165,12 @@ pub fn demolish_burgage_zone(ctx: &ReducerContext, zone_id: u64) -> Result<(), S
         .filter(&zone_id)
         .count() as u32;
     let refund = residence_zone_cost(residence_count);
-    let salvage = crate::economy::ResourceAmount {
-        wood: (refund.wood * crate::economy::WOOD_SALVAGE_FRACTION).round(),
-        stone: (refund.stone * crate::economy::STONE_SALVAGE_FRACTION).round(),
+    let salvage = ResourceAmount {
+        timber: (refund.timber * TIMBER_SALVAGE_FRACTION).round(),
+        stone: (refund.stone * STONE_SALVAGE_FRACTION).round(),
     };
-
-    if let Some(resources) = ctx.db.player_resources().owner().find(&owner) {
-        let mut amount = player_resources_amount(&resources);
-        crate::economy::credit(&mut amount, &salvage);
-        update_player_resources(ctx, owner, amount);
-    }
+    credit_treasury_timber(ctx, owner, salvage.timber);
+    credit_treasury_stone(ctx, owner, salvage.stone);
 
     for residence in ctx.db.residence().zone_id().filter(&zone_id) {
         ctx.db.residence().id().delete(residence.id);

@@ -1,8 +1,8 @@
 use spacetimedb::ReducerContext;
 
-use crate::db::*;
-
 use crate::constants::{LUMBER_MILL_INTERVAL, LUMBER_MILL_RADIUS, TICK_DT};
+use crate::db::*;
+use crate::economy::{building_storage_caps, deposit_building};
 use crate::simulation::spatial::find_nearest_mature_tree;
 use crate::tables::{Building, TreeEntity};
 
@@ -11,6 +11,23 @@ pub fn step_lumber_mill(ctx: &ReducerContext, building: Building) {
     if cooldown > 0.0 {
         ctx.db.building().id().update(Building {
             action_cooldown: cooldown,
+            ..building
+        });
+        return;
+    }
+
+    if building.assigned_labor == 0 {
+        ctx.db.building().id().update(Building {
+            action_cooldown: LUMBER_MILL_INTERVAL,
+            ..building
+        });
+        return;
+    }
+
+    let caps = building_storage_caps(&building.kind);
+    if building.timber >= caps.timber - 1e-6 {
+        ctx.db.building().id().update(Building {
+            action_cooldown: LUMBER_MILL_INTERVAL,
             ..building
         });
         return;
@@ -30,13 +47,7 @@ pub fn step_lumber_mill(ctx: &ReducerContext, building: Building) {
         ..target
     });
 
-    if let Some(mut resources) = ctx.db.player_resources().owner().find(&building.owner) {
-        resources.wood += target.wood_yield;
-        ctx.db.player_resources().owner().update(resources);
-    }
-
-    ctx.db.building().id().update(Building {
-        action_cooldown: LUMBER_MILL_INTERVAL,
-        ..building
-    });
+    let (_, _, _, mut updated) = deposit_building(&building, caps, target.wood_yield, 0.0, 0.0);
+    updated.action_cooldown = LUMBER_MILL_INTERVAL;
+    ctx.db.building().id().update(updated);
 }

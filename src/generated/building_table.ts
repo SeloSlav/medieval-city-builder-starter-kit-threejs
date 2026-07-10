@@ -18,4 +18,8 @@ export default __t.row({
   z: __t.f64(),
   workRadius: __t.f64().name("work_radius"),
   actionCooldown: __t.f64().name("action_cooldown"),
+  timber: __t.f64(),
+  firewood: __t.f64(),
+  stone: __t.f64(),
+  assignedLabor: __t.u32().name("assigned_labor"),
 });

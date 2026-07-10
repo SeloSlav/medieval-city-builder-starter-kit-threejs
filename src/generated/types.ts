@@ -18,6 +18,10 @@ export const Building = __t.object("Building", {
   z: __t.f64(),
   workRadius: __t.f64(),
   actionCooldown: __t.f64(),
+  timber: __t.f64(),
+  firewood: __t.f64(),
+  stone: __t.f64(),
+  assignedLabor: __t.u32(),
 });
 export type Building = __Infer<typeof Building>;
 
@@ -39,8 +43,9 @@ export type BurgageZone = __Infer<typeof BurgageZone>;
 
 export const PlayerResources = __t.object("PlayerResources", {
   owner: __t.identity(),
-  wood: __t.f64(),
+  timber: __t.f64(),
   stone: __t.f64(),
+  firewood: __t.f64(),
   water: __t.f64(),
 });
 export type PlayerResources = __Infer<typeof PlayerResources>;
@@ -70,6 +75,10 @@ export const Residence = __t.object("Residence", {
   x: __t.f64(),
   z: __t.f64(),
   yaw: __t.f64(),
+  population: __t.u32(),
+  firewoodStock: __t.f64(),
+  abandoned: __t.bool(),
+  needsDeficitTicks: __t.u32(),
 });
 export type Residence = __Infer<typeof Residence>;
 

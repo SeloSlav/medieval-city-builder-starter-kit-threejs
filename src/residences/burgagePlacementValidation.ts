@@ -44,7 +44,7 @@ type BurgagePlacementContext = {
   corners: THREE.Vector3[];
   frontageEdge: BurgageFrontageEdge;
   plotCount: number;
-  stockpile: { wood: number; stone: number };
+  stockpile: { timber: number; stone: number };
   existingZones: Iterable<BurgageZoneState>;
   existingBuildings: Iterable<BuildingState>;
   roadNetwork: RoadNetwork;
@@ -123,7 +123,7 @@ export function validateBurgagePlacement(context: BurgagePlacementContext): Burg
   }
 
   const cost = residenceZoneCost(layout.residences.length);
-  if (context.stockpile.wood < cost.wood || context.stockpile.stone < cost.stone) {
+  if (context.stockpile.timber < cost.timber || context.stockpile.stone < cost.stone) {
     return { ok: false, reason: 'insufficient_resources' };
   }
 

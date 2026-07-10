@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AssignBuildingLaborReducer from "../assign_building_labor_reducer";
 import BootstrapQuarriesReducer from "../bootstrap_quarries_reducer";
 import BootstrapTreesReducer from "../bootstrap_trees_reducer";
 import ClientConnectedReducer from "../client_connected_reducer";
@@ -17,6 +18,7 @@ import RemoveRoadEdgeReducer from "../remove_road_edge_reducer";
 import SyncRoadNetworkReducer from "../sync_road_network_reducer";
 import TickSimReducer from "../tick_sim_reducer";
 
+export type AssignBuildingLaborParams = __Infer<typeof AssignBuildingLaborReducer>;
 export type BootstrapQuarriesParams = __Infer<typeof BootstrapQuarriesReducer>;
 export type BootstrapTreesParams = __Infer<typeof BootstrapTreesReducer>;
 export type ClientConnectedParams = __Infer<typeof ClientConnectedReducer>;

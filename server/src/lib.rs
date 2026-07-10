@@ -12,6 +12,7 @@ mod schedule;
 mod db;
 mod lifecycle;
 mod reducers;
+mod roads;
 mod simulation;
 
 pub use constants::DEFAULT_WORLD_SEED;

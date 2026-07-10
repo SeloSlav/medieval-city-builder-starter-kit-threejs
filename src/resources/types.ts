@@ -1,6 +1,6 @@
 import type { RoadNetworkSnapshot } from '../roads/RoadNetwork.ts';
 
-export const RESOURCE_KINDS = ['stone', 'wood', 'water'] as const;
+export const RESOURCE_KINDS = ['timber', 'stone', 'firewood', 'water'] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
 export const RESOURCE_NODE_KINDS = ['quarry'] as const;
@@ -59,6 +59,10 @@ export type BuildingState = {
   z: number;
   workRadius: number;
   actionCooldown: number;
+  timber: number;
+  firewood: number;
+  stone: number;
+  assignedLabor: number;
 };
 
 export type BurgageFrontageEdge = 0 | 1 | 2 | 3;
@@ -80,6 +84,10 @@ export type ResidenceState = {
   x: number;
   z: number;
   yaw: number;
+  population: number;
+  firewoodStock: number;
+  abandoned: boolean;
+  needsDeficitTicks: number;
 };
 
 export type ResourceStockpile = Record<ResourceKind, number>;
@@ -144,7 +152,7 @@ export type InspectableTarget =
     };
 
 export function createEmptyStockpile(): ResourceStockpile {
-  return { stone: 0, wood: 0, water: 0 };
+  return { timber: 0, stone: 0, firewood: 0, water: 0 };
 }
 
 export function isResourceKind(value: string): value is ResourceKind {

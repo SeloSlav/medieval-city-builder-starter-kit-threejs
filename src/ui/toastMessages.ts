@@ -15,7 +15,8 @@ export const TOAST_MESSAGES = {
   'building.placement.on_quarry_pit': 'Cannot build on a quarry pit',
   'building.placement.no_quarry_in_range': 'No quarry stone within work range',
   'building.placement.no_trees_in_range': 'No mature trees within work range',
-  'building.placement.insufficient_resources': 'Not enough wood or stone',
+  'building.placement.no_road_access': 'Building must be placed near a road',
+  'building.placement.insufficient_resources': 'Not enough timber or stone',
   'burgage.placement.water': 'Cannot place residences on water',
   'burgage.placement.too_steep': 'The slope is too steep here',
   'burgage.placement.invalid_shape': 'Invalid residence plot shape',
@@ -24,7 +25,7 @@ export const TOAST_MESSAGES = {
   'burgage.placement.overlaps_existing': 'Overlaps an existing residence plot',
   'burgage.placement.overlaps_building': 'Overlaps an existing building',
   'burgage.placement.on_quarry_pit': 'Cannot place residences on a quarry pit',
-  'burgage.placement.insufficient_resources': 'Not enough wood or stone',
+  'burgage.placement.insufficient_resources': 'Not enough timber or stone',
   'burgage.placement.no_fit': 'Too many plots for this frontage — press − to reduce plot count',
 } as const;
 
@@ -100,6 +101,8 @@ export function buildingPlacementReasonToToastId(reason: BuildingPlacementFailur
       return 'building.placement.no_quarry_in_range';
     case 'no_trees_in_range':
       return 'building.placement.no_trees_in_range';
+    case 'no_road_access':
+      return 'building.placement.no_road_access';
     case 'insufficient_resources':
       return 'building.placement.insufficient_resources';
     default: {

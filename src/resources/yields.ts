@@ -26,8 +26,10 @@ export function formatResourceAmount(kind: ResourceKind, amount: number): string
   switch (kind) {
     case 'stone':
       return `${Math.round(amount)} stone`;
-    case 'wood':
-      return `${Math.round(amount)} wood`;
+    case 'timber':
+      return `${Math.round(amount)} timber`;
+    case 'firewood':
+      return `${Math.round(amount)} firewood`;
     case 'water':
       return amount > 0 ? 'Fresh water access' : 'No water stored';
     default: {

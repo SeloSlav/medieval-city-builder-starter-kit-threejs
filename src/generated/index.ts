@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AssignBuildingLaborReducer from "./assign_building_labor_reducer";
 import BootstrapQuarriesReducer from "./bootstrap_quarries_reducer";
 import BootstrapTreesReducer from "./bootstrap_trees_reducer";
 import DemolishBuildingReducer from "./demolish_building_reducer";
@@ -176,6 +177,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("assign_building_labor", AssignBuildingLaborReducer),
   __reducerSchema("bootstrap_quarries", BootstrapQuarriesReducer),
   __reducerSchema("bootstrap_trees", BootstrapTreesReducer),
   __reducerSchema("demolish_building", DemolishBuildingReducer),

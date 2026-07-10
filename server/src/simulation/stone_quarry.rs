@@ -1,8 +1,8 @@
 use spacetimedb::ReducerContext;
 
-use crate::db::*;
-
 use crate::constants::{STONE_PER_HARVEST, STONE_QUARRY_INTERVAL, STONE_QUARRY_RADIUS, TICK_DT};
+use crate::db::*;
+use crate::economy::{building_storage_caps, deposit_building};
 use crate::simulation::spatial::find_nearest_quarry;
 use crate::tables::{Building, Quarry};
 
@@ -11,6 +11,23 @@ pub fn step_stone_quarry(ctx: &ReducerContext, building: Building) {
     if cooldown > 0.0 {
         ctx.db.building().id().update(Building {
             action_cooldown: cooldown,
+            ..building
+        });
+        return;
+    }
+
+    if building.assigned_labor == 0 {
+        ctx.db.building().id().update(Building {
+            action_cooldown: STONE_QUARRY_INTERVAL,
+            ..building
+        });
+        return;
+    }
+
+    let caps = building_storage_caps(&building.kind);
+    if building.stone >= caps.stone - 1e-6 {
+        ctx.db.building().id().update(Building {
+            action_cooldown: STONE_QUARRY_INTERVAL,
             ..building
         });
         return;
@@ -38,13 +55,7 @@ pub fn step_stone_quarry(ctx: &ReducerContext, building: Building) {
         ..quarry
     });
 
-    if let Some(mut resources) = ctx.db.player_resources().owner().find(&building.owner) {
-        resources.stone += extracted;
-        ctx.db.player_resources().owner().update(resources);
-    }
-
-    ctx.db.building().id().update(Building {
-        action_cooldown: STONE_QUARRY_INTERVAL,
-        ..building
-    });
+    let (_, _, _, mut updated) = deposit_building(&building, caps, 0.0, 0.0, extracted);
+    updated.action_cooldown = STONE_QUARRY_INTERVAL;
+    ctx.db.building().id().update(updated);
 }

@@ -1,4 +1,4 @@
-use spacetimedb::{Identity};
+use spacetimedb::Identity;
 
 #[spacetimedb::table(accessor = world_config, public)]
 pub struct WorldConfig {
@@ -13,8 +13,11 @@ pub struct WorldConfig {
 pub struct PlayerResources {
     #[primary_key]
     pub owner: Identity,
-    pub wood: f64,
+    /// Treasury timber — included in aggregate totals with building storage.
+    pub timber: f64,
     pub stone: f64,
+    /// Treasury firewood (usually zero; residences and lodges hold stock).
+    pub firewood: f64,
     pub water: f64,
 }
 
@@ -41,6 +44,7 @@ pub struct TreeEntity {
 }
 
 #[spacetimedb::table(accessor = building, public, index(accessor = owner, btree(columns = [owner])))]
+#[derive(Clone)]
 pub struct Building {
     #[primary_key]
     #[auto_inc]
@@ -51,6 +55,10 @@ pub struct Building {
     pub z: f64,
     pub work_radius: f64,
     pub action_cooldown: f64,
+    pub timber: f64,
+    pub firewood: f64,
+    pub stone: f64,
+    pub assigned_labor: u32,
 }
 
 #[spacetimedb::table(accessor = road_network_state, public)]
@@ -89,4 +97,8 @@ pub struct Residence {
     pub x: f64,
     pub z: f64,
     pub yaw: f64,
+    pub population: u32,
+    pub firewood_stock: f64,
+    pub abandoned: bool,
+    pub needs_deficit_ticks: u32,
 }

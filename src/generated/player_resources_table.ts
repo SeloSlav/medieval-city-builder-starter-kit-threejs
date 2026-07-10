@@ -12,7 +12,8 @@ import {
 
 export default __t.row({
   owner: __t.identity().primaryKey(),
-  wood: __t.f64(),
+  timber: __t.f64(),
   stone: __t.f64(),
+  firewood: __t.f64(),
   water: __t.f64(),
 });

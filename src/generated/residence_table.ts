@@ -18,4 +18,8 @@ export default __t.row({
   x: __t.f64(),
   z: __t.f64(),
   yaw: __t.f64(),
+  population: __t.u32(),
+  firewoodStock: __t.f64().name("firewood_stock"),
+  abandoned: __t.bool(),
+  needsDeficitTicks: __t.u32().name("needs_deficit_ticks"),
 });
