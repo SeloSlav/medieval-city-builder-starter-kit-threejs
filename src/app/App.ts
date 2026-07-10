@@ -1,6 +1,17 @@
 ﻿import { CameraController } from '../camera/CameraController.ts';
 import { FirstPersonController } from '../camera/FirstPersonController.ts';
 import { InputManager } from '../input/InputManager.ts';
+import {
+  createInitialGameState,
+  deserializeGameState,
+  gameStateToSnapshot,
+  restoreGameState,
+  serializeGameState,
+} from '../resources/GameState.ts';
+import type { GameState } from '../resources/types.ts';
+import { ResourceInspector } from '../resources/ResourceInspector.ts';
+import { WorldLayoutRegistry } from '../resources/WorldLayoutRegistry.ts';
+import { WorldQueries } from '../resources/WorldQueries.ts';
 import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
 import { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { RoadSelection } from '../roads/RoadSelection.ts';
@@ -26,6 +37,9 @@ export class App {
   private roadSelection: RoadSelection | null = null;
   private toolbar: BuildToolbar | null = null;
   private toastManager: ToastManager | null = null;
+  private resourceInspector: ResourceInspector | null = null;
+  private gameState: GameState | null = null;
+  private layoutRegistry: WorldLayoutRegistry | null = null;
   private animationId = 0;
   private lastTime = 0;
   private frameBudgetTime = 0;
@@ -57,8 +71,17 @@ export class App {
     const sceneManager = await SceneManager.create(sceneRoot, (label, detail) => {
       loadingScreen?.setProgress({ label, detail });
     }, materialsPromise, startupTexturesPromise);
+    const layoutRegistry = WorldLayoutRegistry.fromWorldLayout(sceneManager.worldLayout);
+    const gameState = createInitialGameState(layoutRegistry, sceneManager.worldLayout.seed);
     const input = new InputManager(sceneManager.renderer.domElement);
     const roadNetwork = new RoadNetwork();
+    const worldQueries = new WorldQueries({
+      terrain: sceneManager.terrain,
+      riverField: sceneManager.riverField,
+      registry: layoutRegistry,
+      getGameState: () => this.gameState ?? gameState,
+      getRoadNetwork: () => this.roadNetwork ?? roadNetwork,
+    });
     const cameraController = new CameraController({
       camera: sceneManager.camera,
       target: sceneManager.cameraTarget,
@@ -117,8 +140,19 @@ export class App {
         cameraController.setInputEnabled(!open && !firstPersonController.isActive());
       },
       canOpenMenuFromKeyboard: () => !firstPersonController.isActive(),
+      onExportGameState: () => this.exportGameState(),
+      onImportGameState: () => this.importGameState(),
     });
     const toastManager = new ToastManager(uiRoot);
+    const resourceInspector = new ResourceInspector({
+      domElement: sceneManager.renderer.domElement,
+      uiRoot,
+      sceneManager,
+      terrainProjector: sceneManager.terrainProjector,
+      worldQueries,
+      isBlocked: () => roadTool.isEnabled() || firstPersonController.isActive() || toolbar.isGameMenuOpen(),
+    });
+    resourceInspector.setStockpile(gameState.stockpile);
 
     firstPersonController = new FirstPersonController({
       camera: sceneManager.camera,
@@ -152,6 +186,11 @@ export class App {
     this.roadSelection = roadSelection;
     this.toolbar = toolbar;
     this.toastManager = toastManager;
+    this.resourceInspector = resourceInspector;
+    this.gameState = gameState;
+    this.layoutRegistry = layoutRegistry;
+
+    this.exposeDevHandles();
 
     sceneManager.syncRoadNetwork(roadNetwork);
     this.syncToolbar();
@@ -186,6 +225,7 @@ export class App {
     window.removeEventListener('resize', this.onResize);
     this.roadTool?.dispose();
     this.roadSelection?.dispose();
+    this.resourceInspector?.dispose();
     this.toastManager?.dispose();
     this.firstPersonController?.dispose();
     this.cameraController?.dispose();
@@ -265,6 +305,80 @@ export class App {
     this.fpsSampleStart = time;
     this.fpsFrameCount = 0;
     this.fpsAccumulatedSeconds = 0;
+  }
+
+  private syncResourceUi(): void {
+    if (!this.gameState || !this.resourceInspector) return;
+    this.resourceInspector.setStockpile(this.gameState.stockpile);
+    this.resourceInspector.refreshSelection();
+  }
+
+  private exportGameState(): void {
+    if (!this.gameState || !this.roadNetwork) return;
+    const snapshot = gameStateToSnapshot(this.gameState, this.roadNetwork.snapshot());
+    const blob = new Blob([serializeGameState(snapshot)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `medieval-road-state-${Date.now()}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    this.toastManager?.show('Game state exported.', { variant: 'success' });
+  }
+
+  private importGameState(): void {
+    if (!this.layoutRegistry || !this.roadNetwork || !this.sceneManager) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void file.text().then((raw) => {
+        try {
+          const snapshot = deserializeGameState(raw);
+          if (snapshot.seed !== this.gameState!.seed) {
+            console.warn('Imported state seed differs from current world layout.');
+          }
+          this.gameState = restoreGameState(snapshot, this.layoutRegistry!);
+          this.roadNetwork!.restore(snapshot.roads);
+          this.sceneManager!.syncRoadNetwork(this.roadNetwork!);
+          this.roadSelection?.refresh();
+          this.syncResourceUi();
+          this.syncToolbar();
+          this.toastManager?.show('Game state imported.', { variant: 'success' });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Invalid game state file.';
+          this.toastManager?.show(message, { variant: 'error' });
+        }
+      });
+    });
+    input.click();
+  }
+
+  private exposeDevHandles(): void {
+    if (!this.gameState || !this.roadNetwork || !this.layoutRegistry) return;
+    (window as typeof window & {
+      __medievalGameState?: {
+        getState: () => GameState;
+        export: () => string;
+        import: (raw: string) => void;
+        registry: WorldLayoutRegistry;
+      };
+    }).__medievalGameState = {
+      getState: () => this.gameState!,
+      export: () => serializeGameState(gameStateToSnapshot(this.gameState!, this.roadNetwork!.snapshot())),
+      import: (raw: string) => {
+        const snapshot = deserializeGameState(raw);
+        this.gameState = restoreGameState(snapshot, this.layoutRegistry!);
+        this.roadNetwork!.restore(snapshot.roads);
+        this.sceneManager?.syncRoadNetwork(this.roadNetwork!);
+        this.roadSelection?.refresh();
+        this.syncResourceUi();
+        this.syncToolbar();
+      },
+      registry: this.layoutRegistry,
+    };
   }
 
   private mustElement(selector: string): HTMLElement {

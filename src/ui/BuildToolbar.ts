@@ -45,6 +45,8 @@ export class BuildToolbar {
       onBuildRoad: () => void;
       onMenuOpenChange?: (open: boolean) => void;
       canOpenMenuFromKeyboard?: () => boolean;
+      onExportGameState?: () => void;
+      onImportGameState?: () => void;
     },
   ) {
     root.innerHTML = `
@@ -164,6 +166,8 @@ export class BuildToolbar {
       onTipsPreferenceChange: () => this.syncContextPanels(),
       onOpenChange: handlers.onMenuOpenChange,
       canOpenFromKeyboard: handlers.canOpenMenuFromKeyboard,
+      onExportGameState: handlers.onExportGameState,
+      onImportGameState: handlers.onImportGameState,
     });
     this.unsubscribeTipsPreference = subscribeTipCardsPreference(() => this.syncContextPanels());
 

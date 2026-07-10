@@ -145,6 +145,90 @@ button {
   outline: none;
 }
 
+.game-menu-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.game-menu-action {
+  justify-self: stretch;
+  padding: 10px 14px;
+  color: var(--ink);
+  font-weight: 600;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.game-menu-action:hover,
+.game-menu-action:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.resource-stockpile-hud {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.resource-stockpile-item {
+  display: grid;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.resource-stockpile-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.resource-stockpile-item strong {
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1;
+  color: var(--accent-2);
+}
+
+.resource-inspector-panel {
+  position: absolute;
+  top: 64px;
+  left: 14px;
+  z-index: 4;
+  width: min(300px, calc(100vw - 28px));
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.resource-inspector-panel[hidden] {
+  display: none;
+}
+
+.resource-inspector-details {
+  padding-top: 2px;
+  border-top: 1px solid rgba(238, 232, 220, 0.1);
+}
+
 .fps-reticule {
   position: fixed;
   left: 50%;

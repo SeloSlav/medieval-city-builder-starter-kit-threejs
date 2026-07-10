@@ -6,6 +6,8 @@ import {
 type GameMenuOptions = {
   onTipsPreferenceChange: () => void;
   onOpenChange?: (open: boolean) => void;
+  onExportGameState?: () => void;
+  onImportGameState?: () => void;
   /** When false, Escape will not open the menu (e.g. first-person walk mode). */
   canOpenFromKeyboard?: () => boolean;
 };
@@ -18,12 +20,16 @@ export class GameMenu {
   private open = false;
   private readonly onTipsPreferenceChange: () => void;
   private readonly onOpenChange?: (open: boolean) => void;
+  private readonly onExportGameState?: () => void;
+  private readonly onImportGameState?: () => void;
   private readonly canOpenFromKeyboard?: () => boolean;
   private readonly onKeyDown: (event: KeyboardEvent) => void;
 
   constructor(parent: HTMLElement, options: GameMenuOptions) {
     this.onTipsPreferenceChange = options.onTipsPreferenceChange;
     this.onOpenChange = options.onOpenChange;
+    this.onExportGameState = options.onExportGameState;
+    this.onImportGameState = options.onImportGameState;
     this.canOpenFromKeyboard = options.canOpenFromKeyboard;
 
     this.menuButton = document.createElement('button');
@@ -48,6 +54,10 @@ export class GameMenu {
           <input type="checkbox" data-tips-checkbox />
           <span>Turn off tips</span>
         </label>
+        <div class="game-menu-actions">
+          <button type="button" class="game-menu-action" data-export-state>Export game state</button>
+          <button type="button" class="game-menu-action" data-import-state>Import game state</button>
+        </div>
         <button type="button" class="game-menu-return" data-return-button>Return to game</button>
       </div>
     `;
@@ -55,6 +65,8 @@ export class GameMenu {
     this.dialog = this.backdrop.querySelector<HTMLElement>('.game-menu-dialog')!;
     this.tipsCheckbox = this.backdrop.querySelector<HTMLInputElement>('[data-tips-checkbox]')!;
     const returnButton = this.backdrop.querySelector<HTMLButtonElement>('[data-return-button]')!;
+    const exportButton = this.backdrop.querySelector<HTMLButtonElement>('[data-export-state]')!;
+    const importButton = this.backdrop.querySelector<HTMLButtonElement>('[data-import-state]')!;
 
     parent.appendChild(this.menuButton);
     parent.appendChild(this.backdrop);
@@ -62,6 +74,14 @@ export class GameMenu {
     this.tipsCheckbox.checked = areTipCardsDisabled();
     this.menuButton.addEventListener('click', () => this.toggle());
     returnButton.addEventListener('click', () => this.close());
+    exportButton.addEventListener('click', () => {
+      this.onExportGameState?.();
+      this.close();
+    });
+    importButton.addEventListener('click', () => {
+      this.onImportGameState?.();
+      this.close();
+    });
     this.backdrop.addEventListener('click', () => this.close());
     this.dialog.addEventListener('click', (event) => event.stopPropagation());
     this.tipsCheckbox.addEventListener('change', () => {

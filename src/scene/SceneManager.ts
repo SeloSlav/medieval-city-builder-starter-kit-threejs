@@ -6,10 +6,9 @@ import { updateTerrainZoomBlend } from '../grass/GrassLodConfig.ts';
 import { createRiverSystem, type RiverSystem } from '../rivers/RiverSystem.ts';
 import { updateTerrainRoadWear } from '../terrain/TerrainRoadWear.ts';
 import { RiverField } from '../rivers/RiverField.ts';
-import { RiverLayout } from '../rivers/RiverLayout.ts';
 import { setActiveRiverLayout, setActiveQuarryLayout } from '../terrain/TerrainHeight.ts';
-import { QuarryLayout } from '../quarries/QuarryLayout.ts';
 import { createQuarrySystem, type QuarrySystem } from '../quarries/QuarrySystem.ts';
+import { createWorldLayout, type WorldLayout } from '../resources/WorldLayout.ts';
 import type { RoadEdge } from '../roads/RoadEdge.ts';
 import { RoadJunctionBuilder } from '../roads/RoadJunctionBuilder.ts';
 import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
@@ -53,6 +52,11 @@ export class SceneManager {
   private roadNetworkRef: RoadNetwork | null = null;
   private readonly riverSystem: RiverSystem;
   private readonly quarrySystem: QuarrySystem;
+  readonly worldLayout: WorldLayout;
+
+  get riverField() {
+    return this.riverSystem.field;
+  }
   private readonly roadGroup = new THREE.Group();
   private readonly junctionGroup = new THREE.Group();
   private readonly edgeVisuals = new Map<string, { revision: number; group: THREE.Group }>();
@@ -65,6 +69,7 @@ export class SceneManager {
     terrain: Terrain,
     riverSystem: RiverSystem,
     quarrySystem: QuarrySystem,
+    worldLayout: WorldLayout,
   ) {
     this.container = container;
     this.renderer = backend.renderer;
@@ -98,6 +103,7 @@ export class SceneManager {
     });
     this.riverSystem = riverSystem;
     this.quarrySystem = quarrySystem;
+    this.worldLayout = worldLayout;
     this.roadMeshBuilder = new RoadMeshBuilder(this.terrain, materials, this.getBridgeSamplingContext());
 
     this.roadGroup.name = 'Road network visuals';
@@ -135,15 +141,11 @@ export class SceneManager {
     container.appendChild(backend.renderer.domElement);
 
     onProgress?.('Building world', 'River layout, quarries, and terrain');
-    const riverBounds = Terrain.fullBounds();
-    const riverLayout = RiverLayout.create({ bounds: riverBounds });
-    const quarryLayout = QuarryLayout.create({
-      bounds: riverBounds,
-      riverLayout,
-      playableHalf: 410,
-    });
+    const worldLayout = createWorldLayout();
+    const { quarryLayout, riverLayout } = worldLayout;
     setActiveRiverLayout(riverLayout);
     setActiveQuarryLayout(quarryLayout);
+    const riverBounds = Terrain.fullBounds();
     const riverField = RiverField.fromLayout({ bounds: riverBounds, layout: riverLayout });
     await yieldToMain();
 
@@ -169,7 +171,7 @@ export class SceneManager {
     await yieldToMain();
 
     onProgress?.('Building world', 'Sky and scene lighting');
-    const manager = new SceneManager(container, backend, materials, startupTextures, terrain, riverSystem, quarrySystem);
+    const manager = new SceneManager(container, backend, materials, startupTextures, terrain, riverSystem, quarrySystem, worldLayout);
     void manager.sky.ready.catch((error) => {
       console.warn('Sky volumetric shader still compiling:', error);
     });
