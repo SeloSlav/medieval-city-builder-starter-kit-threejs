@@ -64,15 +64,15 @@ function createQuarryRockPlacements(layout: QuarryLayout, rng: () => number): St
 function createSiteRockPlacements(site: QuarrySite, placements: StonePlacement[], rng: () => number): void {
   const targetCount =
     site.kind === 'large'
-      ? 42 + Math.floor(rng() * 18)
-      : 16 + Math.floor(rng() * 10);
+      ? 88 + Math.floor(rng() * 32)
+      : 42 + Math.floor(rng() * 18);
   const startCount = placements.length;
   let attempts = 0;
 
   while (placements.length < startCount + targetCount && attempts < targetCount * 28) {
     attempts++;
     const angle = rng() * TAU;
-    const radialT = Math.pow(rng(), site.kind === 'large' ? 0.72 : 0.82);
+    const radialT = Math.pow(rng(), site.kind === 'large' ? 0.68 : 0.72);
     const localX = Math.cos(angle) * site.radiusX * radialT * (0.82 + rng() * 0.36);
     const localZ = Math.sin(angle) * site.radiusZ * radialT * (0.82 + rng() * 0.36);
     const cos = Math.cos(site.rotation);
@@ -81,13 +81,13 @@ function createSiteRockPlacements(site: QuarrySite, placements: StonePlacement[]
     const z = site.z + localX * sin + localZ * cos;
 
     const edgeBias = radialT;
-    const rimChance = site.kind === 'large' ? edgeBias > 0.72 : edgeBias > 0.58;
-    if (!rimChance && rng() < 0.42) continue;
+    const rimChance = site.kind === 'large' ? edgeBias > 0.68 : edgeBias > 0.72;
+    if (!rimChance && rng() < 0.38) continue;
 
     const scale =
       site.kind === 'large'
-        ? THREE.MathUtils.lerp(0.55, 2.6, Math.pow(rng(), 1.35))
-        : THREE.MathUtils.lerp(0.42, 1.8, Math.pow(rng(), 1.42));
+        ? THREE.MathUtils.lerp(0.65, 3.2, Math.pow(rng(), 1.28))
+        : THREE.MathUtils.lerp(0.55, 2.6, Math.pow(rng(), 1.35));
     if (!hasMinimumRockDistance(placements, x, z, 1.8 + scale * 0.95)) continue;
 
     placements.push({ x, z, scale });

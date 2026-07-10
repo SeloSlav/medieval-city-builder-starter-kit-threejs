@@ -22,8 +22,8 @@ export type QuarryLayoutOptions = {
   playableHalf?: number;
 };
 
-const MIN_LARGE_QUARRY_SPACING = 110;
-const MIN_SMALL_QUARRY_SPACING = 72;
+const MIN_LARGE_QUARRY_SPACING = 200;
+const MIN_SMALL_QUARRY_SPACING = 110;
 const RIVER_AVOIDANCE_MASK = 0.22;
 const DRAIN_AVOIDANCE_RADIUS = 130;
 
@@ -68,8 +68,8 @@ export class QuarryLayout {
   getPadBlend(x: number, z: number): number {
     let blend = 0;
     for (const site of this.sites) {
-      const inner = site.kind === 'large' ? 0.12 : 0.18;
-      const outer = site.kind === 'large' ? 1.08 : 1.02;
+      const inner = site.kind === 'large' ? 0.08 : 0.12;
+      const outer = site.kind === 'large' ? 1.06 : 1.08;
       blend = Math.max(blend, sampleSiteBlend(x, z, site, inner, outer));
     }
     return blend;
@@ -77,7 +77,7 @@ export class QuarryLayout {
 
   isBlockedForProps(x: number, z: number): boolean {
     for (const site of this.sites) {
-      const margin = site.kind === 'large' ? 1.06 : 1.04;
+      const margin = site.kind === 'large' ? 1.04 : 1.06;
       if (sampleSiteBlend(x, z, site, 0, margin) >= 0.42) return true;
     }
     return false;
@@ -85,7 +85,7 @@ export class QuarryLayout {
 
   isBlockedForGrass(x: number, z: number): boolean {
     for (const site of this.sites) {
-      const margin = site.kind === 'large' ? 1.12 : 1.06;
+      const margin = site.kind === 'large' ? 1.08 : 1.12;
       if (sampleSiteBlend(x, z, site, 0, margin) >= 0.28) return true;
     }
     return false;
@@ -122,9 +122,9 @@ function pickQuarrySite(
         z,
         rotation,
         kind,
-        radiusX: lerp(24, 32, hashF64(seed, attempt, 3)),
-        radiusZ: lerp(18, 26, hashF64(seed, attempt, 4)),
-        pitDepth: lerp(5.4, 7.2, hashF64(seed, attempt, 5)),
+        radiusX: lerp(48, 64, hashF64(seed, attempt, 3)),
+        radiusZ: lerp(36, 52, hashF64(seed, attempt, 4)),
+        pitDepth: lerp(10.8, 14.4, hashF64(seed, attempt, 5)),
       };
     }
 
@@ -133,9 +133,9 @@ function pickQuarrySite(
       z,
       rotation,
       kind,
-      radiusX: lerp(11, 15, hashF64(seed, attempt, 3)),
-      radiusZ: lerp(9, 13, hashF64(seed, attempt, 4)),
-      pitDepth: lerp(1.1, 2.4, hashF64(seed, attempt, 5)),
+      radiusX: lerp(24, 32, hashF64(seed, attempt, 3)),
+      radiusZ: lerp(18, 26, hashF64(seed, attempt, 4)),
+      pitDepth: lerp(5.4, 7.2, hashF64(seed, attempt, 5)),
     };
   }
 
@@ -164,17 +164,17 @@ function createFallbackSite(existing: QuarrySite[], kind: QuarryKind, seed: numb
       return {
         ...preset,
         kind,
-        radiusX: 28,
-        radiusZ: 22,
-        pitDepth: 6.4,
+        radiusX: 56,
+        radiusZ: 44,
+        pitDepth: 12.8,
       };
     }
     return {
       ...preset,
       kind,
-      radiusX: 13,
-      radiusZ: 11,
-      pitDepth: 1.8,
+      radiusX: 28,
+      radiusZ: 22,
+      pitDepth: 6.4,
     };
   }
 
@@ -185,9 +185,9 @@ function createFallbackSite(existing: QuarrySite[], kind: QuarryKind, seed: numb
       z: 130 - offset * 0.4,
       rotation: 0.5,
       kind,
-      radiusX: 28,
-      radiusZ: 22,
-      pitDepth: 6.4,
+      radiusX: 56,
+      radiusZ: 44,
+      pitDepth: 12.8,
     };
   }
   return {
@@ -195,9 +195,9 @@ function createFallbackSite(existing: QuarrySite[], kind: QuarryKind, seed: numb
     z: -110 + offset * 0.35,
     rotation: 1.1,
     kind,
-    radiusX: 13,
-    radiusZ: 11,
-    pitDepth: 1.8,
+    radiusX: 28,
+    radiusZ: 22,
+    pitDepth: 6.4,
   };
 }
 
