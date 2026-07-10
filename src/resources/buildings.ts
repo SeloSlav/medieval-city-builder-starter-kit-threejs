@@ -13,7 +13,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingKind, BuildingDefinition> = {
   lumber_mill: {
     kind: 'lumber_mill',
     label: 'Lumber mill',
-    workRadius: 42,
+    workRadius: 210,
     pickRadius: 8,
     harvestInterval: 3.5,
     regrowRatePerSecond: 0,
@@ -21,7 +21,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingKind, BuildingDefinition> = {
   reforester: {
     kind: 'reforester',
     label: 'Reforester',
-    workRadius: 38,
+    workRadius: 190,
     pickRadius: 8,
     harvestInterval: 0,
     regrowRatePerSecond: 0.035,

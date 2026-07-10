@@ -19,6 +19,26 @@ export const GORSKI_PALETTE = {
   interiorDark: 0x1a1410,
 } as const;
 
+/** Weathered grey quarry stone — distinct from bright Gorski limestone on mills/huts. */
+export const QUARRY_ROCK_PALETTE = {
+  dark: 0x52565c,
+  mid: 0x6b7078,
+  light: 0x828890,
+  cut: 0x5e636a,
+  dust: 0x6a6660,
+  spoil: 0x5c5854,
+} as const;
+
+export function quarryRockMaterial(
+  shade: keyof typeof QUARRY_ROCK_PALETTE = 'mid',
+): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: QUARRY_ROCK_PALETTE[shade],
+    roughness: 0.96,
+    metalness: 0,
+  });
+}
+
 export function stoneMaterial(shade: 'light' | 'mid' | 'mortar' = 'mid'): THREE.MeshStandardMaterial {
   const color =
     shade === 'light'
