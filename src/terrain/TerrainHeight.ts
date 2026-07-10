@@ -1,9 +1,11 @@
 import type { RiverLayout } from '../rivers/RiverLayout.ts';
+import type { QuarryLayout } from '../quarries/QuarryLayout.ts';
 
 const PLAYABLE_SIZE = 820;
 const TERRAIN_SIZE = 1080;
 
 let activeRiverLayout: RiverLayout | null = null;
+let activeQuarryLayout: QuarryLayout | null = null;
 
 export function setActiveRiverLayout(layout: RiverLayout | null): void {
   activeRiverLayout = layout;
@@ -11,6 +13,14 @@ export function setActiveRiverLayout(layout: RiverLayout | null): void {
 
 export function getActiveRiverLayout(): RiverLayout | null {
   return activeRiverLayout;
+}
+
+export function setActiveQuarryLayout(layout: QuarryLayout | null): void {
+  activeQuarryLayout = layout;
+}
+
+export function getActiveQuarryLayout(): QuarryLayout | null {
+  return activeQuarryLayout;
 }
 
 function smoothstep(edge0: number, edge1: number, value: number): number {
@@ -111,7 +121,10 @@ export function sampleRawTerrainHeight(x: number, z: number): number {
 
 export function sampleBaseTerrainHeight(x: number, z: number): number {
   const raw = sampleRawTerrainHeight(x, z);
-  const layout = activeRiverLayout;
-  if (!layout) return raw;
-  return raw - layout.getValleyDepression(x, z);
+  const riverLayout = activeRiverLayout;
+  const quarryLayout = activeQuarryLayout;
+  let height = raw;
+  if (riverLayout) height -= riverLayout.getValleyDepression(x, z);
+  if (quarryLayout) height -= quarryLayout.getPitDepression(x, z);
+  return height;
 }

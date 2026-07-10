@@ -1,5 +1,6 @@
 ﻿import * as THREE from 'three';
 import type { RiverField } from '../rivers/RiverField.ts';
+import type { QuarryLayout } from '../quarries/QuarryLayout.ts';
 import { sampleBaseTerrainHeight } from './TerrainHeight.ts';
 import { yieldToMain } from '../utils/yieldToMain.ts';
 
@@ -28,9 +29,10 @@ export class Terrain {
   static async create(
     material: THREE.Material,
     riverField?: RiverField,
+    quarryLayout?: QuarryLayout,
     onProgress?: (completedRows: number, totalRows: number) => void,
   ): Promise<Terrain> {
-    const geometry = await Terrain.buildGeometryAsync(riverField, onProgress);
+    const geometry = await Terrain.buildGeometryAsync(riverField, quarryLayout, onProgress);
     return new Terrain(material, geometry);
   }
 
@@ -77,6 +79,7 @@ export class Terrain {
 
   private static async buildGeometryAsync(
     riverField: RiverField | undefined,
+    quarryLayout: QuarryLayout | undefined,
     onProgress?: (completedRows: number, totalRows: number) => void,
   ): Promise<THREE.BufferGeometry> {
     const resolution = 769;
@@ -87,6 +90,7 @@ export class Terrain {
     const colors = new Float32Array(vertexCount * 3);
     const shoreBlends = new Float32Array(vertexCount);
     const roadWearBlends = new Float32Array(vertexCount);
+    const quarryPadBlends = new Float32Array(vertexCount);
     const dirtZoomGates = new Float32Array(vertexCount);
     const step = size / (resolution - 1);
     const half = size * 0.5;
@@ -116,6 +120,7 @@ export class Terrain {
 
         shoreBlends[vertexIndex] = riverField?.sampleMudBlendAt(x, z) ?? 0;
         roadWearBlends[vertexIndex] = 0;
+        quarryPadBlends[vertexIndex] = quarryLayout?.getPadBlend(x, z) ?? 0;
         dirtZoomGates[vertexIndex] = 0;
       }
 
@@ -153,6 +158,7 @@ export class Terrain {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('shoreBlend', new THREE.BufferAttribute(shoreBlends, 1));
     geometry.setAttribute('roadWearBlend', new THREE.BufferAttribute(roadWearBlends, 1));
+    geometry.setAttribute('quarryPadBlend', new THREE.BufferAttribute(quarryPadBlends, 1));
     geometry.setAttribute('dirtZoomGate', new THREE.BufferAttribute(dirtZoomGates, 1));
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();

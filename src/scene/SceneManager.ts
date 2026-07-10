@@ -7,7 +7,9 @@ import { createRiverSystem, type RiverSystem } from '../rivers/RiverSystem.ts';
 import { updateTerrainRoadWear } from '../terrain/TerrainRoadWear.ts';
 import { RiverField } from '../rivers/RiverField.ts';
 import { RiverLayout } from '../rivers/RiverLayout.ts';
-import { setActiveRiverLayout } from '../terrain/TerrainHeight.ts';
+import { setActiveRiverLayout, setActiveQuarryLayout } from '../terrain/TerrainHeight.ts';
+import { QuarryLayout } from '../quarries/QuarryLayout.ts';
+import { createQuarrySystem, type QuarrySystem } from '../quarries/QuarrySystem.ts';
 import type { RoadEdge } from '../roads/RoadEdge.ts';
 import { RoadJunctionBuilder } from '../roads/RoadJunctionBuilder.ts';
 import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
@@ -50,6 +52,7 @@ export class SceneManager {
   private vegetationBuilt = false;
   private roadNetworkRef: RoadNetwork | null = null;
   private readonly riverSystem: RiverSystem;
+  private readonly quarrySystem: QuarrySystem;
   private readonly roadGroup = new THREE.Group();
   private readonly junctionGroup = new THREE.Group();
   private readonly edgeVisuals = new Map<string, { revision: number; group: THREE.Group }>();
@@ -61,6 +64,7 @@ export class SceneManager {
     startupTextures: SceneStartupTextures,
     terrain: Terrain,
     riverSystem: RiverSystem,
+    quarrySystem: QuarrySystem,
   ) {
     this.container = container;
     this.renderer = backend.renderer;
@@ -93,6 +97,7 @@ export class SceneManager {
       perlinTexture: startupTextures.skyPerlin,
     });
     this.riverSystem = riverSystem;
+    this.quarrySystem = quarrySystem;
     this.roadMeshBuilder = new RoadMeshBuilder(this.terrain, materials, this.getBridgeSamplingContext());
 
     this.roadGroup.name = 'Road network visuals';
@@ -104,6 +109,7 @@ export class SceneManager {
       this.sky,
       this.terrain.mesh,
       this.riverSystem.group,
+      this.quarrySystem.group,
       this.roadGroup,
       this.junctionGroup,
       this.previewGroup,
@@ -128,23 +134,30 @@ export class SceneManager {
     applyMaxAnisotropy(startupTextures, backend.maxAnisotropy);
     container.appendChild(backend.renderer.domElement);
 
-    onProgress?.('Building world', 'River layout and terrain');
+    onProgress?.('Building world', 'River layout, quarries, and terrain');
     const riverBounds = Terrain.fullBounds();
     const riverLayout = RiverLayout.create({ bounds: riverBounds });
+    const quarryLayout = QuarryLayout.create({
+      bounds: riverBounds,
+      riverLayout,
+      playableHalf: 410,
+    });
     setActiveRiverLayout(riverLayout);
+    setActiveQuarryLayout(quarryLayout);
     const riverField = RiverField.fromLayout({ bounds: riverBounds, layout: riverLayout });
     await yieldToMain();
 
     const terrain = await Terrain.create(
       materials.createTerrainMaterialWithRiverShore(),
       riverField,
+      quarryLayout,
       (completedRows, totalRows) => {
         onProgress?.('Building world', `Shaping terrain (${completedRows}/${totalRows})`);
       },
     );
     await yieldToMain();
 
-    onProgress?.('Building world', 'River water and banks');
+    onProgress?.('Building world', 'River water, banks, and quarries');
     await yieldToMain();
     const riverSystem = createRiverSystem(
       terrain,
@@ -152,10 +165,11 @@ export class SceneManager {
       materials.riverBank,
       startupTextures.riverRock,
     );
+    const quarrySystem = createQuarrySystem(terrain, quarryLayout, startupTextures.riverRock);
     await yieldToMain();
 
     onProgress?.('Building world', 'Sky and scene lighting');
-    const manager = new SceneManager(container, backend, materials, startupTextures, terrain, riverSystem);
+    const manager = new SceneManager(container, backend, materials, startupTextures, terrain, riverSystem, quarrySystem);
     void manager.sky.ready.catch((error) => {
       console.warn('Sky volumetric shader still compiling:', error);
     });
@@ -168,12 +182,12 @@ export class SceneManager {
     this.vegetationBuilt = true;
 
     this.forestManager = await createForestProps(this.terrain, this.maxAnisotropy, {
-      isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z),
+      isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z) || this.quarrySystem.isBlockedAt(x, z),
       rendererBackend: this.rendererBackend,
     });
     if (GRASS_BLADES_ENABLED) {
       this.grassField = createGrassBladeField(this.terrain, {
-        isBlockedAt: (x, z) => this.riverSystem.isGrassBlockedAt(x, z),
+        isBlockedAt: (x, z) => this.riverSystem.isGrassBlockedAt(x, z) || this.quarrySystem.isGrassBlockedAt(x, z),
       });
       this.scene.add(this.grassField.group);
       // Draw reeds after grass so shoreline cattails stay visible at ground level.
@@ -266,6 +280,9 @@ export class SceneManager {
     for (const rock of this.riverSystem.shoreRockPlacements) {
       if (isRockNearPath(rock, sampled, roadHalfWidth)) return 'rocks';
     }
+    for (const rock of this.quarrySystem.rockPlacements) {
+      if (isRockNearPath(rock, sampled, roadHalfWidth)) return 'rocks';
+    }
 
     return null;
   }
@@ -335,6 +352,8 @@ export class SceneManager {
     }
     this.riverSystem.dispose();
     disposeObject3D(this.riverSystem.group);
+    this.quarrySystem.dispose();
+    disposeObject3D(this.quarrySystem.group);
     this.sky.dispose();
     this.postProcessor.dispose();
     disposeObject3D(this.junctionGroup);

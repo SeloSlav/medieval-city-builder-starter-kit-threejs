@@ -85,6 +85,20 @@ function buildMuddyRoadColorNode(textures: TextureSet, grassUv: TslNode): TslNod
   return warmTint.mul(float(0.86) as TslNode);
 }
 
+function buildQuarryRockColorNode(textures: TextureSet, grassUv: TslNode): TslNode {
+  const sample = texture(textures.albedo, grassUv) as TslNode;
+  const luminance = sample.r
+    .mul(float(0.299) as TslNode)
+    .add(sample.g.mul(float(0.587) as TslNode))
+    .add(sample.b.mul(float(0.114) as TslNode));
+  const desaturated = mix(
+    sample.rgb,
+    vec3(luminance, luminance, luminance) as TslNode,
+    float(0.62) as TslNode,
+  ) as TslNode;
+  return desaturated.mul(vec3(0.62, 0.6, 0.56) as TslNode).mul(float(0.94) as TslNode);
+}
+
 function buildDirtGroundColorNode(textures: TextureSet, grassUv: TslNode): TslNode {
   const sample = texture(textures.albedo, grassUv) as TslNode;
   return sample.rgb.mul(vec3(0.52, 0.42, 0.3) as TslNode);
@@ -111,10 +125,11 @@ function applyCloseZoomDirtBlend(
   dirtColor: TslNode,
   shoreBlend: TslNode,
   roadWear: TslNode,
+  quarryPad: TslNode,
 ): TslNode {
   const zoomGate = attribute('dirtZoomGate', 'float') as TslNode;
   const proximity = buildProximityDirtMask();
-  const wornMask = max(shoreBlend, roadWear) as TslNode;
+  const wornMask = max(max(shoreBlend, roadWear) as TslNode, quarryPad) as TslNode;
   const openGround = sub(float(1) as TslNode, wornMask) as TslNode;
   const dirtAmount = zoomGate.mul(proximity).mul(openGround) as TslNode;
   const meadowWeight = sub(float(1) as TslNode, dirtAmount) as TslNode;
@@ -157,25 +172,30 @@ export function createTerrainGrassMaterialWithRiverShore(
   const blendNodes = buildGrassBlendNodes(grassTextures);
   const mudColor = buildMuddyRoadColorNode(roadTextures, blendNodes.grassUv);
   const dirtColor = buildDirtGroundColorNode(roadTextures, blendNodes.grassUv);
+  const quarryColor = buildQuarryRockColorNode(roadTextures, blendNodes.grassUv);
   const wearColor = buildTrampledWearColorNode(roadTextures, blendNodes.grassUv);
   const shoreBlendRaw = attribute('shoreBlend', 'float') as TslNode;
   const shoreBlend = pow(shoreBlendRaw, float(0.82) as TslNode) as TslNode;
   const roadWear = pow(attribute('roadWearBlend', 'float') as TslNode, float(0.62) as TslNode) as TslNode;
+  const quarryPad = pow(attribute('quarryPadBlend', 'float') as TslNode, float(0.74) as TslNode) as TslNode;
   // Terrain undercoat only — bank mesh overlay carries the inner mud detail.
   const shoreUndercoat = shoreBlend.mul(float(0.58) as TslNode) as TslNode;
   const grassWithShore = mix(blendNodes.colorNode, mudColor, shoreUndercoat) as TslNode;
-  const meadowWithWear = mix(grassWithShore, wearColor, roadWear) as TslNode;
-  const colorNode = applyCloseZoomDirtBlend(meadowWithWear, dirtColor, shoreBlend, roadWear);
+  const meadowWithQuarry = mix(grassWithShore, quarryColor, quarryPad) as TslNode;
+  const meadowWithWear = mix(meadowWithQuarry, wearColor, roadWear) as TslNode;
+  const colorNode = applyCloseZoomDirtBlend(meadowWithWear, dirtColor, shoreBlend, roadWear, quarryPad);
 
   const roadRoughness = (texture(roadTextures.roughness, blendNodes.grassUv) as TslNode).r;
   const muddyRoughness = mix(roadRoughness, float(0.58) as TslNode, float(0.42) as TslNode);
+  const quarryRoughness = mix(roadRoughness, float(0.84) as TslNode, float(0.46) as TslNode);
   const wornRoughness = mix(roadRoughness, float(0.72) as TslNode, float(0.38) as TslNode);
   const dirtRoughness = mix(roadRoughness, float(0.82) as TslNode, float(0.24) as TslNode);
   const roughnessWithShore = mix(blendNodes.roughnessNode, muddyRoughness, shoreUndercoat);
-  const roughnessWithWear = mix(roughnessWithShore, wornRoughness, roadWear);
+  const roughnessWithQuarry = mix(roughnessWithShore, quarryRoughness, quarryPad);
+  const roughnessWithWear = mix(roughnessWithQuarry, wornRoughness, roadWear);
   const zoomGate = attribute('dirtZoomGate', 'float') as TslNode;
   const proximity = buildProximityDirtMask();
-  const openGround = sub(float(1) as TslNode, max(shoreBlend, roadWear) as TslNode) as TslNode;
+  const openGround = sub(float(1) as TslNode, max(max(shoreBlend, roadWear) as TslNode, quarryPad) as TslNode) as TslNode;
   const dirtAmount = zoomGate.mul(proximity).mul(openGround) as TslNode;
   const meadowWeight = sub(float(1) as TslNode, dirtAmount) as TslNode;
   const roughnessNode = mix(
