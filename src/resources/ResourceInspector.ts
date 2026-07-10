@@ -81,7 +81,6 @@ export class ResourceInspector {
     this.marker.visible = false;
 
     options.domElement.addEventListener('mousedown', this.onPointerDown, { capture: true });
-    options.domElement.addEventListener('mousemove', this.onPointerMove);
   }
 
   setStockpile(stockpile: ResourceStockpile): void {
@@ -108,7 +107,6 @@ export class ResourceInspector {
 
   dispose(): void {
     this.options.domElement.removeEventListener('mousedown', this.onPointerDown, { capture: true });
-    this.options.domElement.removeEventListener('mousemove', this.onPointerMove);
     this.options.sceneManager.selectionGroup.remove(this.marker);
     disposeObject3D(this.marker);
     this.panel.remove();
@@ -132,22 +130,6 @@ export class ResourceInspector {
     event.preventDefault();
     event.stopPropagation();
     this.selectTarget(target);
-  };
-
-  private readonly onPointerMove = (event: MouseEvent): void => {
-    if (this.options.isBlocked()) {
-      this.options.domElement.style.cursor = '';
-      return;
-    }
-
-    const point = this.options.terrainProjector.pick(event.clientX, event.clientY);
-    if (!point) {
-      this.options.domElement.style.cursor = '';
-      return;
-    }
-
-    const target = this.options.worldQueries.findInspectableTarget(point.x, point.z);
-    this.options.domElement.style.cursor = target ? 'pointer' : '';
   };
 
   private selectTarget(target: InspectableTarget): void {
