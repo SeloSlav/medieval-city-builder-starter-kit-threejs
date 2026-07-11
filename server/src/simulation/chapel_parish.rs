@@ -68,18 +68,19 @@ fn step_one_chapel_parish(
     };
 
     let owner = chapel_row.owner;
+    let assigned_labor = chapel_row.assigned_labor;
 
-    if chapel_row.assigned_labor > 0 {
+    if assigned_labor > 0 {
         let salary_paid =
-            withdraw_coffer_in_place(&mut chapel_row, chapel_priest_salary_per_tick(chapel_row.assigned_labor));
+            withdraw_coffer_in_place(&mut chapel_row, chapel_priest_salary_per_tick(assigned_labor));
         record_parish_ledger(ctx, owner, ParishLedgerKind::Salary, salary_paid);
     }
 
-    let upkeep_paid = withdraw_coffer_in_place(&mut chapel_row, chapel_upkeep_per_tick(chapel_row.assigned_labor));
+    let upkeep_paid = withdraw_coffer_in_place(&mut chapel_row, chapel_upkeep_per_tick(assigned_labor));
     record_parish_ledger(ctx, owner, ParishLedgerKind::Upkeep, upkeep_paid);
 
     let coffer_balance = chapel_coffer_gold(&chapel_row);
-    if chapel_row.assigned_labor > 0 && coffer_balance >= CHAPEL_CHARITY_MIN_COFFER_GOLD {
+    if assigned_labor > 0 && coffer_balance >= CHAPEL_CHARITY_MIN_COFFER_GOLD {
         let charity_paid = withdraw_coffer_in_place(&mut chapel_row, chapel_charity_per_tick());
         if charity_paid > 1e-9 {
             distribute_chapel_charity(ctx, tick, &mut chapel_row, residences, charity_paid);
