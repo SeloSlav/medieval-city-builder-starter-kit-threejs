@@ -39,7 +39,3 @@ pub fn residence_firewood_runway_seconds(
     }
     firewood_stock / demand
 }
-
-pub fn residence_has_firewood_room(firewood_stock: f64, capacity: f64) -> bool {
-    (capacity - firewood_stock) > 1e-6
-}

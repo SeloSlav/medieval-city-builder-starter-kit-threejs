@@ -18,10 +18,4 @@ impl ResidenceNeedKind {
             _ => None,
         }
     }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Firewood => "firewood",
-        }
-    }
 }
