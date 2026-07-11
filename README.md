@@ -141,6 +141,8 @@ A real-time Three.js sandbox for growing a **medieval settlement** on a procedur
 | Open city administration | Build menu → **City administration** (`A`) |
 | Select residences | Build menu → **Residence** (`H`) |
 | Place building | Left-click on terrain (building tool active) |
+| Undo last building placement | `Ctrl+Z` / `Cmd+Z` |
+| Redo last building placement | `Ctrl+Y` / `Cmd+Y` |
 | Place residence zone | Click frontage edge, then depth point (residence tool active) |
 | Adjust residence plot count | `+` / `−` buttons in the residence layout HUD |
 | Rotate residence frontage edge | `F` or click the frontage button in the residence layout HUD |

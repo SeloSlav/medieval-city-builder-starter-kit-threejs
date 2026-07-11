@@ -11,6 +11,23 @@ import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 
 export type BuildingToolMode = BuildingKind | 'off';
 
+type BuildingPlacementUndoEntry = {
+  buildingId: string;
+  kind: BuildingKind;
+  x: number;
+  z: number;
+};
+
+type BuildingPlacementRedoEntry = {
+  kind: BuildingKind;
+  x: number;
+  z: number;
+};
+
+const BUILDING_POSITION_TOLERANCE = 0.75;
+const BUILDING_SYNC_WAIT_MS = 2000;
+const BUILDING_SYNC_POLL_MS = 50;
+
 function isTypingTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
   const tag = element?.tagName;
@@ -23,6 +40,7 @@ type BuildingToolOptions = {
   markers: BuildingMarkers;
   getState: () => GameState;
   onPlaceBuilding: (kind: BuildingKind, x: number, z: number) => void | Promise<void>;
+  onDemolishBuilding: (buildingId: string) => void | Promise<void>;
   isWaterAt: (x: number, z: number) => boolean;
   isQuarryPitAt?: (x: number, z: number) => boolean;
   getNaturalHeightAt: (x: number, z: number) => number;
@@ -32,6 +50,8 @@ type BuildingToolOptions = {
   onModeChanged: () => void;
   onPlacementRejected?: (reason: BuildingPlacementFailureReason) => void;
   onPlacementFailed?: (message: string) => void;
+  onUndoFailed?: (message: string) => void;
+  onRedoFailed?: (message: string) => void;
   isBlocked: () => boolean;
 };
 
@@ -49,6 +69,8 @@ export class BuildingTool {
   private lastTerrainPreviewZ = Number.NaN;
   private readonly previewMoveThreshold = 0.35;
   private readonly terrainPreviewMoveThreshold = 0.45;
+  private readonly undoStack: BuildingPlacementUndoEntry[] = [];
+  private readonly redoStack: BuildingPlacementRedoEntry[] = [];
 
   constructor(options: BuildingToolOptions) {
     this.options = options;
@@ -56,7 +78,7 @@ export class BuildingTool {
     options.domElement.addEventListener('mousemove', this.onPointerMove);
     options.domElement.addEventListener('mouseenter', this.onPointerEnter);
     options.domElement.addEventListener('mouseleave', this.onPointerLeave);
-    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keydown', this.onKeyDown, { capture: true });
   }
 
   getMode(): BuildingToolMode {
@@ -106,15 +128,36 @@ export class BuildingTool {
     this.options.domElement.removeEventListener('mousemove', this.onPointerMove);
     this.options.domElement.removeEventListener('mouseenter', this.onPointerEnter);
     this.options.domElement.removeEventListener('mouseleave', this.onPointerLeave);
-    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keydown', this.onKeyDown, { capture: true });
+  }
+
+  hasUndoRedo(): boolean {
+    return this.undoStack.length > 0 || this.redoStack.length > 0;
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (this.mode === 'off' || this.options.isBlocked()) return;
     if (isTypingTarget(event.target)) return;
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    this.setMode('off');
+    const key = event.key.toLowerCase();
+
+    if (key === 'escape' && this.mode !== 'off' && !this.options.isBlocked()) {
+      event.preventDefault();
+      this.setMode('off');
+      return;
+    }
+
+    if (!this.hasUndoRedo() || this.options.isBlocked()) return;
+
+    if ((event.ctrlKey || event.metaKey) && key === 'z' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.undo();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (key === 'y' || (event.shiftKey && key === 'z'))) {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.redo();
+    }
   };
 
   private readonly onPointerEnter = (): void => {
@@ -182,13 +225,63 @@ export class BuildingTool {
   };
 
   private async placeAt(kind: BuildingKind, x: number, z: number): Promise<void> {
+    const beforeIds = new Set(this.options.getState().buildings.keys());
     try {
       await this.options.onPlaceBuilding(kind, x, z);
+      const buildingId = await waitForPlacedBuilding(this.options.getState, beforeIds, kind, x, z);
+      if (buildingId) {
+        this.undoStack.push({ buildingId, kind, x, z });
+        this.redoStack.length = 0;
+      }
       this.setMode('off');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Building placement failed.';
       console.error('Building placement failed:', error);
       this.options.onPlacementFailed?.(message);
+    }
+  }
+
+  private async undo(): Promise<void> {
+    const entry = this.undoStack.pop();
+    if (!entry) return;
+    try {
+      await this.options.onDemolishBuilding(entry.buildingId);
+      this.redoStack.push({ kind: entry.kind, x: entry.x, z: entry.z });
+    } catch (error) {
+      this.undoStack.push(entry);
+      const message = error instanceof Error ? error.message : 'Building undo failed.';
+      console.error('Building undo failed:', error);
+      this.options.onUndoFailed?.(message);
+    }
+  }
+
+  private async redo(): Promise<void> {
+    const entry = this.redoStack.pop();
+    if (!entry) return;
+    const beforeIds = new Set(this.options.getState().buildings.keys());
+    try {
+      await this.options.onPlaceBuilding(entry.kind, entry.x, entry.z);
+      const buildingId = await waitForPlacedBuilding(
+        this.options.getState,
+        beforeIds,
+        entry.kind,
+        entry.x,
+        entry.z,
+      );
+      if (!buildingId) {
+        throw new Error('Redo could not find the placed building.');
+      }
+      this.undoStack.push({
+        buildingId,
+        kind: entry.kind,
+        x: entry.x,
+        z: entry.z,
+      });
+    } catch (error) {
+      this.redoStack.push(entry);
+      const message = error instanceof Error ? error.message : 'Building redo failed.';
+      console.error('Building redo failed:', error);
+      this.options.onRedoFailed?.(message);
     }
   }
 
@@ -281,6 +374,40 @@ export class BuildingTool {
     this.resetPreviewCache();
     this.options.markers.clearPlacementPreview();
   }
+}
+
+function findPlacedBuildingId(
+  buildings: Map<string, { id: string; kind: BuildingKind; x: number; z: number }>,
+  beforeIds: Set<string>,
+  kind: BuildingKind,
+  x: number,
+  z: number,
+): string | null {
+  for (const building of buildings.values()) {
+    if (beforeIds.has(building.id)) continue;
+    if (building.kind !== kind) continue;
+    if (Math.hypot(building.x - x, building.z - z) > BUILDING_POSITION_TOLERANCE) continue;
+    return building.id;
+  }
+  return null;
+}
+
+async function waitForPlacedBuilding(
+  getState: () => GameState,
+  beforeIds: Set<string>,
+  kind: BuildingKind,
+  x: number,
+  z: number,
+): Promise<string | null> {
+  const deadline = performance.now() + BUILDING_SYNC_WAIT_MS;
+  while (performance.now() < deadline) {
+    const buildingId = findPlacedBuildingId(getState().buildings, beforeIds, kind, x, z);
+    if (buildingId) return buildingId;
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, BUILDING_SYNC_POLL_MS);
+    });
+  }
+  return findPlacedBuildingId(getState().buildings, beforeIds, kind, x, z);
 }
 
 export function getBuildingToolLabel(mode: BuildingToolMode): string {

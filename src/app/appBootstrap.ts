@@ -265,6 +265,12 @@ export async function bootstrapAppSession(
       }
       await spacetimeStore.placeBuilding(kind, x, z);
     },
+    onDemolishBuilding: async (buildingId) => {
+      if (!spacetimeStore.isConnected) {
+        throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
+      }
+      await spacetimeStore.demolishBuilding(buildingId);
+    },
     isWaterAt: (x, z) => sceneManager.riverField.isRenderedWetAt(x, z),
     isQuarryPitAt: (x, z) => sceneManager.worldLayout.quarryLayout.isBlockedForProps(x, z),
     getNaturalHeightAt: (x, z) => sampleNaturalTerrainHeight(x, z),
@@ -283,6 +289,12 @@ export async function bootstrapAppSession(
       toastManager?.showMessageId(buildingPlacementReasonToToastId(reason), { variant: 'error' });
     },
     onPlacementFailed: (message) => {
+      toastManager?.show(message, { variant: 'error' });
+    },
+    onUndoFailed: (message) => {
+      toastManager?.show(message, { variant: 'error' });
+    },
+    onRedoFailed: (message) => {
       toastManager?.show(message, { variant: 'error' });
     },
     isBlocked: () => isBuildingPlacementBlocked(placementGate),
