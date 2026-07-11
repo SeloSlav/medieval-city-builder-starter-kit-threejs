@@ -362,6 +362,7 @@ export class BuildToolbar {
       canOpenFromKeyboard: handlers.canOpenMenuFromKeyboard,
       onExportGameState: handlers.onExportGameState,
       onImportGameState: handlers.onImportGameState,
+      showButton: false,
     });
     this.unsubscribeTipsPreference = subscribeTipCardsPreference(() => this.syncContextPanels());
 
