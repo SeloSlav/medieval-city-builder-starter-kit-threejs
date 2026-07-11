@@ -15,6 +15,7 @@ type GameMenuOptions = {
   onOpenChange?: (open: boolean) => void;
   onExportGameState?: () => void;
   onImportGameState?: () => void;
+  showButton?: boolean;
   /** When false, Escape will not open the menu (e.g. first-person walk mode). */
   canOpenFromKeyboard?: () => boolean;
 };
@@ -89,7 +90,7 @@ export class GameMenu {
     const exportButton = this.backdrop.querySelector<HTMLButtonElement>('[data-export-state]')!;
     const importButton = this.backdrop.querySelector<HTMLButtonElement>('[data-import-state]')!;
 
-    parent.appendChild(this.menuButton);
+    if (options.showButton !== false) parent.appendChild(this.menuButton);
     parent.appendChild(this.backdrop);
 
     this.tipsCheckbox.checked = areTipCardsDisabled();
@@ -151,7 +152,7 @@ export class GameMenu {
     this.backdrop.remove();
   }
 
-  private toggle(): void {
+  toggle(): void {
     if (this.open) this.close();
     else this.openMenu();
   }

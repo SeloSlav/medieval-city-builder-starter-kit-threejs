@@ -1,9 +1,9 @@
 import { CompassHud } from './CompassHud.ts';
 import { GameMenu } from './GameMenu.ts';
-import { formatBuildingCost, getBuildingCost } from '../resources/buildingEconomy.ts';
+import { formatBuildingCost, getBuildingCost, residenceZoneCost } from '../resources/buildingEconomy.ts';
 import type { BurgageLayoutHudState } from '../residences/BurgageTool.ts';
 import { syncTipCardVisibility } from './tipCards.ts';
-import { subscribeTipCardsPreference } from './tipCardsPreference.ts';
+import { areTipCardsDisabled, setTipCardsDisabled, subscribeTipCardsPreference } from './tipCardsPreference.ts';
 
 export type ToolbarStats = {
   canBuild: boolean;
@@ -11,6 +11,14 @@ export type ToolbarStats = {
   mode: 'road' | 'lumber_mill' | 'reforester' | 'woodcutters_lodge' | 'stone_quarry' | 'residences' | 'idle';
   statusDetail?: string | null;
 };
+
+const BUILD_CARD_ART = {
+  lumber_mill: '/assets/ui/build-menu/lumber-mill.png',
+  reforester: '/assets/ui/build-menu/reforester.png',
+  woodcutters_lodge: '/assets/ui/build-menu/woodcutters-lodge.png',
+  stone_quarry: '/assets/ui/build-menu/stonecutters-camp.png',
+  residences: '/assets/ui/build-menu/residence.png',
+} as const;
 
 type DeletePopupOptions = {
   clientX: number;
@@ -21,12 +29,16 @@ type DeletePopupOptions = {
 
 export class BuildToolbar {
   private readonly roadButton: HTMLButtonElement;
+  private readonly buildMenuButton: HTMLButtonElement;
+  private readonly helpButton: HTMLButtonElement;
+  private readonly settingsButton: HTMLButtonElement;
   private readonly lumberMillButton: HTMLButtonElement;
   private readonly reforesterButton: HTMLButtonElement;
   private readonly woodcuttersLodgeButton: HTMLButtonElement;
   private readonly stoneQuarryButton: HTMLButtonElement;
   private readonly residencesButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
+  private readonly buildMenu: HTMLElement;
   private readonly burgageLayoutHud: HTMLElement;
   private readonly burgagePlotDecreaseButton: HTMLButtonElement;
   private readonly burgagePlotIncreaseButton: HTMLButtonElement;
@@ -42,16 +54,17 @@ export class BuildToolbar {
   private readonly fpsValue: HTMLElement;
   private readonly zoomValue: HTMLElement;
   private readonly fpModePanel: HTMLElement;
-  private readonly roadTools: HTMLElement;
+  private readonly constructionDock: HTMLElement;
   private readonly zoomStat: HTMLElement;
   private readonly builderPanelTitle: HTMLElement;
   private readonly builderHelpList: HTMLElement;
   private readonly builderStatusBar: HTMLElement;
   private readonly root: HTMLElement;
   private readonly compassHud: CompassHud;
-  private readonly gameMenu: GameMenu;
+  private gameMenu: GameMenu | null = null;
   private readonly unsubscribeTipsPreference: () => void;
   private firstPersonActive = false;
+  private buildMenuOpen = false;
   private buildButtonVisible = false;
   private burgageLayoutHudVisible = false;
   private lastBuildLeft = Number.NaN;
@@ -61,6 +74,21 @@ export class BuildToolbar {
   private hudMode: ToolbarStats['mode'] = 'idle';
   private deleteCancel: (() => void) | null = null;
   private deleteRemove: (() => void) | null = null;
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (isTypingTarget(event.target) || this.firstPersonActive || this.gameMenu?.isOpen()) return;
+    const key = event.key.toLowerCase();
+    if (key === 'b' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.toggleBuildMenu();
+      return;
+    }
+    if (key === 'escape' && this.buildMenuOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.setBuildMenuOpen(false);
+    }
+  };
 
   constructor(
     root: HTMLElement,
@@ -235,28 +263,60 @@ export class BuildToolbar {
 
       <div class="builder-status-bar" data-builder-status hidden aria-live="polite"></div>
 
-      <div class="road-tools" aria-label="Build tools">
-        <button type="button" class="road-tool-button" data-action="road" title="Roads (R)">
-          Roads <span class="road-tool-button-key">(R)</span>
-        </button>
-        <button type="button" class="road-tool-button" data-action="lumber-mill" title="Place lumber mill">
-          Lumber mill
-        </button>
-        <button type="button" class="road-tool-button" data-action="reforester" title="Place reforester">
-          Reforester
-        </button>
-        <button type="button" class="road-tool-button" data-action="woodcutters-lodge" title="Place woodcutter's lodge">
-          Woodcutter's lodge
-        </button>
-        <button type="button" class="road-tool-button" data-action="stone-quarry" title="Place stonecutter's camp">
-          Stonecutter's camp
-        </button>
-        <button type="button" class="road-tool-button" data-action="residences" title="Place residences">
-          Residences
-        </button>
-      </div>
+      <section class="construction-menu" data-build-menu hidden aria-label="Build menu">
+        <div class="construction-menu__cards">
+          <button type="button" class="construction-card" data-action="lumber-mill" title="Place lumber mill (${formatBuildingCost(getBuildingCost('lumber_mill'))})">
+            <img class="construction-card__art" src="${BUILD_CARD_ART.lumber_mill}" alt="" draggable="false" />
+            <span class="construction-card__label">Lumber mill</span>
+          </button>
+          <button type="button" class="construction-card" data-action="stone-quarry" title="Place stonecutter's camp (${formatBuildingCost(getBuildingCost('stone_quarry'))})">
+            <img class="construction-card__art" src="${BUILD_CARD_ART.stone_quarry}" alt="" draggable="false" />
+            <span class="construction-card__label">Stonecutters</span>
+          </button>
+          <button type="button" class="construction-card" data-action="reforester" title="Place forester (${formatBuildingCost(getBuildingCost('reforester'))})">
+            <img class="construction-card__art" src="${BUILD_CARD_ART.reforester}" alt="" draggable="false" />
+            <span class="construction-card__label">Forester</span>
+          </button>
+          <button type="button" class="construction-card" data-action="woodcutters-lodge" title="Place woodcutter's lodge (${formatBuildingCost(getBuildingCost('woodcutters_lodge'))})">
+            <img class="construction-card__art" src="${BUILD_CARD_ART.woodcutters_lodge}" alt="" draggable="false" />
+            <span class="construction-card__label">Woodcutter</span>
+          </button>
+          <button type="button" class="construction-card" data-action="residences" title="Place residences (${formatBuildingCost(residenceZoneCost(1))} each)">
+            <img class="construction-card__art" src="${BUILD_CARD_ART.residences}" alt="" draggable="false" />
+            <span class="construction-card__label">Residence</span>
+          </button>
+        </div>
+      </section>
 
-      <button type="button" class="road-tool-button icon-button floating-build-button" data-action="build" title="Build road (Enter)" aria-label="Build road" disabled hidden>
+      <nav class="construction-dock" data-construction-dock aria-label="Construction tools">
+        <button type="button" class="construction-dock-button" data-action="road" data-tooltip="Roads (R)" title="Roads (R)" aria-label="Roads" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 21c4.8-4.8 5.2-12.2 1-18" />
+            <path d="M15 21c-2.8-5.7-2.2-11.6 2-18" />
+            <path d="M12 6.5h1" />
+            <path d="M12 11.5h1" />
+            <path d="M12 16.5h1" />
+          </svg>
+        </button>
+        <button type="button" class="construction-dock-button" data-action="build-menu" data-tooltip="Build (B)" title="Build (B)" aria-label="Build menu" aria-expanded="false" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.5 5.5l4 4" />
+            <path d="M12.3 7.7l4-4 3.9 3.9-4 4" />
+            <path d="M14.8 10.8L6.4 19.2a2.1 2.1 0 0 1-3-3l8.4-8.4" />
+          </svg>
+        </button>
+        <button type="button" class="construction-dock-button construction-dock-button--text" data-action="help" data-tooltip="Help tips" title="Help tips" aria-label="Toggle help tips" aria-pressed="false">
+          <span aria-hidden="true">?</span>
+        </button>
+        <button type="button" class="construction-dock-button" data-action="settings" data-tooltip="Settings" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.3a3.7 3.7 0 1 0 0 7.4 3.7 3.7 0 0 0 0-7.4Z" />
+            <path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.4-2.4 1a8 8 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.6A8 8 0 0 0 7 6.6l-2.4-1-2 3.4 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a8 8 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.5Z" />
+          </svg>
+        </button>
+      </nav>
+
+      <button type="button" class="road-tool-button icon-button floating-build-button" data-action="commit-build" title="Build road (Enter)" aria-label="Build road" disabled hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M14.5 5.5l4 4" />
           <path d="M12.3 7.7l4-4 3.9 3.9-4 4" />
@@ -294,6 +354,7 @@ export class BuildToolbar {
     `;
 
     this.root = root;
+    window.addEventListener('keydown', this.onKeyDown, true);
     this.gameMenu = new GameMenu(root, {
       onTipsPreferenceChange: () => this.syncContextPanels(),
       onShadowPreferenceChange: () => handlers.onShadowPreferenceChange?.(),
@@ -301,16 +362,21 @@ export class BuildToolbar {
       canOpenFromKeyboard: handlers.canOpenMenuFromKeyboard,
       onExportGameState: handlers.onExportGameState,
       onImportGameState: handlers.onImportGameState,
+      showButton: false,
     });
     this.unsubscribeTipsPreference = subscribeTipCardsPreference(() => this.syncContextPanels());
 
     this.roadButton = this.mustButton(root, '[data-action="road"]');
+    this.buildMenuButton = this.mustButton(root, '[data-action="build-menu"]');
+    this.helpButton = this.mustButton(root, '[data-action="help"]');
+    this.settingsButton = this.mustButton(root, '[data-action="settings"]');
     this.lumberMillButton = this.mustButton(root, '[data-action="lumber-mill"]');
     this.reforesterButton = this.mustButton(root, '[data-action="reforester"]');
     this.woodcuttersLodgeButton = this.mustButton(root, '[data-action="woodcutters-lodge"]');
     this.stoneQuarryButton = this.mustButton(root, '[data-action="stone-quarry"]');
     this.residencesButton = this.mustButton(root, '[data-action="residences"]');
-    this.buildButton = this.mustButton(root, '[data-action="build"]');
+    this.buildButton = this.mustButton(root, '[data-action="commit-build"]');
+    this.buildMenu = this.mustElement(root, '[data-build-menu]');
     this.burgageLayoutHud = this.mustElement(root, '[data-burgage-layout-hud]');
     this.burgagePlotDecreaseButton = this.mustButton(root, '[data-action="burgage-plot-decrease"]');
     this.burgagePlotIncreaseButton = this.mustButton(root, '[data-action="burgage-plot-increase"]');
@@ -326,7 +392,7 @@ export class BuildToolbar {
     this.fpsValue = this.mustElement(root, '[data-stat="fps"]');
     this.zoomValue = this.mustElement(root, '[data-stat="zoom"]');
     this.fpModePanel = this.mustElement(root, '[data-fp-mode-panel]');
-    this.roadTools = this.mustElement(root, '.road-tools');
+    this.constructionDock = this.mustElement(root, '[data-construction-dock]');
     this.zoomStat = this.mustElement(root, '[data-stat-row="zoom"]');
     this.builderPanelTitle = this.mustElement(root, '[data-road-controls-panel] .road-controls-title');
     this.builderHelpList = this.mustElement(root, '[data-road-controls-panel] .road-controls-list');
@@ -334,13 +400,24 @@ export class BuildToolbar {
     this.compassHud = new CompassHud(root);
 
     this.syncContextPanels();
-    this.roadButton.addEventListener('click', handlers.onOpenRoads);
-    this.lumberMillButton.addEventListener('click', handlers.onToggleLumberMill);
-    this.reforesterButton.addEventListener('click', handlers.onToggleReforester);
-    this.woodcuttersLodgeButton.addEventListener('click', handlers.onToggleWoodcuttersLodge);
-    this.stoneQuarryButton.addEventListener('click', handlers.onToggleStoneQuarry);
-    this.residencesButton.addEventListener('click', handlers.onToggleResidences);
+    this.roadButton.addEventListener('click', () => {
+      this.setBuildMenuOpen(false);
+      handlers.onOpenRoads();
+    });
+    this.buildMenuButton.addEventListener('click', () => this.toggleBuildMenu());
+    this.helpButton.addEventListener('click', () => this.toggleHelpTips());
+    this.settingsButton.addEventListener('click', () => {
+      this.setBuildMenuOpen(false);
+      this.gameMenu?.toggle();
+    });
+    this.lumberMillButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleLumberMill));
+    this.reforesterButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleReforester));
+    this.woodcuttersLodgeButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleWoodcuttersLodge));
+    this.stoneQuarryButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleStoneQuarry));
+    this.residencesButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleResidences));
     this.buildButton.addEventListener('click', handlers.onBuildRoad);
+    this.buildMenu.addEventListener('mousedown', (event) => event.stopPropagation());
+    this.buildMenu.addEventListener('click', (event) => event.stopPropagation());
     this.burgagePlotDecreaseButton.addEventListener('click', () => handlers.onBurgagePlotDecrease?.());
     this.burgagePlotIncreaseButton.addEventListener('click', () => handlers.onBurgagePlotIncrease?.());
     this.burgageRotateFrontageButton.addEventListener('click', () => handlers.onBurgageRotateFrontage?.());
