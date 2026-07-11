@@ -1,4 +1,5 @@
 import type { PopulationStats } from '../resourceTotals.ts';
+import type { ParishPolicyState } from '../../economy/chapelParish.ts';
 import type { MarketplaceTradeAvailability } from '../../economy/marketplaceTrade.ts';
 import type { InspectableTarget } from '../types.ts';
 import type { WorldQueries } from '../WorldQueries.ts';
@@ -42,7 +43,7 @@ export type InspectorRenderContext = {
   worldQueries: WorldQueries;
   populationStats: PopulationStats;
   getEconomicActivityTaxRate?: () => number;
-  getSabbathObservanceEnabled?: () => boolean;
+  getParishPolicy?: () => ParishPolicyState;
   getTradeAvailability?: () => MarketplaceTradeAvailability;
 };
 

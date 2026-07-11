@@ -3,6 +3,8 @@ use spacetimedb::ReducerContext;
 use crate::db::*;
 use crate::economy::{credit_treasury_gold, debit_residence_wealth, deposit_chapel_coffer};
 use crate::simulation::chapel_community::{chapel_attendance_chance, chapel_tithe_gold_per_tick};
+use crate::simulation::game_calendar::GameClock;
+use crate::simulation::labor_schedule::is_chapel_tithe_paused;
 use crate::simulation::landmark_access::find_serving_chapel;
 use crate::simulation::tick_context::SimTickContext;
 use crate::tables::Building;
@@ -11,10 +13,15 @@ pub fn step_chapels(
     ctx: &ReducerContext,
     tick: &SimTickContext,
     sim_tick: u64,
+    clock: &GameClock,
     chapels: &[Building],
 ) {
     for residence in ctx.db.residence().iter() {
         if residence.abandoned || residence.population == 0 {
+            continue;
+        }
+
+        if is_chapel_tithe_paused(ctx, residence.owner, clock) {
             continue;
         }
 

@@ -14,6 +14,7 @@ import {
   summarizeHouseholdWealth,
 } from './villageProjections.ts';
 import { totalChapelCofferGold } from '../resources/chapelCoffer.ts';
+import { hasStaffedChapel } from '../logistics/landmarkAccess.ts';
 import type { BuildingState, GameState } from '../resources/types.ts';
 import type { WorldQueries } from '../resources/WorldQueries.ts';
 
@@ -74,7 +75,7 @@ export function buildVillageAdminReadout(input: {
     parishPolicy.cofferReserveGold,
     parishPolicy.autoSweepEnabled,
   );
-  const hasStaffedChapel = chapels.some((building) => building.assignedLabor > 0);
+  const hasStaffedChapelOnMap = hasStaffedChapel(chapels);
 
   return {
     taxRateLabel: formatTaxRatePercent(taxRate),
@@ -88,9 +89,9 @@ export function buildVillageAdminReadout(input: {
       ? `~${householdSavings.toFixed(1)} gold / day`
       : '—',
     taxIncomeLabel: `~${taxIncome.toFixed(1)} gold / day`,
-    chapelTitheLabel: hasStaffedChapel && worldQueries
+    chapelTitheLabel: hasStaffedChapelOnMap && worldQueries
       ? `~${chapelTithe.toFixed(1)} gold / day`
-      : hasStaffedChapel ? '—' : 'Unstaffed chapel',
+      : hasStaffedChapelOnMap ? '—' : 'Unstaffed chapel',
     parishExpenseLabel: chapels.length > 0
       ? `${formatParishGoldPerDay(parishExpense)} (coffer-limited)`
       : 'No chapel',

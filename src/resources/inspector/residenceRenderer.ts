@@ -13,7 +13,11 @@ import {
 } from '../resourceTotals.ts';
 import { effectiveResidenceSettleTicks } from '../../economy/chapelCommunity.ts';
 import { formatHouseholdWealth } from '../../economy/householdWealth.ts';
-import { buildResidenceParishEconomyView } from '../../economy/economyInspectorViews.ts';
+import { DEFAULT_PARISH_POLICY } from '../../economy/chapelParish.ts';
+import {
+  buildResidenceCommunityContext,
+  buildResidenceParishEconomyView,
+} from '../../economy/economyInspectorViews.ts';
 import {
   RESIDENCE_FIREWOOD_CAPACITY,
   residenceNeedsStatus,
@@ -38,13 +42,13 @@ export function renderResidenceInspector(
   const servingWell = context.worldQueries.getServingWellForResidence(residence);
   const servingFoodSupplier = context.worldQueries.getServingFoodSupplierForResidence(residence);
   const servingChapel = context.worldQueries.getServingChapelForResidence(residence);
-  const sabbathObservance = servingChapel != null
-    && (context.getSabbathObservanceEnabled?.() ?? false);
-  const community = {
-    hasChapelAccess: servingChapel != null,
-    sabbathObservance,
-  };
-  const parishEconomy = buildResidenceParishEconomyView(residence, servingChapel, sabbathObservance);
+  const parishPolicy = context.getParishPolicy?.() ?? DEFAULT_PARISH_POLICY;
+  const community = buildResidenceCommunityContext(servingChapel, parishPolicy);
+  const parishEconomy = buildResidenceParishEconomyView(
+    residence,
+    servingChapel,
+    community.sabbathObservance,
+  );
   const needs = residenceNeedsStatus(residence, {
     servingLodgeId: servingLodge?.id ?? null,
     servingWellId: servingWell?.id ?? null,

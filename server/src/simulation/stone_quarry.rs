@@ -5,9 +5,15 @@ use crate::constants::{STONE_PER_HARVEST, TICK_DT};
 use crate::db::*;
 use crate::economy::{building_storage_caps, deposit_building};
 use crate::simulation::spatial::find_nearest_quarry;
+use crate::simulation::game_calendar::GameClock;
+use crate::simulation::labor_and_logistics_paused;
 use crate::tables::{Building, Quarry};
 
-pub fn step_stone_quarry(ctx: &ReducerContext, building: Building) {
+pub fn step_stone_quarry(ctx: &ReducerContext, clock: &GameClock, building: Building) {
+    if labor_and_logistics_paused(ctx, building.owner, clock) {
+        return;
+    }
+
     let Some(def) = building_def(&building.kind) else {
         return;
     };

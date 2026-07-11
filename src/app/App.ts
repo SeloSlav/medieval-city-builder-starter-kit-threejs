@@ -45,18 +45,12 @@ import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
 import type { BuildingKind } from '../generated/gameBalance.ts';
 import { CityAdministrationPanel } from '../ui/CityAdministrationPanel.ts';
 import { ECONOMIC_ACTIVITY_TAX_RATE_DEFAULT } from '../economy/villageEconomy.ts';
-import { DEFAULT_PARISH_POLICY, hasStaffedChapel } from '../economy/chapelParish.ts';
+import { DEFAULT_PARISH_POLICY } from '../economy/chapelParish.ts';
+import { beginNewWorld, resolveWorldGenerationSettings } from './worldBootstrapFlow.ts';
+import { syncSettlementPresentation } from './settlementSchedulePresentation.ts';
 import { LoadingScreen } from '../ui/LoadingScreen.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
-import { WorldSetupPanel } from '../ui/WorldSetupPanel.ts';
-import {
-  DEFAULT_WORLD_GENERATION_SETTINGS,
-  loadStoredWorldGenerationSettings,
-  saveWorldGenerationSettings,
-  shouldShowWorldSetup,
-  clearStoredWorldGenerationSettings,
-} from '../world/worldGenerationSettings.ts';
-import { clearStoredSpacetimeToken } from '../network/identityPersistence.ts';
+import { saveWorldGenerationSettings } from '../world/worldGenerationSettings.ts';
 import { setActiveWorldGeneration } from '../world/worldGenerationContext.ts';
 import { mountTooltips } from '../ui/tooltips.ts';
 import { setHydrologyOverlayEnabled, isHydrologyOverlayEnabled } from '../scene/hydrologyOverlayPreference.ts';
@@ -122,7 +116,7 @@ export class App {
       </div>
     `;
 
-    const worldSettings = await this.resolveWorldGenerationSettings();
+    const worldSettings = await resolveWorldGenerationSettings(this.root);
     setActiveWorldGeneration(worldSettings);
     saveWorldGenerationSettings(worldSettings);
 
@@ -396,7 +390,7 @@ export class App {
         && !roadTool.isEnabled()
         && !buildingTool.isEnabled()
         && !burgageTool.isEnabled(),
-      onNewWorld: () => this.beginNewWorld(),
+      onNewWorld: () => beginNewWorld(),
     });
     this.cityAdminPanel = new CityAdministrationPanel(uiRoot, {
       getGameState: () => this.gameState,
@@ -449,9 +443,8 @@ export class App {
       getState: () => this.gameState!,
       getEconomicActivityTaxRate: () =>
         this.spacetimeStore?.snapshot.economicActivityTaxRate ?? ECONOMIC_ACTIVITY_TAX_RATE_DEFAULT,
-      getSabbathObservanceEnabled: () =>
-        this.spacetimeStore?.snapshot.parishPolicy.sabbathObservanceEnabled
-        ?? DEFAULT_PARISH_POLICY.sabbathObservanceEnabled,
+      getParishPolicy: () =>
+        this.spacetimeStore?.snapshot.parishPolicy ?? DEFAULT_PARISH_POLICY,
       ...inspectorActions,
       onSelectionChange: (target) => {
         buildingMarkers.setSelectedWorkExtent(
@@ -656,6 +649,7 @@ export class App {
       this.sceneManager?.render(dt, this.cameraController?.getOrbitDistance());
     }
     this.updateFps(time, dt);
+    this.applySettlementPresentation();
     this.ambientAudio?.tick(dt);
     this.residenceMarkers?.tick(dt);
     this.animationId = requestAnimationFrame(this.tick);
@@ -744,7 +738,7 @@ export class App {
     if (sampleMs < 400) return;
     const fps = this.fpsFrameCount / Math.max(this.fpsAccumulatedSeconds, 0.001);
     this.toolbar?.setFps(fps);
-    this.syncSettlementClock();
+    this.applySettlementPresentation();
     (window as typeof window & { __medievalRoadStats?: { backend?: string; fps: number; calls?: number; triangles?: number; pixelRatio?: number } })
       .__medievalRoadStats = { fps, ...this.sceneManager?.getPerformanceStats() };
     this.resetFpsSample(time);
@@ -900,15 +894,21 @@ export class App {
     );
     this.resourceInspector.refreshSelection();
     this.cityAdminPanel?.refresh();
-    this.syncSettlementClock();
+    this.applySettlementPresentation();
   }
 
-  private syncSettlementClock(): void {
-    if (!this.toolbar || !this.spacetimeStore?.isConnected || !this.gameState) return;
-    this.toolbar.setSettlementClock(this.spacetimeStore.snapshot.simTick, {
-      sabbathObservance: this.spacetimeStore.snapshot.parishPolicy.sabbathObservanceEnabled,
-      staffedChapel: hasStaffedChapel(this.gameState.buildings.values()),
-    });
+  private applySettlementPresentation(): void {
+    if (!this.spacetimeStore) return;
+    syncSettlementPresentation(
+      {
+        toolbar: this.toolbar,
+        sceneManager: this.sceneManager,
+        residenceMarkers: this.residenceMarkers,
+      },
+      this.spacetimeStore.snapshot,
+      this.gameState,
+      this.spacetimeStore.isConnected,
+    );
   }
 
   private exposeDevHandles(): void {
@@ -924,25 +924,6 @@ export class App {
       registry: this.layoutRegistry,
       treeRegistry: this.treeRegistry,
     };
-  }
-
-  private async resolveWorldGenerationSettings() {
-    if (shouldShowWorldSetup()) {
-      return WorldSetupPanel.prompt(this.root);
-    }
-    return loadStoredWorldGenerationSettings() ?? DEFAULT_WORLD_GENERATION_SETTINGS;
-  }
-
-  private beginNewWorld(): void {
-    const confirmed = window.confirm(
-      'Start a new world? This clears your saved world settings and local player identity, then reloads the page.',
-    );
-    if (!confirmed) return;
-    clearStoredWorldGenerationSettings();
-    clearStoredSpacetimeToken('city-builder');
-    const url = new URL(window.location.href);
-    url.searchParams.set('new', '1');
-    window.location.assign(url.toString());
   }
 
   private mustElement(selector: string): HTMLElement {

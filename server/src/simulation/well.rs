@@ -88,6 +88,7 @@ pub fn step_well(ctx: &ReducerContext, tick: &SimTickContext, sim_tick: u64, clo
     if do_deliver {
         dispatch_delivery_if_ready(
             ctx,
+            clock,
             network,
             &mut well,
             split.delivering,

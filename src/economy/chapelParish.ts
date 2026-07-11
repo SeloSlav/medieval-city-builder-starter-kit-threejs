@@ -13,6 +13,9 @@ import {
 } from '../generated/gameBalance.ts';
 import type { BuildingState } from '../resources/types.ts';
 import { chapelCofferGold } from '../resources/chapelCoffer.ts';
+import { hasStaffedChapel } from '../logistics/landmarkAccess.ts';
+
+export { hasStaffedChapel };
 
 export type ParishPolicyState = {
   autoSweepEnabled: boolean;
@@ -35,15 +38,6 @@ export const DEFAULT_PARISH_POLICY: ParishPolicyState = {
   upkeepPaidTotal: 0,
   charityPaidTotal: 0,
 };
-
-export function hasStaffedChapel(buildings: Iterable<BuildingState>): boolean {
-  for (const building of buildings) {
-    if (building.kind === 'chapel' && building.assignedLabor > 0) {
-      return true;
-    }
-  }
-  return false;
-}
 
 export function clampChapelCofferReserveGold(value: number): number {
   return Math.min(CHAPEL_COFFER_RESERVE_MAX, Math.max(CHAPEL_COFFER_RESERVE_MIN, value));

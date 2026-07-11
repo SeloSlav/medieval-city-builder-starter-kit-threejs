@@ -2,7 +2,7 @@ import type { BackyardGardenKind } from '../generated/gameBalance.ts';
 import { CHAPEL_RECOVERY_NEEDS_REQUIRED } from '../generated/gameBalance.ts';
 import type { BuildingState, ResidenceState } from '../resources/types.ts';
 import { chapelCofferGold } from '../resources/chapelCoffer.ts';
-import { RESIDENCE_NEED_KINDS } from '../residences/residenceNeedState.ts';
+import { RESIDENCE_NEED_KINDS, type ResidenceCommunityContext } from '../residences/residenceNeedState.ts';
 import {
   formatChapelAbandonmentGracePercent,
   formatChapelRecoveryStockMultiplierPercent,
@@ -22,7 +22,19 @@ import { formatTaxRatePercent } from './villageEconomy.ts';
 import {
   formatParishGoldPerDay,
   payableParishExpensePerDay,
+  type ParishPolicyState,
 } from './chapelParish.ts';
+
+export function buildResidenceCommunityContext(
+  servingChapel: BuildingState | null,
+  parishPolicy: ParishPolicyState,
+): ResidenceCommunityContext {
+  const sabbathObservance = servingChapel != null && parishPolicy.sabbathObservanceEnabled;
+  return {
+    hasChapelAccess: servingChapel != null,
+    sabbathObservance,
+  };
+}
 
 export type ResidenceParishEconomyView = {
   hasChapelAccess: boolean;

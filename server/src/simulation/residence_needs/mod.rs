@@ -8,6 +8,8 @@ pub mod water;
 pub use kinds::ResidenceNeedKind;
 pub use state::{load_needs, need_stock};
 
+use crate::simulation::game_calendar::GameClock;
+use crate::simulation::labor_schedule::is_consumption_paused;
 use spacetimedb::ReducerContext;
 
 use crate::db::*;
@@ -24,8 +26,13 @@ pub fn step_residence_needs(
     ctx: &ReducerContext,
     residence: Residence,
     has_chapel_access: bool,
+    clock: &GameClock,
 ) {
     if residence.abandoned || residence.population == 0 {
+        return;
+    }
+
+    if is_consumption_paused(ctx, residence.owner, clock) {
         return;
     }
 

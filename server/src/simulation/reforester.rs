@@ -3,6 +3,8 @@ use spacetimedb::ReducerContext;
 use crate::building_defs::building_def;
 use crate::constants::{REFORESTER_REGROW_PER_SEC, TICK_DT};
 use crate::db::*;
+use crate::simulation::game_calendar::GameClock;
+use crate::simulation::labor_and_logistics_paused;
 use crate::tables::{Building, TreeEntity};
 
 enum ReforesterTreeUpdate {
@@ -11,7 +13,11 @@ enum ReforesterTreeUpdate {
     Mature,
 }
 
-pub fn step_reforester(ctx: &ReducerContext, building: Building) {
+pub fn step_reforester(ctx: &ReducerContext, clock: &GameClock, building: Building) {
+    if labor_and_logistics_paused(ctx, building.owner, clock) {
+        return;
+    }
+
     let Some(def) = building_def(&building.kind) else {
         return;
     };

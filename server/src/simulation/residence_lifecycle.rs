@@ -1,6 +1,7 @@
 use spacetimedb::ReducerContext;
 
 use crate::db::*;
+use crate::simulation::game_calendar::GameClock;
 use crate::simulation::landmark_access::residence_has_chapel_access;
 use crate::simulation::residence_needs::{step_residence_needs, step_residence_recovery};
 use crate::simulation::residence_settlement::step_residence_settlement;
@@ -12,6 +13,7 @@ pub fn step_residence(
     tick: &SimTickContext,
     chapels: &[Building],
     residence: Residence,
+    clock: &GameClock,
 ) {
     let residence_id = residence.id;
     let has_chapel_access =
@@ -29,5 +31,5 @@ pub fn step_residence(
         return;
     };
 
-    step_residence_needs(ctx, residence, has_chapel_access);
+    step_residence_needs(ctx, residence, has_chapel_access, clock);
 }

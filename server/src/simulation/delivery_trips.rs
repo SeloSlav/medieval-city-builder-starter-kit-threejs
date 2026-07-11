@@ -88,6 +88,7 @@ pub fn cancel_trips_for_residence(ctx: &ReducerContext, residence_id: u64) {
 
 pub fn try_start_delivery_trip(
     ctx: &ReducerContext,
+    clock: &GameClock,
     network: &RoadNetwork,
     building: &mut Building,
     delivery_workers: u32,
@@ -101,14 +102,7 @@ pub fn try_start_delivery_trip(
         return false;
     }
 
-    if labor_and_logistics_paused(ctx, building.owner, &crate::simulation::game_clock(
-        ctx.db
-            .world_config()
-            .id()
-            .find(&0)
-            .map(|config| config.sim_tick)
-            .unwrap_or(0),
-    )) {
+    if labor_and_logistics_paused(ctx, building.owner, clock) {
         return false;
     }
 

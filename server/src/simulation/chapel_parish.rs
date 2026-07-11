@@ -11,6 +11,8 @@ use crate::economy::{
     withdraw_coffer_in_place,
 };
 use crate::economy::{record_parish_ledger, ParishLedgerKind};
+use crate::simulation::game_calendar::GameClock;
+use crate::simulation::labor_schedule::is_parish_economy_paused;
 use crate::simulation::tick_context::SimTickContext;
 use crate::tables::{Building, Residence};
 
@@ -44,9 +46,14 @@ pub fn step_chapel_parish(
     ctx: &ReducerContext,
     tick: &SimTickContext,
     sim_tick: u64,
+    clock: &GameClock,
     chapels: &[Building],
     residences: &[Residence],
 ) {
+    if is_parish_economy_paused(clock) {
+        return;
+    }
+
     for chapel in chapels {
         step_one_chapel_parish(ctx, tick, sim_tick, chapel, residences);
     }

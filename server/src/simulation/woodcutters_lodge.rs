@@ -70,6 +70,7 @@ pub fn step_woodcutters_lodge(ctx: &ReducerContext, tick: &SimTickContext, clock
     if do_deliver {
         dispatch_delivery_if_ready(
             ctx,
+            clock,
             network,
             &mut lodge,
             split.delivering,

@@ -20,12 +20,11 @@ import {
 } from './buildMenuCards.ts';
 import { toolbarModeToMenuAction } from './buildMenuMapping.ts';
 import type { BuildingKind } from '../generated/gameBalance.ts';
+import type { SettlementSchedule } from '../world/settlementSchedule.ts';
 import {
   formatCalendarDate,
   formatClockTime,
   formatWeekday,
-  gameClock,
-  laborPauseLabel,
 } from '../world/gameCalendar.ts';
 import {
   describeBuilderHelp,
@@ -617,17 +616,13 @@ export class BuildToolbar {
     this.burgageLayoutHud.style.top = `${top}px`;
   }
 
-  setSettlementClock(
-    simTick: number,
-    options: { sabbathObservance: boolean; staffedChapel: boolean },
-  ): void {
-    const clock = gameClock(simTick);
-    this.clockDate.textContent = formatCalendarDate(clock);
-    this.clockTime.textContent = formatClockTime(clock);
-    const pauseLabel = laborPauseLabel(clock, options.sabbathObservance, options.staffedChapel);
+  setSettlementClock(schedule: SettlementSchedule): void {
+    this.clockDate.textContent = formatCalendarDate(schedule.clock);
+    this.clockTime.textContent = formatClockTime(schedule.clock);
+    const pauseLabel = schedule.laborPauseLabel;
     this.clockDetail.textContent = pauseLabel
-      ? `${formatWeekday(clock)} · ${pauseLabel}`
-      : formatWeekday(clock);
+      ? `${formatWeekday(schedule.clock)} · ${pauseLabel}`
+      : formatWeekday(schedule.clock);
     this.fpsPanel.classList.toggle('is-sabbath', pauseLabel === 'Sunday sabbath');
     this.fpsPanel.classList.toggle('is-night', pauseLabel === 'Night hours');
   }

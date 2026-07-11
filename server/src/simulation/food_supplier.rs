@@ -85,6 +85,7 @@ fn step_food_supplier(
     if do_deliver {
         dispatch_delivery_if_ready(
             ctx,
+            clock,
             network,
             &mut supplier,
             split.delivering,

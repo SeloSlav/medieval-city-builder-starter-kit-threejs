@@ -17,6 +17,7 @@
     "test:landmark-access": "npx tsx scripts/testLandmarkAccessParity.mts",
     "test:economy-parity": "npx tsx scripts/testEconomyParity.mts",
     "test:chapel-parish": "npx tsx scripts/testChapelParish.mts",
+    "test:settlement-schedule": "npx tsx scripts/testSettlementSchedule.mts",
     "deploy:local": "powershell -ExecutionPolicy Bypass -File ./server/deploy-local.ps1",
     "deploy:local-clean": "powershell -ExecutionPolicy Bypass -File ./server/deploy-local-clean.ps1"
   },

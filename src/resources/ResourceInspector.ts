@@ -12,6 +12,7 @@ import type { GameState, InspectableTarget } from './types.ts';
 import type { WorldQueries } from './WorldQueries.ts';
 import { renderInspectableTarget } from './inspector/renderInspectableTarget.ts';
 import { handleSupplementalPanelClick } from './inspector/supplementalPanel.ts';
+import type { ParishPolicyState } from '../economy/chapelParish.ts';
 import type { BackyardGardenKind } from '../residences/backyardGarden.ts';
 import { backyardIconPosition } from '../residences/backyardPosition.ts';
 
@@ -23,7 +24,7 @@ type ResourceInspectorOptions = {
   worldQueries: WorldQueries;
   getState: () => GameState;
   getEconomicActivityTaxRate?: () => number;
-  getSabbathObservanceEnabled?: () => boolean;
+  getParishPolicy?: () => ParishPolicyState;
   onDemolishBuilding?: (buildingId: string) => void | Promise<void>;
   onDemolishResidence?: (residenceId: string) => void | Promise<void>;
   onDemolishBurgageZone?: (zoneId: string) => void | Promise<void>;
@@ -360,8 +361,8 @@ export class ResourceInspector {
       ...(this.options.getEconomicActivityTaxRate
         ? { getEconomicActivityTaxRate: this.options.getEconomicActivityTaxRate }
         : {}),
-      ...(this.options.getSabbathObservanceEnabled
-        ? { getSabbathObservanceEnabled: this.options.getSabbathObservanceEnabled }
+      ...(this.options.getParishPolicy
+        ? { getParishPolicy: this.options.getParishPolicy }
         : {}),
       getTradeAvailability: () => computeTradeAvailability(this.options.getState()),
     });

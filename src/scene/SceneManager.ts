@@ -22,6 +22,7 @@ import type { Point2 } from '../utils/polygonGeometry.ts';
 import type { BridgeSamplingContext } from '../roads/RiverBridgeSpans.ts';
 import { getStillWaterSurfaceY } from '../rivers/RiverWaterLevel.ts';
 import { SkyCloudMesh } from '../sky/SkyCloudMesh.ts';
+import type { DayNightLightingState } from '../world/dayNightPresentation.ts';
 import { Terrain } from '../terrain/Terrain.ts';
 import { TerrainProjector } from '../terrain/TerrainProjector.ts';
 import { disposeObject3D } from '../utils/dispose.ts';
@@ -59,6 +60,10 @@ export class SceneManager {
   private readonly sky: SkyCloudMesh;
   private readonly sunDirection = new THREE.Vector3();
   private sunLight!: THREE.DirectionalLight;
+  private hemiLight!: THREE.HemisphereLight;
+  private ambientLight!: THREE.AmbientLight;
+  private skyFillLight!: THREE.DirectionalLight;
+  private skyAnimationTime = 0;
   private forestManager: ForestManager | null = null;
   private grassField: GrassBladeField | null = null;
   private vegetationBuilt = false;
@@ -334,7 +339,7 @@ export class SceneManager {
     );
     this.sky.updateCamera(this.camera);
     this.sky.updateSun(this.sunDirection);
-    this.sky.updateTime(elapsed);
+    this.sky.updateTime(this.skyAnimationTime);
     this.riverSystem.tick(dt, elapsed);
     this.renderFrame++;
     if (this.shouldRefreshShadowMap(cameraDistance)) {
@@ -360,6 +365,27 @@ export class SceneManager {
     const dz = this.cameraTarget.z - this.lastShadowTargetZ;
     if (Math.hypot(dx, dz) > 10) return true;
     return Math.abs(cameraDistance - this.lastShadowDistance) > 8;
+  }
+
+  applyDayNight(state: DayNightLightingState): void {
+    this.skyAnimationTime = state.skyAnimationTime;
+    this.sunDirection.copy(state.sunDirection);
+    this.sunLight.color.setHex(state.sunColor);
+    this.sunLight.intensity = state.sunIntensity;
+    this.sunLight.position.copy(this.sunDirection).multiplyScalar(180);
+    this.hemiLight.color.setHex(state.hemiSkyColor);
+    this.hemiLight.groundColor.setHex(state.hemiGroundColor);
+    this.hemiLight.intensity = state.hemiIntensity;
+    this.ambientLight.color.setHex(state.ambientColor);
+    this.ambientLight.intensity = state.ambientIntensity;
+    this.skyFillLight.color.setHex(state.fillColor);
+    this.skyFillLight.intensity = state.fillIntensity;
+    this.skyFillLight.position.copy(this.sunDirection).multiplyScalar(-90).add(new THREE.Vector3(0, 65, 0));
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.color.setHex(state.fogColor);
+      this.scene.fog.density = state.fogDensity;
+    }
+    this.postProcessor.setDayNightGrade(state.grade);
   }
 
   getPerformanceStats(): { backend: RendererBackendKind; calls: number; triangles: number; pixelRatio: number } {
@@ -544,9 +570,11 @@ export class SceneManager {
 
   private addLighting(): void {
     const hemi = new THREE.HemisphereLight(0xdff0ff, 0x56644a, 1.9);
+    this.hemiLight = hemi;
     this.scene.add(hemi);
 
     const ambient = new THREE.AmbientLight(0xb8d1ff, 0.2);
+    this.ambientLight = ambient;
     this.scene.add(ambient);
 
     const sun = new THREE.DirectionalLight(0xffefd2, 4.9);
@@ -567,6 +595,7 @@ export class SceneManager {
 
     const blueFill = new THREE.DirectionalLight(0x9fc8ff, 0.45);
     blueFill.name = 'Sky fill';
+    this.skyFillLight = blueFill;
     blueFill.position.copy(this.sunDirection).multiplyScalar(-90).add(new THREE.Vector3(0, 65, 0));
     this.scene.add(blueFill);
   }

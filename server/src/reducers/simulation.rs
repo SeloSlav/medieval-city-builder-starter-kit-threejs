@@ -2,7 +2,7 @@ use spacetimedb::ReducerContext;
 
 use crate::db::*;
 use crate::simulation::{
-    labor_and_logistics_paused, step_backyard_gardens,
+    step_backyard_gardens,
     step_chapels, step_chapel_parish, step_delivery_trips, step_foragers_shed, step_foraging_respawn,
     step_hunters_hall, step_lumber_mill, step_reforester, step_residence, step_stone_quarry,
     step_well, step_woodcutters_lodge, SimTickContext,
@@ -65,10 +65,7 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
         let Some(building) = ctx.db.building().id().find(&building_id) else {
             continue;
         };
-        if labor_and_logistics_paused(ctx, building.owner, &clock) {
-            continue;
-        }
-        step_reforester(ctx, building);
+        step_reforester(ctx, &clock, building);
     }
 
     for building_id in lumber_mill_ids {
@@ -82,10 +79,7 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
         let Some(building) = ctx.db.building().id().find(&building_id) else {
             continue;
         };
-        if labor_and_logistics_paused(ctx, building.owner, &clock) {
-            continue;
-        }
-        step_stone_quarry(ctx, building);
+        step_stone_quarry(ctx, &clock, building);
     }
 
     for building_id in hunters_hall_ids {
@@ -125,12 +119,12 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
         .filter(|building| building.kind == "chapel")
         .collect();
 
-    step_chapels(ctx, &tick, sim_tick, &chapels);
+    step_chapels(ctx, &tick, sim_tick, &clock, &chapels);
 
     let residences: Vec<Residence> = ctx.db.residence().iter().collect();
-    step_chapel_parish(ctx, &tick, sim_tick, &chapels, &residences);
+    step_chapel_parish(ctx, &tick, sim_tick, &clock, &chapels, &residences);
 
     for residence in residences {
-        step_residence(ctx, &tick, &chapels, residence);
+        step_residence(ctx, &tick, &chapels, residence, &clock);
     }
 }

@@ -12,8 +12,17 @@ export function isRoadPathConnected(
   return probe(ax, az, bx, bz) != null;
 }
 
-export function isChapelStaffed(chapel: BuildingState): boolean {
-  return chapel.kind === 'chapel' && chapel.assignedLabor > 0;
+export function isChapelStaffed(building: BuildingState): boolean {
+  return building.kind === 'chapel' && building.assignedLabor > 0;
+}
+
+export function hasStaffedChapel(buildings: Iterable<BuildingState>): boolean {
+  for (const building of buildings) {
+    if (isChapelStaffed(building)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function hasRoadPathToBuildingKind(
