@@ -1,0 +1,106 @@
+import * as THREE from 'three';
+import { addMesh, timberMaterial } from '../buildings/buildingMaterials.ts';
+import type { DeliveryCargoKind } from './deliveryTrips.ts';
+import { cargoColor } from './deliveryTrips.ts';
+
+const WHEEL_MATERIAL = new THREE.MeshStandardMaterial({
+  color: 0x3a2d22,
+  roughness: 0.9,
+  metalness: 0,
+});
+
+const CARGO_MATERIALS = new Map<DeliveryCargoKind, THREE.MeshStandardMaterial>();
+
+function cargoMaterial(kind: DeliveryCargoKind): THREE.MeshStandardMaterial {
+  let material = CARGO_MATERIALS.get(kind);
+  if (!material) {
+    const color = cargoColor(kind);
+    material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.72,
+      metalness: 0.04,
+      emissive: color,
+      emissiveIntensity: 0.06,
+    });
+    CARGO_MATERIALS.set(kind, material);
+  }
+  return material;
+}
+
+function addCargo(group: THREE.Group, kind: DeliveryCargoKind): void {
+  const material = cargoMaterial(kind);
+
+  switch (kind) {
+    case 'firewood':
+      addMesh(group, new THREE.BoxGeometry(0.9, 0.42, 0.55), material, new THREE.Vector3(0, 0.72, 0.05));
+      addMesh(
+        group,
+        new THREE.CylinderGeometry(0.1, 0.1, 0.85, 6),
+        timberMaterial('weathered'),
+        new THREE.Vector3(-0.18, 0.78, 0.05),
+        new THREE.Euler(0, 0, Math.PI * 0.5),
+      );
+      break;
+    case 'water':
+      addMesh(group, new THREE.CylinderGeometry(0.28, 0.3, 0.55, 10), material, new THREE.Vector3(0, 0.78, 0));
+      addMesh(
+        group,
+        new THREE.TorusGeometry(0.3, 0.04, 6, 12),
+        timberMaterial('dark'),
+        new THREE.Vector3(0, 1.02, 0),
+        new THREE.Euler(Math.PI * 0.5, 0, 0),
+      );
+      break;
+    case 'food':
+      addMesh(group, new THREE.BoxGeometry(0.62, 0.34, 0.48), material, new THREE.Vector3(-0.12, 0.7, 0));
+      addMesh(group, new THREE.BoxGeometry(0.48, 0.28, 0.4), material, new THREE.Vector3(0.28, 0.76, 0.08));
+      break;
+    default: {
+      const unreachable: never = kind;
+      throw new Error(`Unknown cargo kind: ${unreachable}`);
+    }
+  }
+}
+
+export function createDeliveryCartMesh(kind: DeliveryCargoKind): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `DeliveryCart:${kind}`;
+
+  const frame = timberMaterial('mid');
+  addMesh(group, new THREE.BoxGeometry(1.15, 0.14, 0.72), frame, new THREE.Vector3(0, 0.42, 0));
+  addMesh(group, new THREE.BoxGeometry(0.12, 0.55, 0.72), frame, new THREE.Vector3(-0.48, 0.68, 0));
+  addMesh(group, new THREE.BoxGeometry(0.12, 0.42, 0.72), frame, new THREE.Vector3(0.48, 0.62, 0));
+
+  const wheelGeometry = new THREE.CylinderGeometry(0.22, 0.22, 0.12, 12);
+  addMesh(
+    group,
+    wheelGeometry,
+    WHEEL_MATERIAL,
+    new THREE.Vector3(-0.42, 0.22, 0.34),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+  addMesh(
+    group,
+    wheelGeometry,
+    WHEEL_MATERIAL,
+    new THREE.Vector3(-0.42, 0.22, -0.34),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+  addMesh(
+    group,
+    wheelGeometry,
+    WHEEL_MATERIAL,
+    new THREE.Vector3(0.42, 0.22, 0.34),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+  addMesh(
+    group,
+    wheelGeometry,
+    WHEEL_MATERIAL,
+    new THREE.Vector3(0.42, 0.22, -0.34),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+
+  addCargo(group, kind);
+  return group;
+}

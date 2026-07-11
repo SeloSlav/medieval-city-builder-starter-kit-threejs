@@ -117,6 +117,14 @@
   color: #e8c86a;
 }
 
+.settlement-hud__stat--water .settlement-hud__value {
+  color: #7eb8e8;
+}
+
+.settlement-hud__stat--food .settlement-hud__value {
+  color: #8fbf72;
+}
+
 .ui-tooltip {
   position: fixed;
   z-index: 40;

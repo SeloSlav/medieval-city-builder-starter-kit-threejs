@@ -1,18 +1,19 @@
 import * as THREE from 'three';
 import { disposeObject3D } from '../utils/dispose.ts';
 import type { DeliveryTripState } from '../logistics/deliveryTrips.ts';
-import { cargoColor } from '../logistics/deliveryTrips.ts';
+import { createDeliveryCartMesh } from '../logistics/deliveryCartMesh.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 
 const TICK_BLEND_SEC = 0.2;
 
 type TripVisual = {
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
   fromX: number;
   fromZ: number;
   toX: number;
   toZ: number;
   blend: number;
+  yaw: number;
 };
 
 type DeliveryAgentRendererOptions = {
@@ -24,8 +25,6 @@ export class DeliveryAgentRenderer {
   private readonly terrain: Terrain;
   private readonly group = new THREE.Group();
   private readonly visuals = new Map<string, TripVisual>();
-  private readonly geometry = new THREE.SphereGeometry(0.55, 14, 10);
-  private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
 
   constructor(options: DeliveryAgentRendererOptions) {
     this.terrain = options.terrain;
@@ -39,16 +38,21 @@ export class DeliveryAgentRenderer {
       nextIds.add(trip.id);
       const existing = this.visuals.get(trip.id);
       if (existing) {
+        const dx = trip.x - existing.toX;
+        const dz = trip.z - existing.toZ;
+        if (Math.hypot(dx, dz) > 0.05) {
+          existing.yaw = Math.atan2(dx, dz);
+        }
         existing.fromX = existing.toX;
         existing.fromZ = existing.toZ;
         existing.toX = trip.x;
         existing.toZ = trip.z;
         existing.blend = 0;
-        this.updateMaterial(existing.mesh, trip);
+        this.ensureCartMesh(existing, trip);
         continue;
       }
 
-      const mesh = new THREE.Mesh(this.geometry, this.materialFor(trip));
+      const mesh = createDeliveryCartMesh(trip.cargoKind);
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       this.group.add(mesh);
@@ -59,6 +63,7 @@ export class DeliveryAgentRenderer {
         toX: trip.x,
         toZ: trip.z,
         blend: 1,
+        yaw: 0,
       });
     }
 
@@ -74,8 +79,9 @@ export class DeliveryAgentRenderer {
       const t = smoothstep(visual.blend);
       const x = THREE.MathUtils.lerp(visual.fromX, visual.toX, t);
       const z = THREE.MathUtils.lerp(visual.fromZ, visual.toZ, t);
-      const y = this.terrain.getHeightAt(x, z) + 0.75;
+      const y = this.terrain.getHeightAt(x, z) + 0.05;
       visual.mesh.position.set(x, y, z);
+      visual.mesh.rotation.y = visual.yaw;
     }
   }
 
@@ -83,12 +89,19 @@ export class DeliveryAgentRenderer {
     for (const id of [...this.visuals.keys()]) {
       this.removeTrip(id);
     }
-    this.geometry.dispose();
-    for (const material of this.materials.values()) {
-      material.dispose();
-    }
-    this.materials.clear();
     this.group.removeFromParent();
+  }
+
+  private ensureCartMesh(visual: TripVisual, trip: DeliveryTripState): void {
+    if (visual.mesh.name === `DeliveryCart:${trip.cargoKind}`) return;
+    const replacement = createDeliveryCartMesh(trip.cargoKind);
+    replacement.position.copy(visual.mesh.position);
+    replacement.rotation.copy(visual.mesh.rotation);
+    replacement.castShadow = true;
+    this.group.remove(visual.mesh);
+    disposeObject3D(visual.mesh);
+    this.group.add(replacement);
+    visual.mesh = replacement;
   }
 
   private removeTrip(id: string): void {
@@ -97,29 +110,6 @@ export class DeliveryAgentRenderer {
     disposeObject3D(visual.mesh);
     visual.mesh.removeFromParent();
     this.visuals.delete(id);
-  }
-
-  private materialFor(trip: DeliveryTripState): THREE.MeshStandardMaterial {
-    const key = trip.cargoKind;
-    let material = this.materials.get(key);
-    if (!material) {
-      material = new THREE.MeshStandardMaterial({
-        color: cargoColor(trip.cargoKind),
-        roughness: 0.55,
-        metalness: 0.05,
-        emissive: cargoColor(trip.cargoKind),
-        emissiveIntensity: 0.12,
-      });
-      this.materials.set(key, material);
-    }
-    return material;
-  }
-
-  private updateMaterial(mesh: THREE.Mesh, trip: DeliveryTripState): void {
-    const material = this.materialFor(trip);
-    if (mesh.material !== material) {
-      mesh.material = material;
-    }
   }
 }
 

@@ -149,6 +149,10 @@ export async function demolishBuilding(buildingId: string): Promise<void> {
   await callReducer('demolishBuilding', 'demolish_building', { buildingId: serverId });
 }
 
+export async function resetWorld(): Promise<void> {
+  await callReducer('resetWorld', 'reset_world', {});
+}
+
 export async function bootstrapWorld(
   registry: WorldLayoutRegistry,
   worldLayout: WorldLayout,

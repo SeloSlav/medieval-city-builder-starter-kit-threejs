@@ -47,6 +47,7 @@ export type ResourceTotals = {
   stone: number;
   firewood: number;
   water: number;
+  food: number;
   gold: number;
 };
 
@@ -88,22 +89,29 @@ export function computeResourceTotals(state: GameState): ResourceTotals {
   let timber = state.stockpile.timber;
   let stone = state.stockpile.stone;
   let firewood = state.stockpile.firewood;
+  let water = state.stockpile.water;
+  let food = state.stockpile.food;
 
   for (const building of state.buildings.values()) {
     timber += building.timber;
     stone += building.stone;
     firewood += building.firewood;
+    water += building.water;
+    food += building.food;
   }
 
   for (const residence of state.residences.values()) {
     firewood += getNeedStock(residence.needs, 'firewood');
+    water += getNeedStock(residence.needs, 'water');
+    food += getNeedStock(residence.needs, 'food');
   }
 
   cachedTotals = {
     timber,
     stone,
     firewood,
-    water: state.stockpile.water,
+    water,
+    food,
     gold: state.stockpile.gold,
   };
   cachedState = state;
@@ -117,19 +125,8 @@ export function computeTradeAvailability(state: GameState): MarketplaceTradeAvai
     stone: totals.stone,
     gold: totals.gold,
     firewood: totals.firewood,
-    food: computeAggregateFood(state),
+    food: totals.food,
   };
-}
-
-function computeAggregateFood(state: GameState): number {
-  let food = state.stockpile.food;
-  for (const building of state.buildings.values()) {
-    food += building.food;
-  }
-  for (const residence of state.residences.values()) {
-    food += getNeedStock(residence.needs, 'food');
-  }
-  return food;
 }
 
 export function computePopulationStats(state: GameState): PopulationStats {

@@ -203,6 +203,24 @@ export class BuildToolbar {
               <strong class="settlement-hud__value" data-stockpile="firewood">0</strong>
             </div>
             <div
+              class="settlement-hud__stat settlement-hud__stat--water"
+              tabindex="0"
+              data-resource="water"
+              data-tooltip="Water in treasury, wells, and residence stocks combined."
+            >
+              <span class="settlement-hud__label">Water</span>
+              <strong class="settlement-hud__value" data-stockpile="water">0</strong>
+            </div>
+            <div
+              class="settlement-hud__stat settlement-hud__stat--food"
+              tabindex="0"
+              data-resource="food"
+              data-tooltip="Food in treasury, supplier buildings, and residence stocks combined."
+            >
+              <span class="settlement-hud__label">Food</span>
+              <strong class="settlement-hud__value" data-stockpile="food">0</strong>
+            </div>
+            <div
               class="settlement-hud__stat settlement-hud__stat--gold"
               tabindex="0"
               data-resource="gold"

@@ -21,6 +21,7 @@ import PlaceBackyardGardenReducer from "../place_backyard_garden_reducer";
 import PlaceBuildingReducer from "../place_building_reducer";
 import PlaceBurgageZoneReducer from "../place_burgage_zone_reducer";
 import RemoveRoadEdgeReducer from "../remove_road_edge_reducer";
+import ResetWorldReducer from "../reset_world_reducer";
 import SetChapelParishPolicyReducer from "../set_chapel_parish_policy_reducer";
 import SetEconomicActivityTaxRateReducer from "../set_economic_activity_tax_rate_reducer";
 import SyncRoadNetworkReducer from "../sync_road_network_reducer";
@@ -41,6 +42,7 @@ export type PlaceBackyardGardenParams = __Infer<typeof PlaceBackyardGardenReduce
 export type PlaceBuildingParams = __Infer<typeof PlaceBuildingReducer>;
 export type PlaceBurgageZoneParams = __Infer<typeof PlaceBurgageZoneReducer>;
 export type RemoveRoadEdgeParams = __Infer<typeof RemoveRoadEdgeReducer>;
+export type ResetWorldParams = __Infer<typeof ResetWorldReducer>;
 export type SetChapelParishPolicyParams = __Infer<typeof SetChapelParishPolicyReducer>;
 export type SetEconomicActivityTaxRateParams = __Infer<typeof SetEconomicActivityTaxRateReducer>;
 export type SyncRoadNetworkParams = __Infer<typeof SyncRoadNetworkReducer>;

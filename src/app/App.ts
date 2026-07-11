@@ -8,6 +8,7 @@ import { BuildingTool } from '../buildings/BuildingTool.ts';
 import { BurgageTool } from '../residences/BurgageTool.ts';
 import { MAX_ZONE_DEPTH, MIN_ZONE_DEPTH } from '../residences/burgageLayout.ts';
 import { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
+import { BackyardGardenMarkers } from '../residences/BackyardGardenMarkers.ts';
 import { BurgageFencing } from '../residences/BurgageFencing.ts';
 import { collectOccupiedParcelPolygons } from '../residences/burgageZoneLayout.ts';
 import { SpacetimeGameStore } from '../data/spacetimeGameStore.ts';
@@ -47,7 +48,12 @@ import { CityAdministrationPanel } from '../ui/CityAdministrationPanel.ts';
 import { ECONOMIC_ACTIVITY_TAX_RATE_DEFAULT } from '../economy/villageEconomy.ts';
 import { DEFAULT_PARISH_POLICY } from '../economy/chapelParish.ts';
 import { beginNewWorld, resolveWorldGenerationSettings } from './worldBootstrapFlow.ts';
-import { syncSettlementPresentation } from './settlementSchedulePresentation.ts';
+import { SettlementPresentationController } from './settlementSchedulePresentation.ts';
+import {
+  disposeSettlementWorld,
+  syncSettlementWorld,
+  tickSettlementWorld,
+} from './settlementWorldSync.ts';
 import { LoadingScreen } from '../ui/LoadingScreen.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
 import { saveWorldGenerationSettings } from '../world/worldGenerationSettings.ts';
@@ -72,6 +78,7 @@ export class App {
   private burgageTool: BurgageTool | null = null;
   private buildingMarkers: BuildingMarkers | null = null;
   private residenceMarkers: ResidenceMarkers | null = null;
+  private backyardGardenMarkers: BackyardGardenMarkers | null = null;
   private burgageFencing: BurgageFencing | null = null;
   private toolbar: BuildToolbar | null = null;
   private cityAdminPanel: CityAdministrationPanel | null = null;
@@ -98,6 +105,7 @@ export class App {
   private fpsFrameCount = 0;
   private fpsAccumulatedSeconds = 0;
   private ambientAudio: AmbientAudioController | null = null;
+  private readonly settlementPresentation = new SettlementPresentationController();
   private disposed = false;
 
   constructor(root: HTMLElement) {
@@ -327,6 +335,7 @@ export class App {
     burgageTool.attachTo(sceneManager.previewGroup);
 
     const residenceMarkers = new ResidenceMarkers(sceneManager.selectionGroup);
+    const backyardGardenMarkers = new BackyardGardenMarkers(sceneManager.selectionGroup);
     const burgageFencing = new BurgageFencing(sceneManager.selectionGroup);
 
     const toolbar = new BuildToolbar(uiRoot, {
@@ -390,7 +399,9 @@ export class App {
         && !roadTool.isEnabled()
         && !buildingTool.isEnabled()
         && !burgageTool.isEnabled(),
-      onNewWorld: () => beginNewWorld(),
+      onNewWorld: () => {
+        void beginNewWorld({ connected: this.spacetimeStore?.isConnected ?? false });
+      },
     });
     this.cityAdminPanel = new CityAdministrationPanel(uiRoot, {
       getGameState: () => this.gameState,
@@ -515,6 +526,7 @@ export class App {
     this.buildingMarkers = buildingMarkers;
     this.deliveryAgents = deliveryAgents;
     this.residenceMarkers = residenceMarkers;
+    this.backyardGardenMarkers = backyardGardenMarkers;
     this.burgageFencing = burgageFencing;
     this.toolbar = toolbar;
     this.toolbar.setWaterOverlayActive(isHydrologyOverlayEnabled());
@@ -587,14 +599,18 @@ export class App {
     this.buildingTool?.dispose();
     this.burgageTool?.dispose();
     this.buildingMarkers?.dispose();
-    this.residenceMarkers?.dispose();
+    disposeSettlementWorld({
+      residenceMarkers: this.residenceMarkers,
+      backyardGardenMarkers: this.backyardGardenMarkers,
+      deliveryAgents: this.deliveryAgents,
+      getHeightAt: () => 0,
+    });
     this.burgageFencing?.dispose();
     this.gameRuntime?.dispose();
     this.resourceInspector?.dispose();
     this.worldMapIcons?.quarry.dispose();
     this.worldMapIcons?.foraging.dispose();
     this.worldMapIcons?.backyard.dispose();
-    this.deliveryAgents?.dispose();
     this.toastManager?.dispose();
     this.disposeTooltips?.();
     this.disposeTooltips = null;
@@ -632,7 +648,6 @@ export class App {
       this.worldMapIcons?.quarry.update();
       this.worldMapIcons?.foraging.update();
       this.worldMapIcons?.backyard.update();
-      this.deliveryAgents?.update(dt);
       this.sceneManager?.render(dt, 12, true);
     } else {
       this.cameraController?.update(dt);
@@ -645,13 +660,14 @@ export class App {
       this.worldMapIcons?.quarry.update();
       this.worldMapIcons?.foraging.update();
       this.worldMapIcons?.backyard.update();
-      this.deliveryAgents?.update(dt);
       this.sceneManager?.render(dt, this.cameraController?.getOrbitDistance());
     }
     this.updateFps(time, dt);
-    this.applySettlementPresentation();
+    tickSettlementWorld(
+      { residenceMarkers: this.residenceMarkers, deliveryAgents: this.deliveryAgents },
+      dt,
+    );
     this.ambientAudio?.tick(dt);
-    this.residenceMarkers?.tick(dt);
     this.animationId = requestAnimationFrame(this.tick);
   };
 
@@ -662,10 +678,7 @@ export class App {
     this.treeRegistry = TreeRegistry.fromForestManager(forestManager);
     this.forestVisualSync = new ForestVisualSync(forestManager);
     this.buildingMarkers?.syncBuildings(this.gameState.buildings.values());
-    this.residenceMarkers?.syncResidences(
-      this.gameState.residences.values(),
-      (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
-    );
+    this.syncSettlementWorld(this.gameState);
     this.burgageFencing?.syncZones(
       this.gameState.burgageZones.values(),
       this.gameState.residences.values(),
@@ -738,7 +751,6 @@ export class App {
     if (sampleMs < 400) return;
     const fps = this.fpsFrameCount / Math.max(this.fpsAccumulatedSeconds, 0.001);
     this.toolbar?.setFps(fps);
-    this.applySettlementPresentation();
     (window as typeof window & { __medievalRoadStats?: { backend?: string; fps: number; calls?: number; triangles?: number; pixelRatio?: number } })
       .__medievalRoadStats = { fps, ...this.sceneManager?.getPerformanceStats() };
     this.resetFpsSample(time);
@@ -789,10 +801,7 @@ export class App {
       this.syncPlacedBuildingTerrain({ forceMeshUpdate: true });
     }
 
-    this.residenceMarkers?.syncResidences(
-      state.residences.values(),
-      (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
-    );
+    this.syncSettlementWorld(state);
     this.burgageFencing?.syncZones(
       state.burgageZones.values(),
       state.residences.values(),
@@ -800,9 +809,18 @@ export class App {
     );
 
     this.syncForestClearanceIfNeeded(state);
-    this.deliveryAgents?.syncTrips(state.deliveryTrips.values());
     this.syncResourceUi();
     this.syncToolbar();
+    this.applySettlementPresentation();
+  }
+
+  private syncSettlementWorld(state: GameState): void {
+    syncSettlementWorld({
+      residenceMarkers: this.residenceMarkers,
+      backyardGardenMarkers: this.backyardGardenMarkers,
+      deliveryAgents: this.deliveryAgents,
+      getHeightAt: (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
+    }, state);
   }
 
   private syncForestClearanceIfNeeded(state: GameState): void {
@@ -899,7 +917,7 @@ export class App {
 
   private applySettlementPresentation(): void {
     if (!this.spacetimeStore) return;
-    syncSettlementPresentation(
+    this.settlementPresentation.sync(
       {
         toolbar: this.toolbar,
         sceneManager: this.sceneManager,

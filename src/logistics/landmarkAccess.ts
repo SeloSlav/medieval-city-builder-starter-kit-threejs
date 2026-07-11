@@ -25,6 +25,11 @@ export function hasStaffedChapel(buildings: Iterable<BuildingState>): boolean {
   return false;
 }
 
+/** Player-owned buildings only — mirrors server `owner_has_staffed_chapel` for the active identity. */
+export function playerHasStaffedChapel(buildings: Iterable<BuildingState>): boolean {
+  return hasStaffedChapel(buildings);
+}
+
 export function hasRoadPathToBuildingKind(
   buildings: Iterable<BuildingState>,
   ax: number,

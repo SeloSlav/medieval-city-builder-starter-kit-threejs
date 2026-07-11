@@ -1,0 +1,113 @@
+use spacetimedb::{reducer, Identity, ReducerContext};
+
+use crate::constants::DEFAULT_WORLD_SEED;
+use crate::db::*;
+use crate::lifecycle::seed_world_entities;
+use crate::tables::{
+    BackyardGarden, Building, BurgageZone, DeliveryTrip, ForagingNode, Quarry, ResidenceNeed,
+    TreeEntity, WorldConfig,
+};
+
+#[reducer]
+pub fn reset_world(ctx: &ReducerContext) -> Result<(), String> {
+    let owner = ctx.sender();
+    clear_owner_settlement(ctx, owner);
+    clear_global_world_entities(ctx);
+    reset_world_progress(ctx);
+    seed_world_entities(ctx);
+    Ok(())
+}
+
+fn clear_owner_settlement(ctx: &ReducerContext, owner: Identity) {
+    for trip in ctx.db.delivery_trip().iter().collect::<Vec<DeliveryTrip>>() {
+        if trip.owner != owner {
+            continue;
+        }
+        ctx.db.delivery_trip().id().delete(trip.id);
+    }
+
+    let residence_ids: Vec<u64> = ctx
+        .db
+        .residence()
+        .iter()
+        .filter(|residence| residence.owner == owner)
+        .map(|residence| residence.id)
+        .collect();
+
+    for residence_id in residence_ids {
+        for need in ctx
+            .db
+            .residence_need()
+            .iter()
+            .filter(|need| need.residence_id == residence_id)
+            .collect::<Vec<ResidenceNeed>>()
+        {
+            ctx.db.residence_need().id().delete(need.id);
+        }
+
+        for garden in ctx
+            .db
+            .backyard_garden()
+            .iter()
+            .filter(|garden| garden.residence_id == residence_id)
+            .collect::<Vec<BackyardGarden>>()
+        {
+            ctx.db.backyard_garden().id().delete(garden.id);
+        }
+
+        ctx.db.residence().id().delete(residence_id);
+    }
+
+    for zone in ctx
+        .db
+        .burgage_zone()
+        .iter()
+        .filter(|zone| zone.owner == owner)
+        .collect::<Vec<BurgageZone>>()
+    {
+        ctx.db.burgage_zone().id().delete(zone.id);
+    }
+
+    for building in ctx
+        .db
+        .building()
+        .iter()
+        .filter(|building| building.owner == owner)
+        .collect::<Vec<Building>>()
+    {
+        ctx.db.building().id().delete(building.id);
+    }
+
+    if ctx.db.road_network_state().owner().find(&owner).is_some() {
+        ctx.db.road_network_state().owner().delete(&owner);
+    }
+
+    if ctx.db.player_resources().owner().find(&owner).is_some() {
+        ctx.db.player_resources().owner().delete(&owner);
+    }
+}
+
+fn clear_global_world_entities(ctx: &ReducerContext) {
+    for tree in ctx.db.tree_entity().iter().collect::<Vec<TreeEntity>>() {
+        ctx.db.tree_entity().tree_id().delete(&tree.tree_id);
+    }
+
+    for quarry in ctx.db.quarry().iter().collect::<Vec<Quarry>>() {
+        ctx.db.quarry().quarry_id().delete(&quarry.quarry_id);
+    }
+
+    for node in ctx.db.foraging_node().iter().collect::<Vec<ForagingNode>>() {
+        ctx.db.foraging_node().node_id().delete(&node.node_id);
+    }
+}
+
+fn reset_world_progress(ctx: &ReducerContext) {
+    if let Some(config) = ctx.db.world_config().id().find(&0) {
+        ctx.db.world_config().id().update(WorldConfig {
+            sim_tick: 0,
+            next_building_id: 1,
+            seed: DEFAULT_WORLD_SEED,
+            ..config
+        });
+    }
+}

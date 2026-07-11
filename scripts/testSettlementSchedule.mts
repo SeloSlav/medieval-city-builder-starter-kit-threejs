@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { CALENDAR_WORK_START_HOUR, SIM_TICK_SECONDS } from '../src/generated/gameBalance.ts';
 import { gameClock, isLaborPaused, laborPauseLabel } from '../src/world/gameCalendar.ts';
-import { deriveSettlementSchedule } from '../src/world/settlementSchedule.ts';
+import {
+  deriveSettlementSchedule,
+  expectLaborPausedLikeServer,
+  settlementScheduleDirtyKey,
+} from '../src/world/settlementSchedule.ts';
 import { DEFAULT_PARISH_POLICY } from '../src/economy/chapelParish.ts';
+import type { GameState } from '../src/resources/types.ts';
 
 const workHourTick = Math.ceil(
   (CALENDAR_WORK_START_HOUR * 3600 + 60) / SIM_TICK_SECONDS,
@@ -12,10 +17,12 @@ const nightTick = 0;
 const nightClock = gameClock(nightTick);
 assert.equal(isLaborPaused(nightClock, false, false), true);
 assert.equal(laborPauseLabel(nightClock, false, false), 'Night hours');
+assert.equal(expectLaborPausedLikeServer(nightClock, false, false), true);
 
 const workClock = gameClock(workHourTick);
 assert.equal(isLaborPaused(workClock, false, false), false);
 assert.equal(laborPauseLabel(workClock, false, false), null);
+assert.equal(expectLaborPausedLikeServer(workClock, false, false), false);
 
 const sundayWorkTick = workHourTick;
 const sundayClock = gameClock(sundayWorkTick);
@@ -23,6 +30,10 @@ assert.equal(sundayClock.isSunday, true, 'work-hour tick should land on Sunday (
 assert.equal(sundayClock.isWorkHours, true);
 assert.equal(isLaborPaused(sundayClock, true, true), true);
 assert.equal(laborPauseLabel(sundayClock, true, true), 'Sunday sabbath');
+assert.equal(expectLaborPausedLikeServer(sundayClock, true, true), true);
+
+assert.equal(isLaborPaused(sundayClock, true, false), false);
+assert.equal(expectLaborPausedLikeServer(sundayClock, true, false), false);
 
 const schedule = deriveSettlementSchedule(
   { simTick: nightTick, parishPolicy: DEFAULT_PARISH_POLICY },
@@ -37,5 +48,40 @@ const daySchedule = deriveSettlementSchedule(
 );
 assert.equal(daySchedule.laborPaused, false);
 assert.equal(daySchedule.dayNight.smokeAllowed, true);
+
+const gameState = {
+  buildings: new Map([
+    ['chapel-1', {
+      id: 'chapel-1',
+      kind: 'chapel' as const,
+      x: 0,
+      z: 0,
+      assignedLabor: 1,
+      timber: 0,
+      stone: 0,
+      firewood: 0,
+      water: 0,
+      food: 0,
+      gold: 0,
+    }],
+  ]),
+} as unknown as GameState;
+
+const staffedKey = settlementScheduleDirtyKey(
+  { simTick: workHourTick, parishPolicy: { ...DEFAULT_PARISH_POLICY, sabbathObservanceEnabled: true } },
+  gameState,
+);
+const unstaffedKey = settlementScheduleDirtyKey(
+  { simTick: workHourTick, parishPolicy: { ...DEFAULT_PARISH_POLICY, sabbathObservanceEnabled: true } },
+  null,
+);
+assert.notEqual(staffedKey, unstaffedKey);
+
+const staffedSunday = deriveSettlementSchedule(
+  { simTick: sundayWorkTick, parishPolicy: { ...DEFAULT_PARISH_POLICY, sabbathObservanceEnabled: true } },
+  gameState,
+);
+assert.equal(staffedSunday.laborPaused, true);
+assert.equal(staffedSunday.staffedChapel, true);
 
 console.log('settlement schedule tests passed');

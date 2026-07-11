@@ -45,7 +45,7 @@ export class ResourceInspector {
   private readonly status: HTMLElement;
   private readonly detailList: HTMLElement;
   private readonly stockpileRoot: HTMLElement;
-  private readonly stockpileValues: Record<'timber' | 'stone' | 'firewood' | 'gold', HTMLElement>;
+  private readonly stockpileValues: Record<'timber' | 'stone' | 'firewood' | 'water' | 'food' | 'gold', HTMLElement>;
   private readonly populationValue: HTMLElement;
   private readonly housingValue: HTMLElement;
   private readonly housingSub: HTMLElement;
@@ -128,6 +128,8 @@ export class ResourceInspector {
       timber: this.mustElement(options.uiRoot, '[data-stockpile="timber"]'),
       stone: this.mustElement(options.uiRoot, '[data-stockpile="stone"]'),
       firewood: this.mustElement(options.uiRoot, '[data-stockpile="firewood"]'),
+      water: this.mustElement(options.uiRoot, '[data-stockpile="water"]'),
+      food: this.mustElement(options.uiRoot, '[data-stockpile="food"]'),
       gold: this.mustElement(options.uiRoot, '[data-stockpile="gold"]'),
     };
     this.populationValue = this.mustElement(options.uiRoot, '[data-stockpile="population"]');
@@ -206,6 +208,8 @@ export class ResourceInspector {
     this.stockpileValues.timber.textContent = Math.round(totals.timber).toString();
     this.stockpileValues.stone.textContent = Math.round(totals.stone).toString();
     this.stockpileValues.firewood.textContent = Math.round(totals.firewood).toString();
+    this.stockpileValues.water.textContent = Math.round(totals.water).toString();
+    this.stockpileValues.food.textContent = Math.round(totals.food).toString();
     this.stockpileValues.gold.textContent = totals.gold.toFixed(1);
     this.populationValue.textContent = population.total.toString();
     this.housingValue.textContent = `${population.housed}/${population.housingCapacity}`;

@@ -48,6 +48,7 @@ import PlaceBackyardGardenReducer from "./place_backyard_garden_reducer";
 import PlaceBuildingReducer from "./place_building_reducer";
 import PlaceBurgageZoneReducer from "./place_burgage_zone_reducer";
 import RemoveRoadEdgeReducer from "./remove_road_edge_reducer";
+import ResetWorldReducer from "./reset_world_reducer";
 import SetChapelParishPolicyReducer from "./set_chapel_parish_policy_reducer";
 import SetEconomicActivityTaxRateReducer from "./set_economic_activity_tax_rate_reducer";
 import SyncRoadNetworkReducer from "./sync_road_network_reducer";
@@ -265,6 +266,7 @@ const reducersSchema = __reducers(
   __reducerSchema("place_building", PlaceBuildingReducer),
   __reducerSchema("place_burgage_zone", PlaceBurgageZoneReducer),
   __reducerSchema("remove_road_edge", RemoveRoadEdgeReducer),
+  __reducerSchema("reset_world", ResetWorldReducer),
   __reducerSchema("set_chapel_parish_policy", SetChapelParishPolicyReducer),
   __reducerSchema("set_economic_activity_tax_rate", SetEconomicActivityTaxRateReducer),
   __reducerSchema("sync_road_network", SyncRoadNetworkReducer),
