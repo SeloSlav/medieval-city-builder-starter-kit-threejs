@@ -2,6 +2,14 @@ import { CompassHud } from './CompassHud.ts';
 import { GameMenu } from './GameMenu.ts';
 import { formatBuildingCost, getBuildingCost, residenceZoneCost } from '../resources/buildingEconomy.ts';
 import type { BurgageLayoutHudState } from '../residences/BurgageTool.ts';
+import { isHydrologyOverlayEnabled } from '../scene/hydrologyOverlayPreference.ts';
+import {
+  dismissDockToggles,
+  handleDockHotkey,
+  syncDockToggleButton,
+  toggleDockControl,
+  type DockToggle,
+} from './constructionDockToggle.ts';
 import { syncTipCardVisibility } from './tipCards.ts';
 import { areTipCardsDisabled, setTipCardsDisabled, subscribeTipCardsPreference } from './tipCardsPreference.ts';
 
@@ -17,7 +25,7 @@ const BUILD_CARD_ART = {
   reforester: '/assets/ui/build-menu/reforester.png',
   woodcutters_lodge: '/assets/ui/build-menu/woodcutters-lodge.png',
   stone_quarry: '/assets/ui/build-menu/stonecutters-camp.png',
-  well: '/assets/ui/build-menu/well.svg',
+  well: '/assets/ui/build-menu/water-well.png',
   residences: '/assets/ui/build-menu/residence.png',
 } as const;
 
@@ -145,6 +153,7 @@ export class BuildToolbar {
   private readonly unsubscribeTipsPreference: () => void;
   private firstPersonActive = false;
   private buildMenuOpen = false;
+  private waterOverlayActive = false;
   private buildButtonVisible = false;
   private burgageLayoutHudVisible = false;
   private lastBuildLeft = Number.NaN;
@@ -154,6 +163,9 @@ export class BuildToolbar {
   private hudMode: ToolbarStats['mode'] = 'idle';
   private deleteCancel: (() => void) | null = null;
   private deleteRemove: (() => void) | null = null;
+  private readonly buildMenuToggle: DockToggle;
+  private readonly waterOverlayToggle: DockToggle;
+  private readonly dockToggles: DockToggle[];
   private readonly toolbarHandlers: {
     onOpenRoads: () => void;
     onToggleLumberMill: () => void;
@@ -162,26 +174,26 @@ export class BuildToolbar {
     onToggleStoneQuarry: () => void;
     onToggleWell: () => void;
     onToggleResidences: () => void;
-    onToggleWaterOverlay?: () => void;
+    onSetWaterOverlay?: (active: boolean) => void;
   };
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTypingTarget(event.target) || this.firstPersonActive || this.gameMenu?.isOpen()) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     const key = event.key.toLowerCase();
-    if (key === 'b') {
+    if (key === 'escape') {
+      if (dismissDockToggles(this.dockToggles)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (handleDockHotkey(key, this.dockToggles)) {
       event.preventDefault();
       event.stopPropagation();
-      this.toggleBuildMenu();
       return;
     }
     if (key === 'r' && this.buildMenuOpen) {
-      this.setBuildMenuOpen(false);
-      return;
-    }
-    if (key === 'escape' && this.buildMenuOpen) {
-      event.preventDefault();
-      event.stopPropagation();
       this.setBuildMenuOpen(false);
       return;
     }
@@ -206,7 +218,7 @@ export class BuildToolbar {
       onToggleStoneQuarry: () => void;
       onToggleWell: () => void;
       onToggleResidences: () => void;
-      onToggleWaterOverlay?: () => void;
+      onSetWaterOverlay?: (active: boolean) => void;
       onBurgagePlotDecrease?: () => void;
       onBurgagePlotIncrease?: () => void;
       onBurgageRotateFrontage?: () => void;
@@ -391,7 +403,7 @@ export class BuildToolbar {
             <path d="M12 11.5h1" />
             <path d="M12 16.5h1" />
           </svg>
-          <span class="construction-dock-button__hotkey" aria-hidden="true">(R)</span>
+          <span class="construction-dock-button__hotkey" aria-hidden="true">R</span>
         </button>
         <button type="button" class="construction-dock-button construction-dock-button--hotkey" data-action="build-menu" data-tooltip="Build (B)" aria-label="Build menu (B)" aria-expanded="false" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -399,10 +411,11 @@ export class BuildToolbar {
             <path d="M12.3 7.7l4-4 3.9 3.9-4 4" />
             <path d="M14.8 10.8L6.4 19.2a2.1 2.1 0 0 1-3-3l8.4-8.4" />
           </svg>
-          <span class="construction-dock-button__hotkey" aria-hidden="true">(B)</span>
+          <span class="construction-dock-button__hotkey" aria-hidden="true">B</span>
         </button>
-        <button type="button" class="construction-dock-button construction-dock-button--text" data-action="water-overlay" data-tooltip="Water map" aria-label="Toggle water hydrology overlay" aria-pressed="false">
-          <span aria-hidden="true">💧</span>
+        <button type="button" class="construction-dock-button construction-dock-button--hotkey construction-dock-button--water" data-action="water-overlay" data-tooltip="Water map (M)" aria-label="Water map (M)" aria-pressed="false">
+          <span class="construction-dock-button__icon" aria-hidden="true">💧</span>
+          <span class="construction-dock-button__hotkey" aria-hidden="true">M</span>
         </button>
         <button type="button" class="construction-dock-button construction-dock-button--text" data-action="help" data-tooltip="Help tips" aria-label="Toggle help tips" aria-pressed="false">
           <span aria-hidden="true">?</span>
@@ -461,7 +474,7 @@ export class BuildToolbar {
       onToggleStoneQuarry: handlers.onToggleStoneQuarry,
       onToggleWell: handlers.onToggleWell,
       onToggleResidences: handlers.onToggleResidences,
-      onToggleWaterOverlay: handlers.onToggleWaterOverlay,
+      onSetWaterOverlay: handlers.onSetWaterOverlay,
     };
     window.addEventListener('keydown', this.onKeyDown, true);
     this.gameMenu = new GameMenu(root, {
@@ -511,13 +524,31 @@ export class BuildToolbar {
     this.compassHud = new CompassHud(root);
     this.helpButton.setAttribute('aria-pressed', String(!areTipCardsDisabled()));
 
+    this.buildMenuToggle = {
+      button: this.buildMenuButton,
+      hotkey: 'b',
+      getActive: () => this.buildMenuOpen,
+      setActive: (active) => this.setBuildMenuOpen(active),
+    };
+    this.waterOverlayToggle = {
+      button: this.waterOverlayButton,
+      hotkey: 'm',
+      getActive: () => this.waterOverlayActive,
+      setActive: (active) => this.applyWaterOverlay(active),
+    };
+    this.dockToggles = [this.buildMenuToggle, this.waterOverlayToggle];
+    this.waterOverlayActive = isHydrologyOverlayEnabled();
+    for (const toggle of this.dockToggles) {
+      syncDockToggleButton(toggle);
+    }
+
     this.syncContextPanels();
     this.roadButton.addEventListener('click', () => {
       this.setBuildMenuOpen(false);
       handlers.onOpenRoads();
     });
-    this.buildMenuButton.addEventListener('click', () => this.toggleBuildMenu());
-    this.waterOverlayButton.addEventListener('click', () => handlers.onToggleWaterOverlay?.());
+    this.buildMenuButton.addEventListener('click', () => toggleDockControl(this.buildMenuToggle));
+    this.waterOverlayButton.addEventListener('click', () => toggleDockControl(this.waterOverlayToggle));
     this.helpButton.addEventListener('click', () => this.toggleHelpTips());
     this.settingsButton.addEventListener('click', () => {
       this.setBuildMenuOpen(false);
@@ -548,8 +579,19 @@ export class BuildToolbar {
   }
 
   setWaterOverlayActive(active: boolean): void {
-    this.waterOverlayButton.classList.toggle('is-active', active);
-    this.waterOverlayButton.setAttribute('aria-pressed', String(active));
+    this.applyWaterOverlay(active, false);
+  }
+
+  private applyWaterOverlay(active: boolean, notify = true): void {
+    if (this.waterOverlayActive === active) {
+      syncDockToggleButton(this.waterOverlayToggle);
+      return;
+    }
+    this.waterOverlayActive = active;
+    syncDockToggleButton(this.waterOverlayToggle);
+    if (notify) {
+      this.toolbarHandlers.onSetWaterOverlay?.(active);
+    }
   }
 
   setStats(stats: ToolbarStats): void {
@@ -561,11 +603,9 @@ export class BuildToolbar {
     const stoneQuarryMode = stats.mode === 'stone_quarry';
     const wellMode = stats.mode === 'well';
     const residencesMode = stats.mode === 'residences';
-    const constructionMode = lumberMode || reforesterMode || woodcuttersLodgeMode || stoneQuarryMode || wellMode || residencesMode;
     this.roadButton.classList.toggle('is-active', roadMode);
     this.roadButton.setAttribute('aria-pressed', String(roadMode));
-    this.buildMenuButton.classList.toggle('is-active', constructionMode || this.buildMenuOpen);
-    this.buildMenuButton.setAttribute('aria-pressed', String(constructionMode || this.buildMenuOpen));
+    this.syncBuildMenuButton();
     this.lumberMillButton.classList.toggle('is-active', lumberMode);
     this.lumberMillButton.setAttribute('aria-pressed', String(lumberMode));
     this.reforesterButton.classList.toggle('is-active', reforesterMode);
@@ -705,13 +745,7 @@ export class BuildToolbar {
   }
 
   private isBuilderHudMode(mode: ToolbarStats['mode']): boolean {
-    return mode === 'road'
-      || mode === 'lumber_mill'
-      || mode === 'reforester'
-      || mode === 'woodcutters_lodge'
-      || mode === 'stone_quarry'
-      || mode === 'well'
-      || mode === 'residences';
+    return mode === 'road' || this.isConstructionToolMode(mode);
   }
 
   private describeBuilderTitle(mode: ToolbarStats['mode']): string {
@@ -769,17 +803,28 @@ export class BuildToolbar {
     if (runCancel) cancel?.();
   }
 
-  private toggleBuildMenu(): void {
-    this.setBuildMenuOpen(!this.buildMenuOpen);
-  }
-
   private setBuildMenuOpen(open: boolean): void {
     if (this.buildMenuOpen === open) return;
     this.buildMenuOpen = open;
     this.buildMenu.hidden = !open;
     this.buildMenuButton.setAttribute('aria-expanded', String(open));
-    this.buildMenuButton.classList.toggle('is-active', open);
-    this.buildMenuButton.setAttribute('aria-pressed', String(open));
+    this.syncBuildMenuButton();
+  }
+
+  private syncBuildMenuButton(): void {
+    const constructionMode = this.isConstructionToolMode(this.hudMode);
+    const active = constructionMode || this.buildMenuOpen;
+    this.buildMenuButton.classList.toggle('is-active', active);
+    this.buildMenuButton.setAttribute('aria-pressed', String(active));
+  }
+
+  private isConstructionToolMode(mode: ToolbarStats['mode']): boolean {
+    return mode === 'lumber_mill'
+      || mode === 'reforester'
+      || mode === 'woodcutters_lodge'
+      || mode === 'stone_quarry'
+      || mode === 'well'
+      || mode === 'residences';
   }
 
   private chooseBuildMenuItem(handler: () => void): void {

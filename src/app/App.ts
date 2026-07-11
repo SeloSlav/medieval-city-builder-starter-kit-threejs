@@ -374,11 +374,10 @@ export class App {
         burgageTool.rotateFrontageEdge();
         this.syncToolbar();
       },
-      onToggleWaterOverlay: () => {
-        const enabled = !isHydrologyOverlayEnabled();
-        setHydrologyOverlayEnabled(enabled);
-        this.sceneManager?.setHydrologyOverlayVisible(enabled);
-        this.toolbar?.setWaterOverlayActive(enabled);
+      onSetWaterOverlay: (active) => {
+        setHydrologyOverlayEnabled(active);
+        this.sceneManager?.setHydrologyOverlayVisible(active);
+        this.toolbar?.setWaterOverlayActive(active);
       },
       onMenuOpenChange: (open) => {
         cameraController.setInputEnabled(!open && !firstPersonController.isActive());

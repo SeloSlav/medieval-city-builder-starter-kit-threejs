@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import type { RiverField } from '../rivers/RiverField.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
-import { sampleHydrologyScore } from './sampleHydrology.ts';
+import { sampleHydrologyMapScore } from './sampleHydrology.ts';
 
-const OVERLAY_RESOLUTION = 256;
+const OVERLAY_RESOLUTION = 512;
 
 export type HydrologyOverlayOptions = {
   terrain: Terrain;
@@ -18,7 +18,8 @@ export class HydrologyOverlay {
 
   constructor(options: HydrologyOverlayOptions) {
     this.terrain = options.terrain;
-    const texture = createHydrologyTexture(options.riverField);
+    const { riverField } = options;
+    const texture = createHydrologyTexture(riverField);
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
@@ -26,19 +27,19 @@ export class HydrologyOverlay {
       depthWrite: false,
     });
 
-    const geometry = new THREE.PlaneGeometry(
-      options.terrain.bounds.maxX - options.terrain.bounds.minX,
-      options.terrain.bounds.maxZ - options.terrain.bounds.minZ,
-      1,
-      1,
-    );
+    // Match riverField world extent (full 1080m), not terrain.playable bounds (820m).
+    const geometry = new THREE.PlaneGeometry(riverField.spanX, riverField.spanZ, 1, 1);
     geometry.rotateX(-Math.PI * 0.5);
 
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.name = 'Hydrology overlay';
     this.mesh.renderOrder = 4;
     this.mesh.visible = false;
-    this.mesh.position.set(0, 0.35, 0);
+    this.mesh.position.set(
+      riverField.startX + riverField.spanX * 0.5,
+      0.35,
+      riverField.startZ + riverField.spanZ * 0.5,
+    );
     options.parent.add(this.mesh);
   }
 
@@ -69,20 +70,17 @@ export class HydrologyOverlay {
 function createHydrologyTexture(riverField: RiverField): THREE.DataTexture {
   const resolution = OVERLAY_RESOLUTION;
   const data = new Uint8Array(resolution * resolution * 4);
-  const bounds = {
-    minX: riverField.startX,
-    maxX: riverField.startX + riverField.spanX,
-    minZ: riverField.startZ,
-    maxZ: riverField.startZ + riverField.spanZ,
-  };
+  const { startX, startZ, spanX, spanZ } = riverField;
 
   for (let iz = 0; iz < resolution; iz++) {
+    const z = startZ + (iz / (resolution - 1)) * spanZ;
     for (let ix = 0; ix < resolution; ix++) {
-      const x = bounds.minX + (ix / (resolution - 1)) * (bounds.maxX - bounds.minX);
-      const z = bounds.minZ + (iz / (resolution - 1)) * (bounds.maxZ - bounds.minZ);
-      const score = sampleHydrologyScore(riverField, x, z);
+      const x = startX + (ix / (resolution - 1)) * spanX;
+      const score = sampleHydrologyMapScore(riverField, x, z);
       const color = hydrologyColor(score);
-      const index = (iz * resolution + ix) * 4;
+      // PlaneGeometry UV v=0 maps to +Z after the X rotation — flip rows so minZ aligns with rivers.
+      const dataRow = resolution - 1 - iz;
+      const index = (dataRow * resolution + ix) * 4;
       data[index] = color.r;
       data[index + 1] = color.g;
       data[index + 2] = color.b;
@@ -97,6 +95,7 @@ function createHydrologyTexture(riverField: RiverField): THREE.DataTexture {
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
+  texture.flipY = false;
   texture.needsUpdate = true;
   return texture;
 }

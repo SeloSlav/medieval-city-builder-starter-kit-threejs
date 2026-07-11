@@ -9,7 +9,7 @@ export function sampleHydrologyScore(riverField: RiverField, x: number, z: numbe
     return 1;
   }
 
-  const riverMask = riverField.sampleRiverMask(x, z);
+  const riverMask = riverField.sampleConnectedMask(x, z);
   const shoreDistance = riverField.sampleShoreDistance(x, z);
   const valleyDepth = riverField.layout.getValleyDepression(x, z);
 
@@ -20,6 +20,24 @@ export function sampleHydrologyScore(riverField: RiverField, x: number, z: numbe
   const riverFactor = riverMask;
 
   return clamp01(riverFactor * 0.34 + shoreFactor * 0.42 + valleyFactor * 0.24);
+}
+
+/** Map display score — emphasizes visible rivers and near-shore moisture. */
+export function sampleHydrologyMapScore(riverField: RiverField, x: number, z: number): number {
+  if (riverField.isRenderedWetAt(x, z)) {
+    return 1;
+  }
+
+  const shoreDistance = riverField.sampleShoreDistance(x, z);
+  if (shoreDistance <= 0) {
+    return 0.92;
+  }
+
+  const nearShore = Math.exp(-shoreDistance / 18);
+  const valleyDepth = riverField.layout.getValleyDepression(x, z);
+  const valleyFactor = Math.min(0.55, valleyDepth / VALLEY_DEPTH_SCALE * 0.55);
+
+  return clamp01(nearShore * 0.78 + valleyFactor);
 }
 
 export function hydrologyGradeLabel(score: number): string {
