@@ -199,6 +199,8 @@ function workExtentColor(kind: BuildingKind): number {
       return 0xa8a29e;
     case 'woodcutters_lodge':
       return 0xd7b463;
+    case 'well':
+      return 0x4f9fd4;
     default: {
       const unreachable: never = kind;
       return unreachable;

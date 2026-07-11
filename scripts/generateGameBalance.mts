@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 type BuildingBalance = {
   label: string;
   cost: { timber: number; stone: number };
-  storage: { timber: number; firewood: number; stone: number };
+  storage: { timber: number; firewood: number; stone: number; water?: number };
   workRadius: number;
   pickRadius: number;
   harvestInterval: number;
@@ -36,8 +36,11 @@ type GameBalance = {
     wideParcelFrontageMin: number;
     residenceFirewoodCapacity: number;
     residenceFirewoodPerPersonPerSec: number;
+    residenceWaterCapacity: number;
+    residenceWaterPerPersonPerSec: number;
     abandonAfterDeficitTicks: number;
     residenceRecoveryFirewoodMin: number;
+    residenceRecoveryWaterMin: number;
     residenceSettleTicks: number;
   };
   roads: {
@@ -51,6 +54,11 @@ type GameBalance = {
     lodgeFirewoodPerDelivery: number;
     stonePerHarvest: number;
     reforesterRegrowPerSec: number;
+    wellBaseRefillPerSec: number;
+    wellSurgeChancePerTick: number;
+    wellSurgeAmountMin: number;
+    wellSurgeAmountMax: number;
+    wellSurgeCooldownSec: number;
   };
   buildings: Record<string, BuildingBalance>;
 };
@@ -66,6 +74,7 @@ const simKindByKind: Record<string, string | null> = {
   reforester: 'Reforester',
   stone_quarry: 'StoneQuarry',
   woodcutters_lodge: 'WoodcuttersLodge',
+  well: 'Well',
 };
 
 function rustF64(value: number): string {
@@ -95,8 +104,11 @@ function generateRust(): string {
     `pub const WIDE_PARCEL_FRONTAGE_MIN: f64 = ${rustF64(b.population.wideParcelFrontageMin)};`,
     `pub const RESIDENCE_FIREWOOD_CAPACITY: f64 = ${rustF64(b.population.residenceFirewoodCapacity)};`,
     `pub const RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC: f64 = ${rustF64(b.population.residenceFirewoodPerPersonPerSec)};`,
+    `pub const RESIDENCE_WATER_CAPACITY: f64 = ${rustF64(b.population.residenceWaterCapacity)};`,
+    `pub const RESIDENCE_WATER_PER_PERSON_PER_SEC: f64 = ${rustF64(b.population.residenceWaterPerPersonPerSec)};`,
     `pub const ABANDON_AFTER_DEFICIT_TICKS: u32 = ${b.population.abandonAfterDeficitTicks};`,
     `pub const RESIDENCE_RECOVERY_FIREWOOD_MIN: f64 = ${rustF64(b.population.residenceRecoveryFirewoodMin)};`,
+    `pub const RESIDENCE_RECOVERY_WATER_MIN: f64 = ${rustF64(b.population.residenceRecoveryWaterMin)};`,
     `pub const RESIDENCE_SETTLE_TICKS: u32 = ${b.population.residenceSettleTicks};`,
     '',
     `pub const BUILDING_ROAD_ACCESS_DISTANCE: f64 = ${rustF64(b.roads.buildingRoadAccessDistance)};`,
@@ -107,6 +119,11 @@ function generateRust(): string {
     `pub const LODGE_FIREWOOD_PER_DELIVERY: f64 = ${rustF64(b.production.lodgeFirewoodPerDelivery)};`,
     `pub const STONE_PER_HARVEST: f64 = ${rustF64(b.production.stonePerHarvest)};`,
     `pub const REFORESTER_REGROW_PER_SEC: f64 = ${rustF64(b.production.reforesterRegrowPerSec)};`,
+    `pub const WELL_BASE_REFILL_PER_SEC: f64 = ${rustF64(b.production.wellBaseRefillPerSec)};`,
+    `pub const WELL_SURGE_CHANCE_PER_TICK: f64 = ${rustF64(b.production.wellSurgeChancePerTick)};`,
+    `pub const WELL_SURGE_AMOUNT_MIN: f64 = ${rustF64(b.production.wellSurgeAmountMin)};`,
+    `pub const WELL_SURGE_AMOUNT_MAX: f64 = ${rustF64(b.production.wellSurgeAmountMax)};`,
+    `pub const WELL_SURGE_COOLDOWN_SEC: f64 = ${rustF64(b.production.wellSurgeCooldownSec)};`,
     '',
   ];
 
@@ -116,6 +133,7 @@ function generateRust(): string {
   lines.push('    Reforester,');
   lines.push('    StoneQuarry,');
   lines.push('    WoodcuttersLodge,');
+  lines.push('    Well,');
   lines.push('}');
   lines.push('');
   lines.push('#[derive(Clone, Copy, Debug)]');
@@ -126,6 +144,7 @@ function generateRust(): string {
   lines.push('    pub storage_timber: f64,');
   lines.push('    pub storage_firewood: f64,');
   lines.push('    pub storage_stone: f64,');
+  lines.push('    pub storage_water: f64,');
   lines.push('    pub accepts_labor: bool,');
   lines.push('    pub max_labor: u32,');
   lines.push('    pub work_radius: f64,');
@@ -148,6 +167,7 @@ function generateRust(): string {
     lines.push(`    storage_timber: ${rustF64(def.storage.timber)},`);
     lines.push(`    storage_firewood: ${rustF64(def.storage.firewood)},`);
     lines.push(`    storage_stone: ${rustF64(def.storage.stone)},`);
+    lines.push(`    storage_water: ${rustF64(def.storage.water ?? 0)},`);
     lines.push(`    accepts_labor: ${def.acceptsLabor},`);
     lines.push(`    max_labor: ${def.maxLabor},`);
     lines.push(`    work_radius: ${rustF64(def.workRadius)},`);
@@ -200,8 +220,11 @@ function generateTypeScript(): string {
     `export const WIDE_PARCEL_FRONTAGE_MIN = ${b.population.wideParcelFrontageMin};`,
     `export const RESIDENCE_FIREWOOD_CAPACITY = ${b.population.residenceFirewoodCapacity};`,
     `export const RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC = ${b.population.residenceFirewoodPerPersonPerSec};`,
+    `export const RESIDENCE_WATER_CAPACITY = ${b.population.residenceWaterCapacity};`,
+    `export const RESIDENCE_WATER_PER_PERSON_PER_SEC = ${b.population.residenceWaterPerPersonPerSec};`,
     `export const ABANDON_AFTER_DEFICIT_TICKS = ${b.population.abandonAfterDeficitTicks};`,
     `export const RESIDENCE_RECOVERY_FIREWOOD_MIN = ${b.population.residenceRecoveryFirewoodMin};`,
+    `export const RESIDENCE_RECOVERY_WATER_MIN = ${b.population.residenceRecoveryWaterMin};`,
     `export const RESIDENCE_SETTLE_TICKS = ${b.population.residenceSettleTicks};`,
     '',
     `export const BUILDING_ROAD_ACCESS_DISTANCE = ${b.roads.buildingRoadAccessDistance};`,
@@ -212,6 +235,11 @@ function generateTypeScript(): string {
     `export const LODGE_DELIVERY_INTERVAL = ${b.production.lodgeDeliveryInterval};`,
     `export const LODGE_FIREWOOD_PER_DELIVERY = ${b.production.lodgeFirewoodPerDelivery};`,
     `export const STONE_PER_HARVEST = ${b.production.stonePerHarvest};`,
+    `export const WELL_BASE_REFILL_PER_SEC = ${b.production.wellBaseRefillPerSec};`,
+    `export const WELL_SURGE_CHANCE_PER_TICK = ${b.production.wellSurgeChancePerTick};`,
+    `export const WELL_SURGE_AMOUNT_MIN = ${b.production.wellSurgeAmountMin};`,
+    `export const WELL_SURGE_AMOUNT_MAX = ${b.production.wellSurgeAmountMax};`,
+    `export const WELL_SURGE_COOLDOWN_SEC = ${b.production.wellSurgeCooldownSec};`,
     '',
     'export type BuildingResourceCost = {',
     '  timber: number;',
@@ -222,6 +250,7 @@ function generateTypeScript(): string {
     '  timber: number;',
     '  firewood: number;',
     '  stone: number;',
+    '  water?: number;',
     '};',
     '',
     'export type BuildingDefinition = {',
@@ -264,8 +293,9 @@ function generateTypeScript(): string {
   lines.push('export const BUILDING_STORAGE_CAPS = {');
 
   for (const [kind, def] of Object.entries(b.buildings)) {
+    const water = def.storage.water ?? 0;
     lines.push(
-      `  ${kind}: { timber: ${def.storage.timber}, firewood: ${def.storage.firewood}, stone: ${def.storage.stone} },`,
+      `  ${kind}: { timber: ${def.storage.timber}, firewood: ${def.storage.firewood}, stone: ${def.storage.stone}${water > 0 ? `, water: ${water}` : ''} },`,
     );
   }
 

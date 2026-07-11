@@ -3,6 +3,7 @@ use spacetimedb::ReducerContext;
 use crate::simulation::road_logistics::{claim_residences_for_lodges, owner_lodges};
 use crate::simulation::residence_needs::kinds::ResidenceNeedKind;
 use crate::simulation::tick_context::SimTickContext;
+use crate::simulation::well::residence_has_well_supply;
 use crate::tables::Residence;
 
 pub struct ResidenceNeedSupplyContext {
@@ -17,6 +18,7 @@ impl ResidenceNeedSupplyContext {
     fn index_for(kind: ResidenceNeedKind) -> usize {
         match kind {
             ResidenceNeedKind::Firewood => 0,
+            ResidenceNeedKind::Water => 1,
         }
     }
 }
@@ -31,9 +33,11 @@ pub fn build_supply_context(
         let claims = claim_residences_for_lodges(network, &lodges, std::slice::from_ref(residence));
         claims.contains_key(&residence.id)
     });
+    let has_water_route = residence_has_well_supply(ctx, residence.owner, residence);
 
     let mut routes = [false; ResidenceNeedKind::ALL.len()];
     routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::Firewood)] =
         has_firewood_route;
+    routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::Water)] = has_water_route;
     ResidenceNeedSupplyContext { routes }
 }

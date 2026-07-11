@@ -2,6 +2,7 @@ pub mod firewood;
 mod kinds;
 pub mod state;
 mod supply;
+pub mod water;
 
 pub use kinds::ResidenceNeedKind;
 pub use state::{load_needs, need_stock};
@@ -124,17 +125,22 @@ fn consume_need(
     residence: &Residence,
     need: &NeedState,
 ) -> ConsumeResult {
-    match kind {
-        ResidenceNeedKind::Firewood => match firewood::consume(residence, need) {
-            firewood::ConsumeOutcome::Met(updated) => ConsumeResult::Met(updated),
-            firewood::ConsumeOutcome::Unmet => ConsumeResult::Unmet,
-        },
-    }
+        match kind {
+            ResidenceNeedKind::Firewood => match firewood::consume(residence, need) {
+                firewood::ConsumeOutcome::Met(updated) => ConsumeResult::Met(updated),
+                firewood::ConsumeOutcome::Unmet => ConsumeResult::Unmet,
+            },
+            ResidenceNeedKind::Water => match water::consume(residence, need) {
+                water::ConsumeOutcome::Met(updated) => ConsumeResult::Met(updated),
+                water::ConsumeOutcome::Unmet => ConsumeResult::Unmet,
+            },
+        }
 }
 
 fn on_unmet_need(kind: ResidenceNeedKind, need: &NeedState) -> NeedState {
     match kind {
         ResidenceNeedKind::Firewood => firewood::on_unmet(need),
+        ResidenceNeedKind::Water => water::on_unmet(need),
     }
 }
 
@@ -145,6 +151,7 @@ fn evaluate_recovery(
 ) -> bool {
     match kind {
         ResidenceNeedKind::Firewood => firewood::evaluate_recovery(need, supply),
+        ResidenceNeedKind::Water => water::evaluate_recovery(need, supply),
     }
 }
 
@@ -155,5 +162,6 @@ fn apply_delivery_for_kind(
 ) -> NeedState {
     match kind {
         ResidenceNeedKind::Firewood => firewood::apply_delivery(need, delivered),
+        ResidenceNeedKind::Water => water::apply_delivery(need, delivered),
     }
 }

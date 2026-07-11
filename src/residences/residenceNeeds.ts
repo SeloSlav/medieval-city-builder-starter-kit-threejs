@@ -2,7 +2,10 @@ import {
   ABANDON_AFTER_DEFICIT_TICKS,
   RESIDENCE_FIREWOOD_CAPACITY,
   RESIDENCE_RECOVERY_FIREWOOD_MIN,
+  RESIDENCE_RECOVERY_WATER_MIN,
   RESIDENCE_SETTLE_TICKS,
+  RESIDENCE_WATER_CAPACITY,
+  RESIDENCE_WATER_PER_PERSON_PER_SEC,
   SIM_TICK_SECONDS,
 } from '../generated/gameBalance.ts';
 import {
@@ -48,7 +51,7 @@ export function residenceRecoveryReady(
 
 export function residenceNeedsStatus(
   residence: ResidenceState,
-  supply: ResidenceNeedSupplyContext = { servingLodgeId: null },
+  supply: ResidenceNeedSupplyContext = { servingLodgeId: null, servingWellId: null },
 ): ResidenceNeedsStatus {
   if (residence.abandoned) {
     return describeAbandonedResidence(residence, supply);
@@ -79,6 +82,16 @@ function evaluateNeedRecovery(
         stock: need.stock,
         threshold: RESIDENCE_RECOVERY_FIREWOOD_MIN,
         supplyAvailable: supply.servingLodgeId != null,
+      };
+    case 'water':
+      return {
+        kind,
+        label: 'Water',
+        ready: supply.servingWellId != null
+          && need.stock + 1e-6 >= RESIDENCE_RECOVERY_WATER_MIN,
+        stock: need.stock,
+        threshold: RESIDENCE_RECOVERY_WATER_MIN,
+        supplyAvailable: supply.servingWellId != null,
       };
     default: {
       const unhandled: never = kind;
@@ -191,6 +204,29 @@ function describeActiveNeed(
         state: 'active',
       };
     }
+    case 'water': {
+      const runwayDays = residenceWaterRunwayDays(residence);
+      if (runwayDays == null) return null;
+      if (runwayDays <= 0.25) {
+        return {
+          label: 'Out of water — awaiting well supply',
+          state: 'warning',
+        };
+      }
+      if (runwayDays < 1) {
+        return {
+          label: `Low water — ${formatWaterRunwayDays(runwayDays)} left`,
+          state: 'warning',
+        };
+      }
+      if (runwayDays < 3) {
+        return {
+          label: `Water low — ${formatWaterRunwayDays(runwayDays)} left`,
+          state: 'warning',
+        };
+      }
+      return null;
+    }
     default: {
       const unhandled: never = kind;
       return unhandled;
@@ -198,10 +234,26 @@ function describeActiveNeed(
   }
 }
 
+function residenceWaterRunwayDays(residence: ResidenceState): number | null {
+  if (residence.abandoned || residence.population === 0) return null;
+  const stock = getNeed(residence.needs, 'water').stock;
+  const dailyUse = residence.population * RESIDENCE_WATER_PER_PERSON_PER_SEC * 86400;
+  if (dailyUse <= 1e-9) return null;
+  return stock / dailyUse;
+}
+
+function formatWaterRunwayDays(days: number): string {
+  if (days >= 2) return `${days.toFixed(1)} days`;
+  const hours = Math.max(1, Math.round(days * 24));
+  return `${hours}h`;
+}
+
 function needLabel(kind: ResidenceNeedKind): string {
   switch (kind) {
     case 'firewood':
       return 'Firewood';
+    case 'water':
+      return 'Water';
     default: {
       const unhandled: never = kind;
       return unhandled;
@@ -224,4 +276,4 @@ function formatShortDuration(seconds: number): string {
   return `~${Math.max(1, Math.round(seconds))}s`;
 }
 
-export { RESIDENCE_FIREWOOD_CAPACITY };
+export { RESIDENCE_FIREWOOD_CAPACITY, RESIDENCE_WATER_CAPACITY };

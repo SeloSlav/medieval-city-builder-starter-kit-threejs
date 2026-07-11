@@ -11,6 +11,7 @@ const BUILDING_SHADOW_HEIGHT: Record<BuildingKind, number> = {
   reforester: 4.2,
   woodcutters_lodge: 4.2,
   stone_quarry: 5.8,
+  well: 2.4,
 };
 
 const RESIDENCE_SHADOW_HEIGHT = 6.4;
@@ -70,6 +71,7 @@ function createBuildingShadowGeometry(
     case 'lumber_mill':
     case 'reforester':
     case 'woodcutters_lodge':
+    case 'well':
       return new THREE.BoxGeometry(params.radiusX * 2 * scale, height, params.radiusZ * 2 * scale);
     default: {
       const unreachable: never = kind;

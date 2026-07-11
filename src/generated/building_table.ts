@@ -22,5 +22,7 @@ export default __t.row({
   timber: __t.f64(),
   firewood: __t.f64(),
   stone: __t.f64(),
+  water: __t.f64(),
+  waterCapacity: __t.f64().name("water_capacity"),
   assignedLabor: __t.u32().name("assigned_labor"),
 });

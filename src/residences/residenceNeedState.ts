@@ -1,9 +1,10 @@
-export type ResidenceNeedKind = 'firewood';
+export type ResidenceNeedKind = 'firewood' | 'water';
 
-export const RESIDENCE_NEED_KINDS: readonly ResidenceNeedKind[] = ['firewood'];
+export const RESIDENCE_NEED_KINDS: readonly ResidenceNeedKind[] = ['firewood', 'water'];
 
 export const RESIDENCE_NEED_KIND_IDS: Record<ResidenceNeedKind, number> = {
   firewood: 0,
+  water: 1,
 };
 
 export type ResidenceNeedRecord = {
@@ -15,6 +16,7 @@ export type ResidenceNeedsState = Record<ResidenceNeedKind, ResidenceNeedRecord>
 
 export type ResidenceNeedSupplyContext = {
   servingLodgeId: string | null;
+  servingWellId: string | null;
 };
 
 export type ResidenceNeedRecoveryStatus = {
@@ -34,6 +36,7 @@ export type ResidenceNeedsStatus = {
 export function createDefaultNeeds(): ResidenceNeedsState {
   return {
     firewood: { stock: 0, deficitTicks: 0 },
+    water: { stock: 0, deficitTicks: 0 },
   };
 }
 
@@ -41,6 +44,8 @@ export function needKindFromId(id: number): ResidenceNeedKind | null {
   switch (id) {
     case RESIDENCE_NEED_KIND_IDS.firewood:
       return 'firewood';
+    case RESIDENCE_NEED_KIND_IDS.water:
+      return 'water';
     default:
       return null;
   }

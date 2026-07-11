@@ -46,6 +46,7 @@ import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
 import { LoadingScreen } from '../ui/LoadingScreen.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
 import { mountTooltips } from '../ui/tooltips.ts';
+import { setHydrologyOverlayEnabled, isHydrologyOverlayEnabled } from '../scene/hydrologyOverlayPreference.ts';
 import { roadPlacementReasonToToastId, buildingPlacementReasonToToastId, burgagePlacementReasonToToastId } from '../ui/toastMessages.ts';
 
 const TARGET_MAX_FPS = 90;
@@ -340,6 +341,14 @@ export class App {
         }
         this.syncToolbar();
       },
+      onToggleWell: () => {
+        buildingTool.toggleMode('well');
+        if (buildingTool.isEnabled()) {
+          roadTool.setEnabled(false);
+          burgageTool.setEnabled(false);
+        }
+        this.syncToolbar();
+      },
       onToggleResidences: () => {
         const wasEnabled = burgageTool.isEnabled();
         burgageTool.setEnabled(!wasEnabled);
@@ -364,6 +373,12 @@ export class App {
       onBurgageRotateFrontage: () => {
         burgageTool.rotateFrontageEdge();
         this.syncToolbar();
+      },
+      onToggleWaterOverlay: () => {
+        const enabled = !isHydrologyOverlayEnabled();
+        setHydrologyOverlayEnabled(enabled);
+        this.sceneManager?.setHydrologyOverlayVisible(enabled);
+        this.toolbar?.setWaterOverlayActive(enabled);
       },
       onMenuOpenChange: (open) => {
         cameraController.setInputEnabled(!open && !firstPersonController.isActive());
@@ -503,6 +518,7 @@ export class App {
     this.residenceMarkers = residenceMarkers;
     this.burgageFencing = burgageFencing;
     this.toolbar = toolbar;
+    this.toolbar.setWaterOverlayActive(isHydrologyOverlayEnabled());
     this.toastManager = toastManager;
     this.disposeTooltips = disposeTooltips;
     this.resourceInspector = resourceInspector;

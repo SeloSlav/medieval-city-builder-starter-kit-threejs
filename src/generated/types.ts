@@ -22,6 +22,8 @@ export const Building = __t.object("Building", {
   timber: __t.f64(),
   firewood: __t.f64(),
   stone: __t.f64(),
+  water: __t.f64(),
+  waterCapacity: __t.f64(),
   assignedLabor: __t.u32(),
 });
 export type Building = __Infer<typeof Building>;

@@ -6,7 +6,7 @@ use crate::schedule::SimTickSchedule;
 use crate::simulation::SimTickContext;
 use crate::simulation::{
     step_lumber_mill, step_reforester, step_residence_needs, step_residence_recovery,
-    step_residence_settlement, step_stone_quarry, step_woodcutters_lodge,
+    step_residence_settlement, step_stone_quarry, step_well, step_woodcutters_lodge,
 };
 use crate::tables::WorldConfig;
 
@@ -19,11 +19,19 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: SimTickSchedule) {
     }
 
     let tick = SimTickContext::new(ctx);
+    let sim_tick = ctx
+        .db
+        .world_config()
+        .id()
+        .find(&0)
+        .map(|config| config.sim_tick)
+        .unwrap_or(0);
 
     let mut lumber_mill_ids: Vec<u64> = Vec::new();
     let mut reforester_ids: Vec<u64> = Vec::new();
     let mut stone_quarry_ids: Vec<u64> = Vec::new();
     let mut woodcutters_lodge_ids: Vec<u64> = Vec::new();
+    let mut well_ids: Vec<u64> = Vec::new();
 
     for building in ctx.db.building().iter() {
         let Some(sim_kind) =
@@ -36,6 +44,7 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: SimTickSchedule) {
             BuildingSimKind::Reforester => reforester_ids.push(building.id),
             BuildingSimKind::StoneQuarry => stone_quarry_ids.push(building.id),
             BuildingSimKind::WoodcuttersLodge => woodcutters_lodge_ids.push(building.id),
+            BuildingSimKind::Well => well_ids.push(building.id),
         }
     }
 
@@ -65,6 +74,13 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: SimTickSchedule) {
             continue;
         };
         step_woodcutters_lodge(ctx, &tick, building);
+    }
+
+    for building_id in well_ids {
+        let Some(building) = ctx.db.building().id().find(&building_id) else {
+            continue;
+        };
+        step_well(ctx, sim_tick, building);
     }
 
     let residence_ids: Vec<u64> = ctx.db.residence().iter().map(|row| row.id).collect();

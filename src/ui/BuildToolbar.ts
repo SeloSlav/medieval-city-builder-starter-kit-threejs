@@ -8,7 +8,7 @@ import { areTipCardsDisabled, setTipCardsDisabled, subscribeTipCardsPreference }
 export type ToolbarStats = {
   canBuild: boolean;
   hasDraft: boolean;
-  mode: 'road' | 'lumber_mill' | 'reforester' | 'woodcutters_lodge' | 'stone_quarry' | 'residences' | 'idle';
+  mode: 'road' | 'lumber_mill' | 'reforester' | 'woodcutters_lodge' | 'stone_quarry' | 'well' | 'residences' | 'idle';
   statusDetail?: string | null;
 };
 
@@ -17,48 +17,81 @@ const BUILD_CARD_ART = {
   reforester: '/assets/ui/build-menu/reforester.png',
   woodcutters_lodge: '/assets/ui/build-menu/woodcutters-lodge.png',
   stone_quarry: '/assets/ui/build-menu/stonecutters-camp.png',
+  well: '/assets/ui/build-menu/well.svg',
   residences: '/assets/ui/build-menu/residence.png',
 } as const;
 
 const BUILD_CARD_COPY = {
   lumber_mill: {
     title: 'Lumber mill',
+    hotkey: 'L',
     description: 'Workers fell mature trees in a wide radius and stockpile timber for building.',
     cost: () => formatBuildingCost(getBuildingCost('lumber_mill')),
   },
   stone_quarry: {
     title: "Stonecutter's camp",
+    hotkey: 'S',
     description: 'Quarries stone from rock outcrops within range for walls and foundations.',
     cost: () => formatBuildingCost(getBuildingCost('stone_quarry')),
   },
   reforester: {
     title: 'Reforester',
+    hotkey: 'F',
     description: 'Regrows cleared woodland, turning stumps into saplings and mature forest.',
     cost: () => formatBuildingCost(getBuildingCost('reforester')),
   },
   woodcutters_lodge: {
     title: "Woodcutter's lodge",
+    hotkey: 'W',
     description: 'Chops timber into firewood and hauls it to homes along connected roads.',
     cost: () => formatBuildingCost(getBuildingCost('woodcutters_lodge')),
   },
+  well: {
+    title: 'Well',
+    hotkey: 'E',
+    description: 'Draws groundwater to homes within range. Yield depends on local hydrology.',
+    cost: () => formatBuildingCost(getBuildingCost('well')),
+  },
   residences: {
     title: 'Residence',
+    hotkey: 'H',
     description: 'Draw burgage plots along a road. Each cottage houses settlers over time.',
     cost: () => `${formatBuildingCost(residenceZoneCost(1))} per home`,
   },
 } as const;
 
+type BuildMenuAction =
+  | 'lumber-mill'
+  | 'stone-quarry'
+  | 'reforester'
+  | 'woodcutters-lodge'
+  | 'well'
+  | 'residences';
+
+const BUILD_MENU_ACTIONS: ReadonlyArray<{
+  action: BuildMenuAction;
+  artKey: keyof typeof BUILD_CARD_ART;
+}> = [
+  { action: 'lumber-mill', artKey: 'lumber_mill' },
+  { action: 'stone-quarry', artKey: 'stone_quarry' },
+  { action: 'reforester', artKey: 'reforester' },
+  { action: 'woodcutters-lodge', artKey: 'woodcutters_lodge' },
+  { action: 'well', artKey: 'well' },
+  { action: 'residences', artKey: 'residences' },
+];
+
 function renderConstructionCard(
-  action: string,
+  action: BuildMenuAction,
   artKey: keyof typeof BUILD_CARD_ART,
 ): string {
   const copy = BUILD_CARD_COPY[artKey];
   const cost = copy.cost();
   return `
-          <button type="button" class="construction-card" data-action="${action}" aria-label="${copy.title}">
+          <button type="button" class="construction-card" data-action="${action}" data-hotkey="${copy.hotkey}" aria-label="${copy.title} (${copy.hotkey})">
             <img class="construction-card__art" src="${BUILD_CARD_ART[artKey]}" alt="" draggable="false" />
+            <span class="construction-card__hotkey" aria-hidden="true">${copy.hotkey}</span>
             <span class="construction-card__tooltip" role="tooltip">
-              <span class="construction-card__tooltip-title">${copy.title}</span>
+              <span class="construction-card__tooltip-title">${copy.title} (${copy.hotkey})</span>
               <span class="construction-card__tooltip-desc">${copy.description}</span>
               <span class="construction-card__tooltip-cost">Cost: ${cost}</span>
             </span>
@@ -75,12 +108,14 @@ type DeletePopupOptions = {
 export class BuildToolbar {
   private readonly roadButton: HTMLButtonElement;
   private readonly buildMenuButton: HTMLButtonElement;
+  private readonly waterOverlayButton: HTMLButtonElement;
   private readonly helpButton: HTMLButtonElement;
   private readonly settingsButton: HTMLButtonElement;
   private readonly lumberMillButton: HTMLButtonElement;
   private readonly reforesterButton: HTMLButtonElement;
   private readonly woodcuttersLodgeButton: HTMLButtonElement;
   private readonly stoneQuarryButton: HTMLButtonElement;
+  private readonly wellButton: HTMLButtonElement;
   private readonly residencesButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
   private readonly buildMenu: HTMLElement;
@@ -119,20 +154,45 @@ export class BuildToolbar {
   private hudMode: ToolbarStats['mode'] = 'idle';
   private deleteCancel: (() => void) | null = null;
   private deleteRemove: (() => void) | null = null;
+  private readonly toolbarHandlers: {
+    onOpenRoads: () => void;
+    onToggleLumberMill: () => void;
+    onToggleReforester: () => void;
+    onToggleWoodcuttersLodge: () => void;
+    onToggleStoneQuarry: () => void;
+    onToggleWell: () => void;
+    onToggleResidences: () => void;
+    onToggleWaterOverlay?: () => void;
+  };
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTypingTarget(event.target) || this.firstPersonActive || this.gameMenu?.isOpen()) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
     const key = event.key.toLowerCase();
-    if (key === 'b' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (key === 'b') {
       event.preventDefault();
       event.stopPropagation();
       this.toggleBuildMenu();
+      return;
+    }
+    if (key === 'r' && this.buildMenuOpen) {
+      this.setBuildMenuOpen(false);
       return;
     }
     if (key === 'escape' && this.buildMenuOpen) {
       event.preventDefault();
       event.stopPropagation();
       this.setBuildMenuOpen(false);
+      return;
     }
+    if (!this.buildMenuOpen) return;
+
+    const buildAction = this.resolveBuildMenuHotkey(key);
+    if (!buildAction) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.activateBuildMenuAction(buildAction);
   };
 
   constructor(
@@ -144,7 +204,9 @@ export class BuildToolbar {
       onToggleReforester: () => void;
       onToggleWoodcuttersLodge: () => void;
       onToggleStoneQuarry: () => void;
+      onToggleWell: () => void;
       onToggleResidences: () => void;
+      onToggleWaterOverlay?: () => void;
       onBurgagePlotDecrease?: () => void;
       onBurgagePlotIncrease?: () => void;
       onBurgageRotateFrontage?: () => void;
@@ -276,6 +338,12 @@ export class BuildToolbar {
               <li><span>Open menu</span><span class="road-controls-key">Esc</span></li>
               <li><span>Walk mode</span><span class="road-controls-key">~</span></li>
               <li><span>Road tool</span><span class="road-controls-key">R</span></li>
+              <li><span>Build menu</span><span class="road-controls-key">B</span></li>
+              <li><span>Lumber mill</span><span class="road-controls-key">L</span></li>
+              <li><span>Stone camp</span><span class="road-controls-key">S</span></li>
+              <li><span>Reforester</span><span class="road-controls-key">F</span></li>
+              <li><span>Woodcutter</span><span class="road-controls-key">W</span></li>
+              <li><span>Residence</span><span class="road-controls-key">H</span></li>
             </ul>
           </section>
         </aside>
@@ -310,16 +378,12 @@ export class BuildToolbar {
 
       <section class="construction-menu" data-build-menu hidden aria-label="Build menu">
         <div class="construction-menu__cards">
-          ${renderConstructionCard('lumber-mill', 'lumber_mill')}
-          ${renderConstructionCard('stone-quarry', 'stone_quarry')}
-          ${renderConstructionCard('reforester', 'reforester')}
-          ${renderConstructionCard('woodcutters-lodge', 'woodcutters_lodge')}
-          ${renderConstructionCard('residences', 'residences')}
+          ${BUILD_MENU_ACTIONS.map(({ action, artKey }) => renderConstructionCard(action, artKey)).join('')}
         </div>
       </section>
 
       <nav class="construction-dock" data-construction-dock aria-label="Construction tools">
-        <button type="button" class="construction-dock-button" data-action="road" data-tooltip="Roads (R)" aria-label="Roads" aria-pressed="false">
+        <button type="button" class="construction-dock-button construction-dock-button--hotkey" data-action="road" data-tooltip="Roads (R)" aria-label="Roads (R)" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 21c4.8-4.8 5.2-12.2 1-18" />
             <path d="M15 21c-2.8-5.7-2.2-11.6 2-18" />
@@ -327,13 +391,18 @@ export class BuildToolbar {
             <path d="M12 11.5h1" />
             <path d="M12 16.5h1" />
           </svg>
+          <span class="construction-dock-button__hotkey" aria-hidden="true">(R)</span>
         </button>
-        <button type="button" class="construction-dock-button" data-action="build-menu" data-tooltip="Build (B)" aria-label="Build menu" aria-expanded="false" aria-pressed="false">
+        <button type="button" class="construction-dock-button construction-dock-button--hotkey" data-action="build-menu" data-tooltip="Build (B)" aria-label="Build menu (B)" aria-expanded="false" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M14.5 5.5l4 4" />
             <path d="M12.3 7.7l4-4 3.9 3.9-4 4" />
             <path d="M14.8 10.8L6.4 19.2a2.1 2.1 0 0 1-3-3l8.4-8.4" />
           </svg>
+          <span class="construction-dock-button__hotkey" aria-hidden="true">(B)</span>
+        </button>
+        <button type="button" class="construction-dock-button construction-dock-button--text" data-action="water-overlay" data-tooltip="Water map" aria-label="Toggle water hydrology overlay" aria-pressed="false">
+          <span aria-hidden="true">💧</span>
         </button>
         <button type="button" class="construction-dock-button construction-dock-button--text" data-action="help" data-tooltip="Help tips" aria-label="Toggle help tips" aria-pressed="false">
           <span aria-hidden="true">?</span>
@@ -384,6 +453,16 @@ export class BuildToolbar {
     `;
 
     this.root = root;
+    this.toolbarHandlers = {
+      onOpenRoads: handlers.onOpenRoads,
+      onToggleLumberMill: handlers.onToggleLumberMill,
+      onToggleReforester: handlers.onToggleReforester,
+      onToggleWoodcuttersLodge: handlers.onToggleWoodcuttersLodge,
+      onToggleStoneQuarry: handlers.onToggleStoneQuarry,
+      onToggleWell: handlers.onToggleWell,
+      onToggleResidences: handlers.onToggleResidences,
+      onToggleWaterOverlay: handlers.onToggleWaterOverlay,
+    };
     window.addEventListener('keydown', this.onKeyDown, true);
     this.gameMenu = new GameMenu(root, {
       onTipsPreferenceChange: () => this.syncContextPanels(),
@@ -398,12 +477,14 @@ export class BuildToolbar {
 
     this.roadButton = this.mustButton(root, '[data-action="road"]');
     this.buildMenuButton = this.mustButton(root, '[data-action="build-menu"]');
+    this.waterOverlayButton = this.mustButton(root, '[data-action="water-overlay"]');
     this.helpButton = this.mustButton(root, '[data-action="help"]');
     this.settingsButton = this.mustButton(root, '[data-action="settings"]');
     this.lumberMillButton = this.mustButton(root, '[data-action="lumber-mill"]');
     this.reforesterButton = this.mustButton(root, '[data-action="reforester"]');
     this.woodcuttersLodgeButton = this.mustButton(root, '[data-action="woodcutters-lodge"]');
     this.stoneQuarryButton = this.mustButton(root, '[data-action="stone-quarry"]');
+    this.wellButton = this.mustButton(root, '[data-action="well"]');
     this.residencesButton = this.mustButton(root, '[data-action="residences"]');
     this.buildButton = this.mustButton(root, '[data-action="commit-build"]');
     this.buildMenu = this.mustElement(root, '[data-build-menu]');
@@ -436,6 +517,7 @@ export class BuildToolbar {
       handlers.onOpenRoads();
     });
     this.buildMenuButton.addEventListener('click', () => this.toggleBuildMenu());
+    this.waterOverlayButton.addEventListener('click', () => handlers.onToggleWaterOverlay?.());
     this.helpButton.addEventListener('click', () => this.toggleHelpTips());
     this.settingsButton.addEventListener('click', () => {
       this.setBuildMenuOpen(false);
@@ -445,6 +527,7 @@ export class BuildToolbar {
     this.reforesterButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleReforester));
     this.woodcuttersLodgeButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleWoodcuttersLodge));
     this.stoneQuarryButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleStoneQuarry));
+    this.wellButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleWell));
     this.residencesButton.addEventListener('click', () => this.chooseBuildMenuItem(handlers.onToggleResidences));
     this.buildButton.addEventListener('click', handlers.onBuildRoad);
     this.buildMenu.addEventListener('mousedown', (event) => event.stopPropagation());
@@ -464,6 +547,11 @@ export class BuildToolbar {
     this.cancelDeleteButton.addEventListener('click', () => this.hideDeletePopup(true));
   }
 
+  setWaterOverlayActive(active: boolean): void {
+    this.waterOverlayButton.classList.toggle('is-active', active);
+    this.waterOverlayButton.setAttribute('aria-pressed', String(active));
+  }
+
   setStats(stats: ToolbarStats): void {
     this.hudMode = stats.mode;
     const roadMode = stats.mode === 'road';
@@ -471,8 +559,9 @@ export class BuildToolbar {
     const reforesterMode = stats.mode === 'reforester';
     const woodcuttersLodgeMode = stats.mode === 'woodcutters_lodge';
     const stoneQuarryMode = stats.mode === 'stone_quarry';
+    const wellMode = stats.mode === 'well';
     const residencesMode = stats.mode === 'residences';
-    const constructionMode = lumberMode || reforesterMode || woodcuttersLodgeMode || stoneQuarryMode || residencesMode;
+    const constructionMode = lumberMode || reforesterMode || woodcuttersLodgeMode || stoneQuarryMode || wellMode || residencesMode;
     this.roadButton.classList.toggle('is-active', roadMode);
     this.roadButton.setAttribute('aria-pressed', String(roadMode));
     this.buildMenuButton.classList.toggle('is-active', constructionMode || this.buildMenuOpen);
@@ -485,6 +574,8 @@ export class BuildToolbar {
     this.woodcuttersLodgeButton.setAttribute('aria-pressed', String(woodcuttersLodgeMode));
     this.stoneQuarryButton.classList.toggle('is-active', stoneQuarryMode);
     this.stoneQuarryButton.setAttribute('aria-pressed', String(stoneQuarryMode));
+    this.wellButton.classList.toggle('is-active', wellMode);
+    this.wellButton.setAttribute('aria-pressed', String(wellMode));
     this.residencesButton.classList.toggle('is-active', residencesMode);
     this.residencesButton.setAttribute('aria-pressed', String(residencesMode));
     this.buildButton.disabled = !stats.canBuild;
@@ -619,6 +710,7 @@ export class BuildToolbar {
       || mode === 'reforester'
       || mode === 'woodcutters_lodge'
       || mode === 'stone_quarry'
+      || mode === 'well'
       || mode === 'residences';
   }
 
@@ -634,6 +726,8 @@ export class BuildToolbar {
         return "Woodcutter's lodge";
       case 'stone_quarry':
         return "Stonecutter's camp";
+      case 'well':
+        return 'Well';
       case 'residences':
         return 'Residences';
       case 'idle':
@@ -693,6 +787,40 @@ export class BuildToolbar {
     handler();
   }
 
+  private resolveBuildMenuHotkey(key: string): BuildMenuAction | null {
+    for (const { action, artKey } of BUILD_MENU_ACTIONS) {
+      if (BUILD_CARD_COPY[artKey].hotkey.toLowerCase() === key) return action;
+    }
+    return null;
+  }
+
+  private activateBuildMenuAction(action: BuildMenuAction): void {
+    switch (action) {
+      case 'lumber-mill':
+        this.chooseBuildMenuItem(this.toolbarHandlers.onToggleLumberMill);
+        return;
+      case 'stone-quarry':
+        this.chooseBuildMenuItem(this.toolbarHandlers.onToggleStoneQuarry);
+        return;
+      case 'reforester':
+        this.chooseBuildMenuItem(this.toolbarHandlers.onToggleReforester);
+        return;
+      case 'woodcutters-lodge':
+        this.chooseBuildMenuItem(this.toolbarHandlers.onToggleWoodcuttersLodge);
+        return;
+      case 'well':
+        this.chooseBuildMenuItem(this.toolbarHandlers.onToggleWell);
+        return;
+      case 'residences':
+        this.chooseBuildMenuItem(this.toolbarHandlers.onToggleResidences);
+        return;
+      default: {
+        const unhandled: never = action;
+        return unhandled;
+      }
+    }
+  }
+
   private toggleHelpTips(): void {
     const disabled = !areTipCardsDisabled();
     setTipCardsDisabled(disabled);
@@ -725,6 +853,7 @@ export class BuildToolbar {
       case 'reforester':
       case 'woodcutters_lodge':
       case 'stone_quarry':
+      case 'well':
         return `
           <li><span>Place building</span><span class="road-controls-key">L-click</span></li>
           <li><span>Cancel tool</span><span class="road-controls-key">Esc</span></li>
@@ -750,6 +879,9 @@ export class BuildToolbar {
     }
     if (stats.mode === 'stone_quarry') {
       return `Click terrain to place a stonecutter's camp (${formatBuildingCost(getBuildingCost('stone_quarry'))})`;
+    }
+    if (stats.mode === 'well') {
+      return `Click terrain to place a well (${formatBuildingCost(getBuildingCost('well'))}) — use the water map for best spots`;
     }
     if (stats.mode === 'residences') {
       return stats.statusDetail ?? 'Click four corners — the 4th click closes the rectangle back to the 1st';

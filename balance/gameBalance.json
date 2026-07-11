@@ -20,8 +20,11 @@
     "wideParcelFrontageMin": 14,
     "residenceFirewoodCapacity": 40,
     "residenceFirewoodPerPersonPerSec": 0.02,
+    "residenceWaterCapacity": 24,
+    "residenceWaterPerPersonPerSec": 0.012,
     "abandonAfterDeficitTicks": 3600,
     "residenceRecoveryFirewoodMin": 8,
+    "residenceRecoveryWaterMin": 5,
     "residenceSettleTicks": 250
   },
   "roads": {
@@ -34,7 +37,12 @@
     "lodgeDeliveryInterval": 4,
     "lodgeFirewoodPerDelivery": 2,
     "stonePerHarvest": 3,
-    "reforesterRegrowPerSec": 0.014
+    "reforesterRegrowPerSec": 0.014,
+    "wellBaseRefillPerSec": 0.42,
+    "wellSurgeChancePerTick": 0.0022,
+    "wellSurgeAmountMin": 10,
+    "wellSurgeAmountMax": 26,
+    "wellSurgeCooldownSec": 42
   },
   "buildings": {
     "lumber_mill": {
@@ -92,6 +100,20 @@
       "requiresRoad": false,
       "requiresMatureTrees": false,
       "requiresQuarryStone": true
+    },
+    "well": {
+      "label": "Well",
+      "cost": { "timber": 18, "stone": 22 },
+      "storage": { "timber": 0, "firewood": 0, "stone": 0, "water": 100 },
+      "workRadius": 90,
+      "pickRadius": 6,
+      "harvestInterval": 0,
+      "regrowRatePerSecond": 0,
+      "maxLabor": 0,
+      "acceptsLabor": false,
+      "requiresRoad": false,
+      "requiresMatureTrees": false,
+      "requiresQuarryStone": false
     }
   }
 }

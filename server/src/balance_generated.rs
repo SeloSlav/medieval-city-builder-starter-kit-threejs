@@ -18,8 +18,11 @@ pub const NARROW_PARCEL_FRONTAGE_MAX: f64 = 9.6;
 pub const WIDE_PARCEL_FRONTAGE_MIN: f64 = 14.0;
 pub const RESIDENCE_FIREWOOD_CAPACITY: f64 = 40.0;
 pub const RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC: f64 = 0.02;
+pub const RESIDENCE_WATER_CAPACITY: f64 = 24.0;
+pub const RESIDENCE_WATER_PER_PERSON_PER_SEC: f64 = 0.012;
 pub const ABANDON_AFTER_DEFICIT_TICKS: u32 = 3600;
 pub const RESIDENCE_RECOVERY_FIREWOOD_MIN: f64 = 8.0;
+pub const RESIDENCE_RECOVERY_WATER_MIN: f64 = 5.0;
 pub const RESIDENCE_SETTLE_TICKS: u32 = 250;
 
 pub const BUILDING_ROAD_ACCESS_DISTANCE: f64 = 20.0;
@@ -30,6 +33,11 @@ pub const LODGE_DELIVERY_INTERVAL: f64 = 4.0;
 pub const LODGE_FIREWOOD_PER_DELIVERY: f64 = 2.0;
 pub const STONE_PER_HARVEST: f64 = 3.0;
 pub const REFORESTER_REGROW_PER_SEC: f64 = 0.014;
+pub const WELL_BASE_REFILL_PER_SEC: f64 = 0.42;
+pub const WELL_SURGE_CHANCE_PER_TICK: f64 = 0.0022;
+pub const WELL_SURGE_AMOUNT_MIN: f64 = 10.0;
+pub const WELL_SURGE_AMOUNT_MAX: f64 = 26.0;
+pub const WELL_SURGE_COOLDOWN_SEC: f64 = 42.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildingSimKind {
@@ -37,6 +45,7 @@ pub enum BuildingSimKind {
     Reforester,
     StoneQuarry,
     WoodcuttersLodge,
+    Well,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -47,6 +56,7 @@ pub struct BuildingDef {
     pub storage_timber: f64,
     pub storage_firewood: f64,
     pub storage_stone: f64,
+    pub storage_water: f64,
     pub accepts_labor: bool,
     pub max_labor: u32,
     pub work_radius: f64,
@@ -65,6 +75,7 @@ const LUMBER_MILL: BuildingDef = BuildingDef {
     storage_timber: 240.0,
     storage_firewood: 0.0,
     storage_stone: 0.0,
+    storage_water: 0.0,
     accepts_labor: true,
     max_labor: 3,
     work_radius: 210.0,
@@ -83,6 +94,7 @@ const REFORESTER: BuildingDef = BuildingDef {
     storage_timber: 0.0,
     storage_firewood: 0.0,
     storage_stone: 0.0,
+    storage_water: 0.0,
     accepts_labor: true,
     max_labor: 1,
     work_radius: 190.0,
@@ -101,6 +113,7 @@ const WOODCUTTERS_LODGE: BuildingDef = BuildingDef {
     storage_timber: 60.0,
     storage_firewood: 120.0,
     storage_stone: 0.0,
+    storage_water: 0.0,
     accepts_labor: true,
     max_labor: 2,
     work_radius: 0.0,
@@ -119,6 +132,7 @@ const STONE_QUARRY: BuildingDef = BuildingDef {
     storage_timber: 0.0,
     storage_firewood: 0.0,
     storage_stone: 180.0,
+    storage_water: 0.0,
     accepts_labor: true,
     max_labor: 4,
     work_radius: 55.0,
@@ -130,7 +144,26 @@ const STONE_QUARRY: BuildingDef = BuildingDef {
     sim_kind: Some(BuildingSimKind::StoneQuarry),
 };
 
-const ALL: &[BuildingDef] = &[LUMBER_MILL, REFORESTER, WOODCUTTERS_LODGE, STONE_QUARRY];
+const WELL: BuildingDef = BuildingDef {
+    kind: "well",
+    cost_timber: 18.0,
+    cost_stone: 22.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 100.0,
+    accepts_labor: false,
+    max_labor: 0,
+    work_radius: 90.0,
+    action_interval: 0.0,
+    pick_radius: 6.0,
+    requires_road: false,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    sim_kind: Some(BuildingSimKind::Well),
+};
+
+const ALL: &[BuildingDef] = &[LUMBER_MILL, REFORESTER, WOODCUTTERS_LODGE, STONE_QUARRY, WELL];
 
 pub fn building_def(kind: &str) -> Option<&'static BuildingDef> {
     ALL.iter().find(|def| def.kind == kind)

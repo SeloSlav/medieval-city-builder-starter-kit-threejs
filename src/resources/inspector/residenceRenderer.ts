@@ -8,13 +8,14 @@ import {
 import {
   formatFirewoodRunwayDays,
   RESIDENCE_SETTLE_TICKS,
+  RESIDENCE_WATER_CAPACITY,
   residenceFirewoodRunwayDays,
   SIM_TICK_SECONDS,
 } from '../resourceTotals.ts';
 import {
-  getNeedStock,
   RESIDENCE_FIREWOOD_CAPACITY,
   residenceNeedsStatus,
+  getNeedStock,
 } from '../../residences/residenceNeeds.ts';
 import type { InspectableTarget } from '../types.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
@@ -32,8 +33,10 @@ export function renderResidenceInspector(
   const nearestRoad = context.worldQueries.getNearestRoadNodeDistance(residence.x, residence.z);
   const roadAccess = context.worldQueries.getRoadAccessLabel(residence.x, residence.z);
   const servingLodge = context.worldQueries.getServingLodgeForResidence(residence);
+  const servingWell = context.worldQueries.getServingWellForResidence(residence);
   const needs = residenceNeedsStatus(residence, {
     servingLodgeId: servingLodge?.id ?? null,
+    servingWellId: servingWell?.id ?? null,
   });
   const runwayDays = residenceFirewoodRunwayDays(residence);
   const firewoodRunwayLabel = runwayDays == null
@@ -42,6 +45,9 @@ export function renderResidenceInspector(
   const lodgeLabel = servingLodge
     ? context.worldQueries.getBuildingLabel(servingLodge.kind)
     : 'None on branch';
+  const wellLabel = servingWell
+    ? context.worldQueries.getBuildingLabel(servingWell.kind)
+    : 'None in range';
   const capacity = residence.populationCapacity;
   const settlersRemaining = Math.max(0, capacity - residence.population);
   const settleEtaSeconds = settlersRemaining > 0
@@ -72,7 +78,9 @@ export function renderResidenceInspector(
         : ''}
       <li><span>Firewood stock</span><span>${Math.round(getNeedStock(residence.needs, 'firewood'))} / ${RESIDENCE_FIREWOOD_CAPACITY}</span></li>
       <li><span>Firewood runway</span><span>${firewoodRunwayLabel}</span></li>
+      <li><span>Water stock</span><span>${Math.round(getNeedStock(residence.needs, 'water'))} / ${RESIDENCE_WATER_CAPACITY}</span></li>
       <li><span>Serving lodge</span><span>${lodgeLabel}</span></li>
+      <li><span>Serving well</span><span>${wellLabel}</span></li>
       <li><span>Road access</span><span>${roadAccess}</span></li>
       <li><span>Build cost</span><span>${formatBuildingCost(singleCost)}</span></li>
       <li><span>Nearest road</span><span>${nearestRoad == null ? 'None nearby' : `${nearestRoad.toFixed(1)} m`}</span></li>

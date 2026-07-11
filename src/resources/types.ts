@@ -66,6 +66,8 @@ export type BuildingState = {
   timber: number;
   firewood: number;
   stone: number;
+  water: number;
+  waterCapacity: number;
   assignedLabor: number;
 };
 

@@ -132,6 +132,8 @@ export function placeBuilding(state: GameState, kind: BuildingKind, x: number, z
     timber: 0,
     firewood: 0,
     stone: 0,
+    water: 0,
+    waterCapacity: 0,
     assignedLabor: 0,
   };
 
@@ -311,6 +313,8 @@ function restoreBuildings(buildings: BuildingState[]): Map<string, BuildingState
       timber: building.timber ?? 0,
       firewood: building.firewood ?? 0,
       stone: building.stone ?? 0,
+      water: building.water ?? 0,
+      waterCapacity: building.waterCapacity ?? 0,
       assignedLabor: building.assignedLabor ?? 0,
     });
   }

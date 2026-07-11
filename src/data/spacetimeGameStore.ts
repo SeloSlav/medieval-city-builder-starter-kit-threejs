@@ -448,6 +448,8 @@ export class SpacetimeGameStore {
           timber: row.timber,
           firewood: row.firewood,
           stone: row.stone,
+          water: row.water,
+          waterCapacity: row.waterCapacity,
           assignedLabor: Number(row.assignedLabor),
         });
       }

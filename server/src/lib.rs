@@ -6,6 +6,8 @@ mod building_defs;
 mod burgage;
 mod constants;
 mod economy;
+mod hydrology;
+mod hydrology_grid_generated;
 mod placement_validation;
 mod tables;
 mod types;

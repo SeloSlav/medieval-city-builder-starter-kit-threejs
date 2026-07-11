@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Well">
+  <rect width="160" height="120" fill="#1a2438"/>
+  <ellipse cx="80" cy="78" rx="34" ry="12" fill="#2d3f5c"/>
+  <ellipse cx="80" cy="72" rx="28" ry="10" fill="#3a5578"/>
+  <ellipse cx="80" cy="68" rx="22" ry="8" fill="#4f86b8"/>
+  <rect x="52" y="34" width="56" height="10" rx="2" fill="#6b4f2d"/>
+  <rect x="48" y="42" width="8" height="30" fill="#5a3f24"/>
+  <rect x="104" y="42" width="8" height="30" fill="#5a3f24"/>
+</svg>

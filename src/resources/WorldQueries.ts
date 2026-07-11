@@ -99,6 +99,10 @@ export class WorldQueries {
     };
   }
 
+  getRiverField(): RiverField {
+    return this.riverField;
+  }
+
   findInspectableTarget(x: number, z: number): InspectableTarget | null {
     const state = this.getGameState();
     const building = findBuilding(state.buildings.values(), x, z);
@@ -212,6 +216,34 @@ export class WorldQueries {
     const lodgeId = this.getResidenceLodgeClaims().get(residence.id);
     if (!lodgeId) return null;
     return this.getGameState().buildings.get(lodgeId) ?? null;
+  }
+
+  getServingWellForResidence(residence: ResidenceState): BuildingState | null {
+    const state = this.getGameState();
+    let best: BuildingState | null = null;
+    let bestDistance = Infinity;
+
+    for (const building of state.buildings.values()) {
+      if (building.kind !== 'well' || building.workRadius <= 0) continue;
+      const dx = building.x - residence.x;
+      const dz = building.z - residence.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > building.workRadius || distance >= bestDistance) continue;
+      bestDistance = distance;
+      best = building;
+    }
+
+    return best;
+  }
+
+  countResidencesInWellRange(well: BuildingState): number {
+    const state = this.getGameState();
+    let count = 0;
+    for (const residence of state.residences.values()) {
+      const distance = Math.hypot(residence.x - well.x, residence.z - well.z);
+      if (distance <= well.workRadius) count += 1;
+    }
+    return count;
   }
 
   getLodgeDeliveryIntervalSeconds(lodge: BuildingState): number {

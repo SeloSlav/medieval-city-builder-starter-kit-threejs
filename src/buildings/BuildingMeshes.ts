@@ -967,6 +967,52 @@ export function createStoneQuarryMesh(): THREE.Group {
   return group;
 }
 
+/** Simple stone well with timber frame — placeholder until final art lands. */
+export function createWellMesh(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'Well';
+
+  const stoneHeight = 0.9;
+  const frameHeight = 1.35;
+  const radius = 1.45;
+
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(radius, radius + 0.18, stoneHeight, 14),
+    stoneMaterial('mid'),
+    new THREE.Vector3(0, stoneHeight * 0.5, 0),
+  );
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(radius - 0.12, radius - 0.05, 0.22, 14),
+    stoneMaterial('light'),
+    new THREE.Vector3(0, stoneHeight + 0.11, 0),
+  );
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(radius - 0.35, radius - 0.35, 0.5, 12),
+    metalMaterial('iron'),
+    new THREE.Vector3(0, stoneHeight + 0.35, 0),
+  );
+
+  for (const side of [-1, 1] as const) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.16, frameHeight, 0.16),
+      timberMaterial('dark'),
+      new THREE.Vector3(side * (radius - 0.08), stoneHeight + frameHeight * 0.5, 0),
+    );
+  }
+  addMesh(
+    group,
+    new THREE.BoxGeometry(radius * 1.7, 0.14, 0.16),
+    timberMaterial('weathered'),
+    new THREE.Vector3(0, stoneHeight + frameHeight, 0),
+  );
+
+  return group;
+}
+
 export function createBuildingMesh(kind: BuildingKind): THREE.Group {
   switch (kind) {
     case 'lumber_mill':
@@ -977,6 +1023,8 @@ export function createBuildingMesh(kind: BuildingKind): THREE.Group {
       return createWoodcuttersLodgeMesh();
     case 'stone_quarry':
       return createStoneQuarryMesh();
+    case 'well':
+      return createWellMesh();
     default: {
       const unreachable: never = kind;
       return unreachable;

@@ -2,6 +2,7 @@ use spacetimedb::ReducerContext;
 
 use crate::building_defs::building_def;
 use crate::constants::RESIDENCE_FIREWOOD_CAPACITY;
+use crate::constants::RESIDENCE_WATER_CAPACITY;
 use crate::db::*;
 use crate::tables::Building;
 
@@ -25,6 +26,10 @@ pub fn building_storage_caps(kind: &str) -> StorageCaps {
 
 pub fn residence_firewood_capacity() -> f64 {
     RESIDENCE_FIREWOOD_CAPACITY
+}
+
+pub fn residence_water_capacity() -> f64 {
+    RESIDENCE_WATER_CAPACITY
 }
 
 pub fn total_timber(ctx: &ReducerContext, owner: spacetimedb::Identity) -> f64 {

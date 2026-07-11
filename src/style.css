@@ -756,6 +756,7 @@ button {
 }
 
 .construction-dock-button {
+  position: relative;
   width: 42px;
   height: 42px;
   padding: 0;
@@ -766,6 +767,18 @@ button {
   border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 8px;
   cursor: pointer;
+}
+
+.construction-dock-button__hotkey {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  opacity: 0.82;
+  pointer-events: none;
 }
 
 .construction-dock-button svg {
@@ -856,6 +869,26 @@ button {
   pointer-events: none;
   user-select: none;
   transition: filter 0.12s ease;
+}
+
+.construction-card__hotkey {
+  position: absolute;
+  left: 8px;
+  bottom: 10px;
+  z-index: 2;
+  min-width: 22px;
+  padding: 3px 6px;
+  border: 1px solid rgba(215, 180, 99, 0.55);
+  border-radius: 5px;
+  background: rgba(16, 20, 26, 0.88);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .construction-card__tooltip {
@@ -1371,6 +1404,14 @@ button {
 
   .construction-card__art {
     height: 176px;
+  }
+
+  .construction-card__hotkey {
+    left: 6px;
+    bottom: 8px;
+    min-width: 20px;
+    padding: 2px 5px;
+    font-size: 11px;
   }
 
   .construction-card__tooltip {

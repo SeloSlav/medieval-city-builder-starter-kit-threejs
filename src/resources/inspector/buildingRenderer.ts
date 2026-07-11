@@ -3,6 +3,7 @@ import { renderLumberMillInspector } from './lumberMillRenderer.ts';
 import { renderReforesterInspector } from './reforesterRenderer.ts';
 import { renderStoneQuarryInspector } from './stoneQuarryRenderer.ts';
 import { renderWoodcuttersLodgeInspector } from './woodcuttersLodgeRenderer.ts';
+import { renderWellInspector } from './wellRenderer.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
 
 export function renderBuildingInspector(
@@ -19,6 +20,8 @@ export function renderBuildingInspector(
       return renderStoneQuarryInspector(target, context);
     case 'reforester':
       return renderReforesterInspector(target, context);
+    case 'well':
+      return renderWellInspector(target, context);
     default: {
       const unreachable: never = building.kind;
       throw new Error(`Unhandled building kind: ${unreachable}`);

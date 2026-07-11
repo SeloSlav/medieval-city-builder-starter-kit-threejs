@@ -8,6 +8,7 @@ use crate::economy::{
     total_stone, total_timber,
 };
 use crate::lifecycle::ensure_player_resources;
+use crate::hydrology::{sample_hydrology_score, well_capacity_from_hydrology};
 use crate::placement_validation::{building_overlaps_residence_zone, building_overlaps_road_surface, is_on_quarry_pit};
 use crate::roads::has_building_road_access;
 use crate::tables::{Building, WorldConfig};
@@ -114,6 +115,10 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         return Err("Building must be placed near a road.".to_string());
     }
 
+    if kind == "well" && sample_hydrology_score(x, z) >= 0.999 {
+        return Err("Cannot build a well on open water.".to_string());
+    }
+
     let cost = building_cost(&kind)?;
     if total_timber(ctx, owner) + 1e-6 < cost.timber {
         return Err(format!(
@@ -137,6 +142,17 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         .find(&0)
         .ok_or_else(|| "World not initialized.".to_string())?;
 
+    let hydrology = if kind == "well" {
+        sample_hydrology_score(x, z)
+    } else {
+        0.0
+    };
+    let water_capacity = if kind == "well" {
+        well_capacity_from_hydrology(def.storage_water, hydrology)
+    } else {
+        0.0
+    };
+
     let building_id = config.next_building_id;
     ctx.db.building().insert(Building {
         id: 0,
@@ -150,6 +166,8 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         timber: 0.0,
         firewood: 0.0,
         stone: 0.0,
+        water: 0.0,
+        water_capacity,
         assigned_labor: 0,
     });
 

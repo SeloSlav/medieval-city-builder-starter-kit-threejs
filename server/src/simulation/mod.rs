@@ -6,6 +6,7 @@ mod residence_needs;
 mod residence_settlement;
 mod stone_quarry;
 mod tick_context;
+mod well;
 mod woodcutters_lodge;
 pub mod spatial;
 
@@ -17,4 +18,5 @@ pub use residence_needs::{
 pub use residence_settlement::step_residence_settlement;
 pub use stone_quarry::step_stone_quarry;
 pub use tick_context::SimTickContext;
+pub use well::step_well;
 pub use woodcutters_lodge::step_woodcutters_lodge;

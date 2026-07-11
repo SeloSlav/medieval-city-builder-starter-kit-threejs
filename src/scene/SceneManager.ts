@@ -32,6 +32,11 @@ import { applyShadowPreferences as syncShadowCasters } from './applyShadowPrefer
 import { TREE_SHADOW_CAST_LAYER } from './SceneLayers.ts';
 import { subscribeShadowPreferences } from './shadowPreference.ts';
 import { applyMaxAnisotropy, beginStartupTextureLoad, type SceneStartupTextures } from './startupTextures.ts';
+import { HydrologyOverlay } from '../hydrology/HydrologyOverlay.ts';
+import {
+  isHydrologyOverlayEnabled,
+  subscribeHydrologyOverlayPreference,
+} from './hydrologyOverlayPreference.ts';
 
 export class SceneManager {
   private readonly container: HTMLElement;
@@ -60,6 +65,7 @@ export class SceneManager {
   private lastForestClearanceSourceSignature = '';
   private readonly riverSystem: RiverSystem;
   private readonly quarrySystem: QuarrySystem;
+  private readonly hydrologyOverlay: HydrologyOverlay;
   readonly worldLayout: WorldLayout;
 
   get riverField() {
@@ -75,6 +81,7 @@ export class SceneManager {
   private lastShadowTargetZ = Number.NaN;
   private lastShadowDistance = Number.NaN;
   private unsubscribeShadowPreferences: (() => void) | null = null;
+  private unsubscribeHydrologyOverlayPreference: (() => void) | null = null;
 
   private constructor(
     container: HTMLElement,
@@ -120,6 +127,15 @@ export class SceneManager {
     this.riverSystem = riverSystem;
     this.quarrySystem = quarrySystem;
     this.worldLayout = worldLayout;
+    this.hydrologyOverlay = new HydrologyOverlay({
+      terrain,
+      riverField: riverSystem.field,
+      parent: this.scene,
+    });
+    this.unsubscribeHydrologyOverlayPreference = subscribeHydrologyOverlayPreference(() => {
+      this.applyHydrologyOverlayPreference();
+    });
+    this.applyHydrologyOverlayPreference();
     this.roadMeshBuilder = new RoadMeshBuilder(this.terrain, materials, this.getBridgeSamplingContext());
 
     this.roadGroup.name = 'Road network visuals';
@@ -238,6 +254,18 @@ export class SceneManager {
       buildingRoot: this.selectionGroup,
     });
     this.refreshShadowMap();
+  }
+
+  applyHydrologyOverlayPreference(): void {
+    this.hydrologyOverlay.setVisible(isHydrologyOverlayEnabled());
+  }
+
+  isHydrologyOverlayVisible(): boolean {
+    return this.hydrologyOverlay.isVisible();
+  }
+
+  setHydrologyOverlayVisible(visible: boolean): void {
+    this.hydrologyOverlay.setVisible(visible);
   }
 
   resize(): void {
@@ -456,6 +484,9 @@ export class SceneManager {
   dispose(): void {
     this.unsubscribeShadowPreferences?.();
     this.unsubscribeShadowPreferences = null;
+    this.unsubscribeHydrologyOverlayPreference?.();
+    this.unsubscribeHydrologyOverlayPreference = null;
+    this.hydrologyOverlay.dispose();
     for (const visual of this.edgeVisuals.values()) disposeObject3D(visual.group);
     this.edgeVisuals.clear();
     if (this.forestManager) {

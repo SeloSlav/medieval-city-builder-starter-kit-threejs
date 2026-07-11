@@ -59,6 +59,8 @@ pub struct Building {
     pub timber: f64,
     pub firewood: f64,
     pub stone: f64,
+    pub water: f64,
+    pub water_capacity: f64,
     pub assigned_labor: u32,
 }
 
