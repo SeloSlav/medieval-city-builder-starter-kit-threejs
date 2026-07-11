@@ -1,4 +1,5 @@
-﻿import { CameraController } from '../camera/CameraController.ts';
+﻿import { AmbientAudioController } from '../audio/AmbientAudioController.ts';
+import { CameraController } from '../camera/CameraController.ts';
 import { FirstPersonController } from '../camera/FirstPersonController.ts';
 import { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
 import { BuildingTerrainLayout } from '../buildings/BuildingTerrainLayout.ts';
@@ -83,6 +84,7 @@ export class App {
   private fpsSampleStart = 0;
   private fpsFrameCount = 0;
   private fpsAccumulatedSeconds = 0;
+  private ambientAudio: AmbientAudioController | null = null;
   private disposed = false;
 
   constructor(root: HTMLElement) {
@@ -111,6 +113,19 @@ export class App {
     const layoutRegistry = WorldLayoutRegistry.fromWorldLayout(sceneManager.worldLayout);
     const gameState = createInitialGameState(layoutRegistry, sceneManager.worldLayout.seed);
     const input = new InputManager(sceneManager.renderer.domElement);
+    const ambientAudio = new AmbientAudioController({
+      unlockElement: sceneManager.renderer.domElement,
+      getCameraTarget: () => {
+        const target = sceneManager.cameraTarget;
+        return { x: target.x, z: target.z };
+      },
+      getOrbitDistance: () => {
+        if (this.firstPersonController?.isActive()) return 12;
+        return this.cameraController?.getOrbitDistance() ?? 240;
+      },
+      getBuildings: () => this.gameState?.buildings.values() ?? [],
+      getBurgageZones: () => this.gameState?.burgageZones.values() ?? [],
+    });
     const roadNetwork = new RoadNetwork();
     const worldQueries = new WorldQueries({
       terrain: sceneManager.terrain,
@@ -487,6 +502,7 @@ export class App {
     this.resourceInspector = resourceInspector;
     this.quarryMapIcons = quarryMapIcons;
     this.gameState = gameState;
+    this.ambientAudio = ambientAudio;
     this.layoutRegistry = layoutRegistry;
 
     const spacetimeStore = new SpacetimeGameStore();
@@ -556,6 +572,7 @@ export class App {
     this.cameraController?.dispose();
     this.toolbar?.dispose();
     this.input?.dispose();
+    this.ambientAudio?.dispose();
     this.sceneManager?.dispose();
   }
 
@@ -595,6 +612,8 @@ export class App {
       this.sceneManager?.render(dt, this.cameraController?.getOrbitDistance());
     }
     this.updateFps(time, dt);
+    this.ambientAudio?.tick(dt);
+    this.residenceMarkers?.tick(dt);
     this.animationId = requestAnimationFrame(this.tick);
   };
 

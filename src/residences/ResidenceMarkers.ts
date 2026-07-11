@@ -3,6 +3,7 @@ import { addTriangularGableWall } from '../buildings/BuildingMeshes.ts';
 import { createResidenceShadowProxy } from '../buildings/buildingShadowProxy.ts';
 import { addMesh, shingleMaterial, stoneMaterial, timberMaterial } from '../buildings/buildingMaterials.ts';
 import { areBuildingShadowsDisabled } from '../scene/shadowPreference.ts';
+import { ChimneySmokeEmitter } from './ResidenceChimneySmoke.ts';
 import { MAIN_HOUSE_DEPTH, MAIN_HOUSE_WIDTH } from './burgageLayout.ts';
 
 const WINDOW_MATERIAL = new THREE.MeshStandardMaterial({
@@ -13,25 +14,52 @@ const WINDOW_MATERIAL = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.15,
 });
 
+const WINDOW_DEPTH = 0.1;
+const WINDOW_FRAME_DEPTH = 0.05;
+const WINDOW_FRAME_PAD = 0.14;
+
+type WindowFace = 'front' | 'left' | 'right';
+
 function addWindow(
   group: THREE.Group,
-  x: number,
+  face: WindowFace,
+  along: number,
   y: number,
-  z: number,
   width: number,
   height: number,
+  halfW: number,
+  halfD: number,
 ): void {
+  if (face === 'front') {
+    const z = halfD - 0.1;
+    addMesh(
+      group,
+      new THREE.BoxGeometry(width, height, WINDOW_DEPTH),
+      WINDOW_MATERIAL,
+      new THREE.Vector3(along, y, z),
+    );
+    addMesh(
+      group,
+      new THREE.BoxGeometry(width + WINDOW_FRAME_PAD, height + WINDOW_FRAME_PAD, WINDOW_FRAME_DEPTH),
+      timberMaterial('dark'),
+      new THREE.Vector3(along, y, z - 0.03),
+    );
+    return;
+  }
+
+  const x = face === 'left' ? -(halfW - 0.1) : halfW - 0.1;
+  const frameOffsetX = face === 'left' ? 0.03 : -0.03;
   addMesh(
     group,
-    new THREE.BoxGeometry(width, height, 0.1),
+    new THREE.BoxGeometry(WINDOW_DEPTH, height, width),
     WINDOW_MATERIAL,
-    new THREE.Vector3(x, y, z),
+    new THREE.Vector3(x, y, along),
   );
   addMesh(
     group,
-    new THREE.BoxGeometry(width + 0.14, height + 0.14, 0.05),
+    new THREE.BoxGeometry(WINDOW_FRAME_DEPTH, height + WINDOW_FRAME_PAD, width + WINDOW_FRAME_PAD),
     timberMaterial('dark'),
-    new THREE.Vector3(x, y, z - 0.03),
+    new THREE.Vector3(x + frameOffsetX, y, along),
   );
 }
 
@@ -89,14 +117,14 @@ export function createResidenceMesh(): THREE.Group {
     new THREE.Vector3(0, floorY, 0),
   );
 
-  addWindow(group, -1.55, stoneHeight + storeyHeight * 0.55, frontZ, 1.05, 1.35);
-  addWindow(group, 1.55, stoneHeight + storeyHeight * 0.55, frontZ, 1.05, 1.35);
-  addWindow(group, -1.55, stoneHeight + storeyHeight + storeyHeight * 0.55, frontZ, 1.0, 1.25);
-  addWindow(group, 1.55, stoneHeight + storeyHeight + storeyHeight * 0.55, frontZ, 1.0, 1.25);
-  addWindow(group, -halfW + 0.1, stoneHeight + storeyHeight * 0.55, 0, 0.1, 1.2);
-  addWindow(group, -halfW + 0.1, stoneHeight + storeyHeight + storeyHeight * 0.5, 0, 0.1, 1.15);
-  addWindow(group, halfW - 0.1, stoneHeight + storeyHeight * 0.55, 0, 0.1, 1.2);
-  addWindow(group, halfW - 0.1, stoneHeight + storeyHeight + storeyHeight * 0.5, 0, 0.1, 1.15);
+  addWindow(group, 'front', -1.55, stoneHeight + storeyHeight * 0.55, 1.05, 1.35, halfW, halfD);
+  addWindow(group, 'front', 1.55, stoneHeight + storeyHeight * 0.55, 1.05, 1.35, halfW, halfD);
+  addWindow(group, 'front', -1.55, stoneHeight + storeyHeight + storeyHeight * 0.55, 1.0, 1.25, halfW, halfD);
+  addWindow(group, 'front', 1.55, stoneHeight + storeyHeight + storeyHeight * 0.55, 1.0, 1.25, halfW, halfD);
+  addWindow(group, 'left', 0, stoneHeight + storeyHeight * 0.55, 1.2, 1.2, halfW, halfD);
+  addWindow(group, 'left', 0, stoneHeight + storeyHeight + storeyHeight * 0.5, 1.15, 1.15, halfW, halfD);
+  addWindow(group, 'right', 0, stoneHeight + storeyHeight * 0.55, 1.2, 1.2, halfW, halfD);
+  addWindow(group, 'right', 0, stoneHeight + storeyHeight + storeyHeight * 0.5, 1.15, 1.15, halfW, halfD);
 
   const doorWidth = 1.2;
   const doorHeight = 2.1;
@@ -164,6 +192,11 @@ export function createResidenceMesh(): THREE.Group {
     new THREE.Vector3(halfW - 1.25, wallTop + 2.55, -halfD + 1.35),
   );
 
+  const chimneyEmitter = new THREE.Object3D();
+  chimneyEmitter.name = 'ChimneyEmitter';
+  chimneyEmitter.position.set(halfW - 1.25, wallTop + 2.7, -halfD + 1.35);
+  group.add(chimneyEmitter);
+
   return group;
 }
 
@@ -191,11 +224,20 @@ export function createResidencePreviewMesh(): THREE.Group {
 export class ResidenceMarkers {
   private readonly root: THREE.Group;
   private readonly meshes = new Map<string, THREE.Group>();
+  private readonly smokeEmitters = new Map<string, ChimneySmokeEmitter>();
+  private readonly smokeActive = new Map<string, boolean>();
 
   constructor(parent: THREE.Group) {
     this.root = new THREE.Group();
     this.root.name = 'Residences';
     parent.add(this.root);
+  }
+
+  tick(dt: number): void {
+    for (const [id, emitter] of this.smokeEmitters) {
+      emitter.setActive(this.smokeActive.get(id) ?? false);
+      emitter.tick(dt);
+    }
   }
 
   syncResidences(
@@ -204,6 +246,8 @@ export class ResidenceMarkers {
       x: number;
       z: number;
       yaw: number;
+      firewoodStock: number;
+      abandoned: boolean;
     }>,
     getHeightAt: (x: number, z: number) => number,
   ): void {
@@ -218,10 +262,20 @@ export class ResidenceMarkers {
         marker.add(shadowProxy);
         this.root.add(marker);
         this.meshes.set(residence.id, marker);
+
+        const chimneyEmitter = marker.getObjectByName('ChimneyEmitter');
+        if (chimneyEmitter) {
+          const seed = residence.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+          this.smokeEmitters.set(residence.id, new ChimneySmokeEmitter(chimneyEmitter, seed));
+        }
       }
       const y = getHeightAt(residence.x, residence.z);
       marker.position.set(residence.x, y, residence.z);
       marker.rotation.y = residence.yaw;
+      this.smokeActive.set(
+        residence.id,
+        !residence.abandoned && residence.firewoodStock > 0,
+      );
       if (!marker.getObjectByName('Building shadow proxy')) {
         const shadowProxy = createResidenceShadowProxy();
         shadowProxy.castShadow = !areBuildingShadowsDisabled();
@@ -234,10 +288,18 @@ export class ResidenceMarkers {
       this.root.remove(marker);
       disposeGroup(marker);
       this.meshes.delete(id);
+      this.smokeEmitters.get(id)?.dispose();
+      this.smokeEmitters.delete(id);
+      this.smokeActive.delete(id);
     }
   }
 
   dispose(): void {
+    for (const emitter of this.smokeEmitters.values()) {
+      emitter.dispose();
+    }
+    this.smokeEmitters.clear();
+    this.smokeActive.clear();
     for (const marker of this.meshes.values()) {
       disposeGroup(marker);
     }
