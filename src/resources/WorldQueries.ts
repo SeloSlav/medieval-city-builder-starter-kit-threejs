@@ -194,7 +194,7 @@ export class WorldQueries {
     const state = this.getGameState();
     const claims = this.getResidenceLodgeClaims();
     const residences = [...state.residences.values()].filter(
-      (residence) => !residence.abandoned && claims.get(residence.id) === lodge.id,
+      (residence) => claims.get(residence.id) === lodge.id,
     );
     return sortResidencesForDelivery(this.getRoadNetwork(), lodge, residences);
   }
@@ -203,7 +203,7 @@ export class WorldQueries {
     const state = this.getGameState();
     const claims = this.getResidenceLodgeClaims();
     const residences = [...state.residences.values()].filter(
-      (residence) => !residence.abandoned && claims.get(residence.id) === lodge.id,
+      (residence) => claims.get(residence.id) === lodge.id,
     );
     return peekNextDeliveryTarget(this.getRoadNetwork(), lodge, residences);
   }

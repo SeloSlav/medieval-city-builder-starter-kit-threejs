@@ -5,6 +5,7 @@ import {
   POPULATION_PER_RESIDENCE,
   RESIDENCE_FIREWOOD_CAPACITY,
   RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC,
+  RESIDENCE_RECOVERY_FIREWOOD_MIN,
   RESIDENCE_SETTLE_TICKS,
   SIM_TICK_SECONDS,
   STARTING_POPULATION,
@@ -27,6 +28,7 @@ export {
   residenceFirewoodRunwaySeconds,
   RESIDENCE_FIREWOOD_CAPACITY,
   RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC,
+  RESIDENCE_RECOVERY_FIREWOOD_MIN,
   RESIDENCE_SETTLE_TICKS,
   SIM_TICK_SECONDS,
   STARTING_POPULATION,
@@ -139,7 +141,22 @@ export function residenceNeedsStatus(residence: ResidenceState): {
   state: 'active' | 'idle' | 'warning' | 'abandoned';
 } {
   if (residence.abandoned) {
-    return { label: 'Abandoned — firewood needs unmet', state: 'abandoned' };
+    if (residence.firewoodStock + 1e-6 >= RESIDENCE_RECOVERY_FIREWOOD_MIN) {
+      return {
+        label: 'Restocking complete — settlers return once supply holds',
+        state: 'idle',
+      };
+    }
+    if (residence.firewoodStock > 0) {
+      return {
+        label: `Abandoned — restocking firewood (${Math.round(residence.firewoodStock)} / ${RESIDENCE_RECOVERY_FIREWOOD_MIN})`,
+        state: 'warning',
+      };
+    }
+    return {
+      label: 'Abandoned — awaiting firewood from a road-connected lodge',
+      state: 'abandoned',
+    };
   }
   if (residence.population === 0) {
     const capacity = residence.populationCapacity;

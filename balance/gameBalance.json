@@ -21,6 +21,7 @@
     "residenceFirewoodCapacity": 40,
     "residenceFirewoodPerPersonPerSec": 0.02,
     "abandonAfterDeficitTicks": 3600,
+    "residenceRecoveryFirewoodMin": 8,
     "residenceSettleTicks": 250
   },
   "roads": {

@@ -5,8 +5,8 @@ use crate::db::*;
 use crate::schedule::SimTickSchedule;
 use crate::simulation::SimTickContext;
 use crate::simulation::{
-    step_lumber_mill, step_reforester, step_residence_needs, step_residence_settlement,
-    step_stone_quarry, step_woodcutters_lodge,
+    step_lumber_mill, step_reforester, step_residence_needs, step_residence_recovery,
+    step_residence_settlement, step_stone_quarry, step_woodcutters_lodge,
 };
 use crate::tables::WorldConfig;
 
@@ -68,6 +68,12 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: SimTickSchedule) {
     }
 
     let residence_ids: Vec<u64> = ctx.db.residence().iter().map(|row| row.id).collect();
+    for residence_id in &residence_ids {
+        let Some(residence) = ctx.db.residence().id().find(residence_id) else {
+            continue;
+        };
+        step_residence_recovery(ctx, &tick, residence);
+    }
     for residence_id in &residence_ids {
         let Some(residence) = ctx.db.residence().id().find(residence_id) else {
             continue;

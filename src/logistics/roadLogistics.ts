@@ -141,7 +141,6 @@ export function claimResidencesForLodges(
   const woodcutters = lodges.filter((building) => building.kind === 'woodcutters_lodge');
 
   for (const residence of residences) {
-    if (residence.abandoned) continue;
     let bestLodge: BuildingState | null = null;
     let bestDistance = Infinity;
     for (const lodge of woodcutters) {
@@ -181,6 +180,9 @@ export function compareResidencesForDelivery(
   a: ResidenceState,
   b: ResidenceState,
 ): number {
+  if (a.abandoned !== b.abandoned) {
+    return a.abandoned ? 1 : -1;
+  }
   const runwayA = residenceFirewoodRunwaySeconds(a) ?? Infinity;
   const runwayB = residenceFirewoodRunwaySeconds(b) ?? Infinity;
   if (Math.abs(runwayA - runwayB) > 1e-6) return runwayA - runwayB;

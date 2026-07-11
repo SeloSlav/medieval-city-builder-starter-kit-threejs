@@ -31,9 +31,6 @@ pub fn claim_residences_for_lodges(
 ) -> std::collections::HashMap<u64, u64> {
     let mut claims = std::collections::HashMap::new();
     for residence in residences {
-        if residence.abandoned {
-            continue;
-        }
         let mut best_lodge: Option<&Building> = None;
         let mut best_distance = f64::INFINITY;
         for lodge in lodges {
@@ -80,23 +77,29 @@ pub fn sort_residences_for_delivery(
     residences: &mut [Residence],
 ) {
     residences.sort_by(|a, b| {
-        let runway_a = residence_firewood_runway_seconds(a);
-        let runway_b = residence_firewood_runway_seconds(b);
-        match runway_a
-            .partial_cmp(&runway_b)
-            .unwrap_or(std::cmp::Ordering::Equal)
-        {
-            std::cmp::Ordering::Equal => {
-                let distance_a = road_path_distance(network, lodge.x, lodge.z, a.x, a.z)
-                    .unwrap_or(f64::INFINITY);
-                let distance_b = road_path_distance(network, lodge.x, lodge.z, b.x, b.z)
-                    .unwrap_or(f64::INFINITY);
-                distance_a
-                    .partial_cmp(&distance_b)
+        match (a.abandoned, b.abandoned) {
+            (true, false) => std::cmp::Ordering::Greater,
+            (false, true) => std::cmp::Ordering::Less,
+            _ => {
+                let runway_a = residence_firewood_runway_seconds(a);
+                let runway_b = residence_firewood_runway_seconds(b);
+                match runway_a
+                    .partial_cmp(&runway_b)
                     .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| a.id.cmp(&b.id))
+                {
+                    std::cmp::Ordering::Equal => {
+                        let distance_a = road_path_distance(network, lodge.x, lodge.z, a.x, a.z)
+                            .unwrap_or(f64::INFINITY);
+                        let distance_b = road_path_distance(network, lodge.x, lodge.z, b.x, b.z)
+                            .unwrap_or(f64::INFINITY);
+                        distance_a
+                            .partial_cmp(&distance_b)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| a.id.cmp(&b.id))
+                    }
+                    other => other,
+                }
             }
-            other => other,
         }
     });
 }

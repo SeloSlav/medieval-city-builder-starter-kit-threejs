@@ -850,7 +850,7 @@ button {
 
 .construction-card__art {
   display: block;
-  height: 112px;
+  height: 224px;
   width: auto;
   object-fit: contain;
   pointer-events: none;
@@ -1370,7 +1370,7 @@ button {
   }
 
   .construction-card__art {
-    height: 88px;
+    height: 176px;
   }
 
   .construction-card__tooltip {

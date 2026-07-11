@@ -49,7 +49,9 @@ export function renderResidenceInspector(
   return {
     eyebrow: 'Residence',
     title: residence.abandoned
-      ? 'Abandoned residence'
+      ? residence.firewoodStock > 0
+        ? 'Abandoned residence — restocking'
+        : 'Abandoned residence'
       : residenceCount === 1
         ? 'Residence'
         : `Residence plot (${residenceCount} residences)`,

@@ -72,7 +72,6 @@ fn collect_delivery_targets(
         .residence()
         .owner()
         .filter(&lodge.owner)
-        .filter(|residence| !residence.abandoned)
         .collect();
     let claims = claim_residences_for_lodges(network, &lodges, &residences);
 
