@@ -30,7 +30,7 @@ import { computePathBoundsXZ } from '../utils/pathGeometry.ts';
 import { RockSpatialIndex } from '../utils/rockSpatialIndex.ts';
 import { yieldToMain } from '../utils/yieldToMain.ts';
 import { createPostProcessor, type ScenePostProcessor } from './PostProcessing.ts';
-import { fitDirectionalLightShadow, computeViewShadowBounds, intersectTerrainBounds } from './fitDirectionalShadow.ts';
+import { fitDirectionalLightShadow, computeViewShadowBounds, intersectTerrainBounds, updateDirectionalShadowCameraMatrices } from './fitDirectionalShadow.ts';
 import { createPreferredRenderer, type RendererBackend, type RendererBackendKind, type SupportedRenderer } from './RendererBackend.ts';
 import { applyShadowPreferences as syncShadowCasters } from './applyShadowPreferences.ts';
 import { TREE_SHADOW_CAST_LAYER } from './SceneLayers.ts';
@@ -372,7 +372,12 @@ export class SceneManager {
     this.sunDirection.copy(state.sunDirection);
     this.sunLight.color.setHex(state.sunColor);
     this.sunLight.intensity = state.sunIntensity;
-    this.sunLight.position.copy(this.sunDirection).multiplyScalar(180);
+    // Keep the sun parallel to the fitted shadow target — not world origin — so panning
+    // does not skew directional shadows between shadow-map refits.
+    this.sunLight.position.copy(this.sunLight.target.position).addScaledVector(state.sunDirection, 180);
+    this.sunLight.updateMatrixWorld();
+    this.sunLight.target.updateMatrixWorld();
+    updateDirectionalShadowCameraMatrices(this.sunLight);
     this.hemiLight.color.setHex(state.hemiSkyColor);
     this.hemiLight.groundColor.setHex(state.hemiGroundColor);
     this.hemiLight.intensity = state.hemiIntensity;

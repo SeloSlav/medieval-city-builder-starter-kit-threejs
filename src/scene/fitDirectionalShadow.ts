@@ -110,7 +110,33 @@ export function fitDirectionalLightShadow(
   shadowCam.bottom = viewBounds.minCamY - padY;
   shadowCam.near = Math.max(0.1, -viewBounds.maxCamZ - DEPTH_PAD);
   shadowCam.far = -viewBounds.minCamZ + DEPTH_PAD;
+  snapDirectionalShadowFrustumToTexels(light, shadowCam);
   shadowCam.updateProjectionMatrix();
+}
+
+/** Prevent shadow swimming when the ortho frustum recenters on pan/zoom. */
+function snapDirectionalShadowFrustumToTexels(
+  light: THREE.DirectionalLight,
+  shadowCam: THREE.OrthographicCamera,
+): void {
+  const mapSize = light.shadow.mapSize.width;
+  const width = shadowCam.right - shadowCam.left;
+  const height = shadowCam.top - shadowCam.bottom;
+  if (!(mapSize > 0 && width > 0 && height > 0)) return;
+
+  const texelW = width / mapSize;
+  const texelH = height / mapSize;
+  const centerX = (shadowCam.left + shadowCam.right) * 0.5;
+  const centerY = (shadowCam.bottom + shadowCam.top) * 0.5;
+  const snappedX = Math.round(centerX / texelW) * texelW;
+  const snappedY = Math.round(centerY / texelH) * texelH;
+  const halfW = width * 0.5;
+  const halfH = height * 0.5;
+
+  shadowCam.left = snappedX - halfW;
+  shadowCam.right = snappedX + halfW;
+  shadowCam.bottom = snappedY - halfH;
+  shadowCam.top = snappedY + halfH;
 }
 
 function buildShadowSampleCoords(
@@ -153,7 +179,12 @@ function syncLightPosition(
   light.target.updateMatrixWorld();
 }
 
-/** Matches Three.js LightShadow.updateMatrices in r185+. */
+/** Re-align the shadow ortho camera after the sun light pose changes. */
+export function updateDirectionalShadowCameraMatrices(light: THREE.DirectionalLight): void {
+  syncShadowCameraFromLight(light, light.shadow.camera);
+  light.shadow.needsUpdate = true;
+}
+
 function syncShadowCameraFromLight(
   light: THREE.DirectionalLight,
   shadowCam: THREE.OrthographicCamera,

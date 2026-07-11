@@ -246,6 +246,11 @@ export class App {
 
     const firstPersonActive = this.firstPersonController?.isActive() ?? false;
     this.syncBuildInteractionPerf();
+    this.settlementPresentation.tick({
+      settlementHud: this.toolbar?.settlementHud ?? null,
+      sceneManager: this.sceneManager,
+      residenceMarkers: this.residenceMarkers,
+    });
     if (firstPersonActive) {
       this.firstPersonController?.update(dt);
       this.toolbar?.setFirstPersonMode(true);
@@ -276,11 +281,6 @@ export class App {
       dt,
     );
     this.ambientAudio?.tick(dt);
-    this.settlementPresentation.tick({
-      settlementHud: this.toolbar?.settlementHud ?? null,
-      sceneManager: this.sceneManager,
-      residenceMarkers: this.residenceMarkers,
-    });
     this.animationId = requestAnimationFrame(this.tick);
   };
 
