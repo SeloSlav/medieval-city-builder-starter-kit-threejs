@@ -58,7 +58,7 @@ const TAU = Math.PI * 2;
 const GRID_SIDE = GRASS_STREAM_CHUNK_RADIUS * 2 + 1;
 const SLOT_CAPACITY = GRASS_TUFTS_PER_CHUNK + 8;
 const MAX_STREAM_INSTANCES = GRID_SIDE * GRID_SIDE * SLOT_CAPACITY;
-const MIN_TUFT_SPACING_SQ = 0.42 * 0.42;
+const MIN_TUFT_SPACING_SQ = 0.34 * 0.34;
 const MIN_MICRO_TUFT_SPACING_SQ = 0.26 * 0.26;
 const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 

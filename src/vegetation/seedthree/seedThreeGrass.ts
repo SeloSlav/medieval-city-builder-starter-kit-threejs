@@ -4,15 +4,15 @@ import {
   attribute,
   cameraViewMatrix,
   float,
-  modelWorldMatrix,
   normalMap,
   normalView,
   normalize,
-  positionLocal,
+  positionGeometry,
   sin,
   texture,
   time,
   uniform,
+  vec3,
   vec4,
 } from 'three/tsl';
 import { windSpeed, windStrength, WIND_DIR } from '@seedthree/core/wind.js';
@@ -35,15 +35,15 @@ const tsl = {
   attribute: attribute as (name: string, type: string) => TslNode,
   cameraViewMatrix: cameraViewMatrix as TslNode,
   float: float as (value: number) => TslNode,
-  modelWorldMatrix: modelWorldMatrix as TslNode,
   normalMap: normalMap as (sample: unknown) => TslNode,
   normalView: normalView as TslNode,
   normalize: normalize as (value: unknown) => TslNode,
-  positionLocal: positionLocal as TslNode,
+  positionGeometry: positionGeometry as TslNode,
   sin: sin as (value: unknown) => TslNode,
   texture: texture as (map: THREE.Texture) => TslNode,
   time: time as TslNode,
   uniform: uniform as <T>(value: T) => { value: T },
+  vec3: vec3 as (x: unknown, y: unknown, z: unknown) => TslNode,
   vec4: vec4 as (...values: unknown[]) => TslNode,
   windSpeed: windSpeed as unknown as TslNode,
   windStrength: windStrength as unknown as TslNode,
@@ -57,20 +57,27 @@ function swayAt(phaseWorld: TslNode, phaseScale: number): TslNode {
     .add(tsl.sin(t.mul(2.63).add(phase.mul(1.9))).mul(0.28));
 }
 
-/** Instanced grass: per-slot phase from aAnchorPos, base pinned via y^2 weighting. */
+/** Instanced grass: bend xz from raw geometry height; y stays pinned at the rooted base. */
 function createInstancedGrassWindPosition(bladeHeight = 1): TslNode {
-  const k = tsl.positionLocal.y.div(tsl.float(bladeHeight)).mul(tsl.positionLocal.y.div(tsl.float(bladeHeight)));
-  const amp = tsl.windStrength.mul(0.22);
-  const anchorWorld = tsl.modelWorldMatrix.mul(tsl.vec4(tsl.attribute('aAnchorPos', 'vec3'), tsl.float(1))).xyz;
+  const geo = tsl.positionGeometry;
+  const heightNorm = geo.y.div(tsl.float(bladeHeight));
+  const k = heightNorm.mul(heightNorm);
+  const amp = tsl.windStrength.mul(0.18);
+  const anchorWorld = tsl.attribute('aAnchorPos', 'vec3');
   const gust = swayAt(anchorWorld, 2.2).mul(amp);
   const jitterT = tsl.time
     .mul(tsl.windSpeed)
     .mul(3.1)
     .add(anchorWorld.z.mul(1.7))
     .add(anchorWorld.x.mul(1.3));
-  const jitter = tsl.sin(jitterT).mul(amp).mul(0.25);
+  const jitter = tsl.sin(jitterT).mul(amp).mul(0.2);
+  const bend = gust.add(jitter).mul(k);
   const windLocal = tsl.attribute('aWindVec', 'vec3');
-  return tsl.positionLocal.add(windLocal.mul(gust.add(jitter)).mul(k));
+  return tsl.vec3(
+    geo.x.add(windLocal.x.mul(bend)),
+    geo.y,
+    geo.z.add(windLocal.z.mul(bend)),
+  );
 }
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -178,14 +185,15 @@ export function createSeedThreeGrassMaterial(textures: SeedThreeGrassTextures): 
     roughness: 0.95,
     metalness: 0,
   });
+  mat.forceSinglePass = true;
 
-  const transmit = tsl.uniform(new THREE.Color().setRGB(0.45, 0.65, 0.22));
+  const transmit = tsl.uniform(new THREE.Color().setRGB(0.38, 0.55, 0.18));
   mat.thicknessColorNode = tsl.attribute('aTint', 'vec3').y.mul(transmit);
-  mat.thicknessDistortionNode = tsl.uniform(0.4);
-  mat.thicknessAmbientNode = tsl.uniform(0.06);
+  mat.thicknessDistortionNode = tsl.uniform(0.35);
+  mat.thicknessAmbientNode = tsl.uniform(0.035);
   mat.thicknessAttenuationNode = tsl.uniform(1.0);
   mat.thicknessPowerNode = tsl.uniform(5.0);
-  mat.thicknessScaleNode = tsl.uniform(2.6);
+  mat.thicknessScaleNode = tsl.uniform(1.9);
   mat.colorNode = tsl.texture(textures.tuft).mul(tsl.vec4(tsl.attribute('aTint', 'vec3'), tsl.float(1)));
   if (textures.tuftRoughness) {
     mat.roughnessMap = textures.tuftRoughness;
@@ -219,9 +227,9 @@ export function seedThreeGrassWindVecForYaw(
 
 export function sampleSeedThreeGrassTint(rng: () => number, dry = 0): THREE.Vector3 {
   return new THREE.Vector3(
-    rng() * 0.45 + 0.55 + dry * 0.45,
-    (rng() * 0.7 + 0.55) * (1 - dry * 0.35),
-    (rng() * 0.35 + 0.45) * (1 - dry * 0.55),
+    rng() * 0.35 + 0.48 + dry * 0.28,
+    (rng() * 0.55 + 0.48) * (1 - dry * 0.35),
+    (rng() * 0.28 + 0.38) * (1 - dry * 0.55),
   );
 }
 
