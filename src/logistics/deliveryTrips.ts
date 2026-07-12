@@ -1,12 +1,22 @@
+import type { BuildingState, GameState, ResidenceState } from '../resources/types.ts';
+import { roadPathDistance } from './roadLogistics.ts';
+import type { RoadNetwork } from '../roads/RoadNetwork.ts';
+
 export const DELIVERY_TRIP_PHASES = ['outbound', 'unloading', 'inbound'] as const;
 export type DeliveryTripPhase = (typeof DELIVERY_TRIP_PHASES)[number];
 
-export type DeliveryCargoKind = 'firewood' | 'water' | 'food';
+export const DELIVERY_CARGO_KINDS = ['firewood', 'water', 'food', 'timber'] as const;
+export type DeliveryCargoKind = (typeof DELIVERY_CARGO_KINDS)[number];
+
+export const DELIVERY_DESTINATION_KINDS = ['residence', 'building'] as const;
+export type DeliveryDestinationKind = (typeof DELIVERY_DESTINATION_KINDS)[number];
 
 export type DeliveryTripState = {
   id: string;
   buildingId: string;
-  residenceId: string;
+  residenceId: string | null;
+  destinationKind: DeliveryDestinationKind;
+  targetBuildingId: string | null;
   cargoKind: DeliveryCargoKind;
   amount: number;
   phase: DeliveryTripPhase;
@@ -19,6 +29,12 @@ export type DeliveryTripState = {
   deliveryWorkers: number;
 };
 
+export type TripEndpoint = {
+  origin: BuildingState;
+  destinationX: number;
+  destinationZ: number;
+};
+
 export function cargoKindFromId(value: number): DeliveryCargoKind | null {
   switch (value) {
     case 0:
@@ -27,6 +43,19 @@ export function cargoKindFromId(value: number): DeliveryCargoKind | null {
       return 'water';
     case 2:
       return 'food';
+    case 3:
+      return 'timber';
+    default:
+      return null;
+  }
+}
+
+export function destinationKindFromId(value: number): DeliveryDestinationKind | null {
+  switch (value) {
+    case 0:
+      return 'residence';
+    case 1:
+      return 'building';
     default:
       return null;
   }
@@ -43,12 +72,77 @@ export function phaseFromId(value: number): DeliveryTripPhase {
   }
 }
 
+export function resolveTripEndpoints(
+  trip: DeliveryTripState,
+  state: Pick<GameState, 'buildings' | 'residences'>,
+): TripEndpoint | null {
+  const origin = state.buildings.get(trip.buildingId);
+  if (!origin) return null;
+
+  if (trip.destinationKind === 'building') {
+    if (!trip.targetBuildingId) return null;
+    const target = state.buildings.get(trip.targetBuildingId);
+    if (!target) return null;
+    return { origin, destinationX: target.x, destinationZ: target.z };
+  }
+
+  if (!trip.residenceId) return null;
+  const residence = state.residences.get(trip.residenceId);
+  if (!residence) return null;
+  return { origin, destinationX: residence.x, destinationZ: residence.z };
+}
+
+export function tripPathDistance(
+  network: RoadNetwork,
+  trip: DeliveryTripState,
+  state: Pick<GameState, 'buildings' | 'residences'>,
+): number | null {
+  const endpoints = resolveTripEndpoints(trip, state);
+  if (!endpoints) return null;
+  return roadPathDistance(
+    network,
+    endpoints.origin.x,
+    endpoints.origin.z,
+    endpoints.destinationX,
+    endpoints.destinationZ,
+  );
+}
+
+export function formatTripDestinationLabel(
+  trip: DeliveryTripState | null,
+  getResidence: (id: string) => ResidenceState | null,
+  fallback: string,
+): string {
+  if (!trip) return fallback;
+  if (trip.destinationKind === 'building') return fallback;
+  if (!trip.residenceId) return fallback;
+  const residence = getResidence(trip.residenceId);
+  if (!residence) return fallback;
+  return `Parcel #${residence.parcelIndex + 1}`;
+}
+
 export function findActiveTripForBuilding(
   trips: Iterable<DeliveryTripState>,
   buildingId: string,
 ): DeliveryTripState | null {
   for (const trip of trips) {
     if (trip.buildingId === buildingId) return trip;
+  }
+  return null;
+}
+
+export function findInboundTimberTripForBuilding(
+  trips: Iterable<DeliveryTripState>,
+  buildingId: string,
+): DeliveryTripState | null {
+  for (const trip of trips) {
+    if (
+      trip.cargoKind === 'timber'
+      && trip.destinationKind === 'building'
+      && trip.targetBuildingId === buildingId
+    ) {
+      return trip;
+    }
   }
   return null;
 }
@@ -73,8 +167,10 @@ export function tripRemainingSeconds(trip: DeliveryTripState, pathDistance: numb
       return Math.max(0, trip.unloadRemaining) + travelPerLeg;
     case 'inbound':
       return (pathDistance - progress) / travelSpeed;
-    default:
-      return Infinity;
+    default: {
+      const _exhaustive: never = trip.phase;
+      return _exhaustive;
+    }
   }
 }
 
@@ -86,6 +182,10 @@ export function formatTripPhaseLabel(phase: DeliveryTripPhase): string {
       return 'Unloading';
     case 'inbound':
       return 'Returning';
+    default: {
+      const _exhaustive: never = phase;
+      return _exhaustive;
+    }
   }
 }
 
@@ -97,5 +197,11 @@ export function cargoColor(kind: DeliveryCargoKind): number {
       return 0x3f8fd6;
     case 'food':
       return 0x5f9f4a;
+    case 'timber':
+      return 0x8a684c;
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
   }
 }

@@ -172,6 +172,7 @@ export class SpacetimeGameStore {
           return;
         }
         console.warn('[SpacetimeGameStore] connect error', error);
+        this.connectErrorListener?.(error);
         this.emit();
       },
       onDisconnect: () => {
@@ -187,40 +188,18 @@ export class SpacetimeGameStore {
     return this.connectWithOptionalToken(token, false);
   }
 
-  toGameState(registry: WorldLayoutRegistry): GameState {
+  toGameState(_registry: WorldLayoutRegistry): GameState {
     const state = this.tableState;
     const seed = state.worldGeneration?.configured
       ? state.worldGeneration.seed
       : getDraftWorldGeneration().seed;
-    const quarries = new Map(state.quarries);
-    const foragingNodes = new Map(state.foragingNodes);
-    if (!this.isConnected) {
-      for (const definition of registry.definitionList) {
-        const nodeState = {
-          nodeId: definition.id,
-          kind: definition.kind,
-          resource: definition.resource,
-          remaining: definition.maxYield,
-          maxYield: definition.maxYield,
-          x: definition.x,
-          z: definition.z,
-        };
-        if (definition.kind === 'quarry') {
-          if (quarries.has(definition.id)) continue;
-          quarries.set(definition.id, nodeState);
-        } else if (definition.kind === 'game' || definition.kind === 'berries') {
-          if (foragingNodes.has(definition.id)) continue;
-          foragingNodes.set(definition.id, nodeState);
-        }
-      }
-    }
 
     return {
       seed,
       tick: state.simTick,
       stockpile: { ...state.stockpile },
-      quarries,
-      foragingNodes,
+      quarries: new Map(state.quarries),
+      foragingNodes: new Map(state.foragingNodes),
       trees: new Map(state.trees),
       buildings: new Map(state.buildings),
       burgageZones: new Map(state.burgageZones),
@@ -329,6 +308,11 @@ export class SpacetimeGameStore {
   }
 
   private roadSyncFailedListener: ((error: unknown) => void) | null = null;
+  private connectErrorListener: ((error: unknown) => void) | null = null;
+
+  setConnectErrorListener(listener: ((error: unknown) => void) | null): void {
+    this.connectErrorListener = listener;
+  }
 
   setRoadSyncFailedListener(listener: ((error: unknown) => void) | null): void {
     this.roadSyncFailedListener = listener;

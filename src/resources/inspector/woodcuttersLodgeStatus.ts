@@ -29,6 +29,8 @@ export type LodgeStatusInput = {
   crew: LodgeLaborSplit;
   tripRemainingSeconds: number | null;
   activeTrip: DeliveryTripState | null;
+  inboundTimberTrip: DeliveryTripState | null;
+  timberTripRemainingSeconds: number | null;
   nextTargetLabel: string;
   hasNextTarget: boolean;
   firewoodPerTrip: number;
@@ -50,6 +52,8 @@ export function resolveWoodcuttersLodgeStatus(input: LodgeStatusInput): {
     crew,
     tripRemainingSeconds,
     activeTrip,
+    inboundTimberTrip,
+    timberTripRemainingSeconds,
     nextTargetLabel,
     hasNextTarget,
     firewoodPerTrip,
@@ -86,9 +90,16 @@ export function resolveWoodcuttersLodgeStatus(input: LodgeStatusInput): {
       statusState: 'warning',
     };
   }
+  if (inboundTimberTrip && timberTripRemainingSeconds != null) {
+    const timer = formatCooldown(timberTripRemainingSeconds);
+    return {
+      statusText: `Timber haul ${formatTripPhaseLabel(inboundTimberTrip.phase).toLowerCase()} — ${timer} remaining`,
+      statusState: 'active',
+    };
+  }
   if (firewood <= 0 && timber <= 0) {
     return {
-      statusText: `Pulling timber from ${millsWithTimber} nearest mill${millsWithTimber === 1 ? '' : 's'} by road`,
+      statusText: `Dispatching timber haul from nearest road-linked mill`,
       statusState: 'active',
     };
   }

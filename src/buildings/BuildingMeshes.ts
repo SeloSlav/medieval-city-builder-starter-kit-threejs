@@ -529,61 +529,289 @@ export function createWoodcuttersLodgeMesh(): THREE.Group {
 }
 
 
-/** Simple stone well with timber frame — placeholder until final art lands. */
+/** Village well — limestone curb, timber shelter, shingled roof, crank and bucket. */
 export function createWellMesh(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Well';
 
-  const stoneHeight = 0.9;
-  const frameHeight = 1.35;
-  const radius = 1.45;
+  const apronRadius = 2.05;
+  const curbOuter = 1.38;
+  const curbInner = 0.92;
+  const postSpan = 2.35;
+  const postHeight = 2.55;
+  const roofPeak = 1.45;
+  const halfSpan = postSpan * 0.5;
 
+  // Flagstone apron — worn limestone pad around the shaft.
   addMesh(
     group,
-    new THREE.CylinderGeometry(radius, radius + 0.18, stoneHeight, 14),
-    stoneMaterial('mid'),
-    new THREE.Vector3(0, stoneHeight * 0.5, 0),
+    new THREE.CylinderGeometry(apronRadius, apronRadius + 0.06, 0.1, 16),
+    stoneMaterial('mortar'),
+    new THREE.Vector3(0, 0.05, 0),
   );
   addMesh(
     group,
-    new THREE.CylinderGeometry(radius - 0.12, radius - 0.05, 0.22, 14),
+    new THREE.CylinderGeometry(apronRadius - 0.08, apronRadius - 0.02, 0.06, 16),
     stoneMaterial('light'),
-    new THREE.Vector3(0, stoneHeight + 0.11, 0),
-  );
-  addMesh(
-    group,
-    new THREE.CylinderGeometry(radius - 0.35, radius - 0.35, 0.5, 12),
-    metalMaterial('iron'),
-    new THREE.Vector3(0, stoneHeight + 0.35, 0),
+    new THREE.Vector3(0, 0.12, 0),
   );
 
-  for (const side of [-1, 1] as const) {
+  // Stacked curb rings — tapered dry-stone shaft wall.
+  const ringHeights = [0.38, 0.34, 0.33] as const;
+  let curbY = 0.15;
+  for (let i = 0; i < ringHeights.length; i++) {
+    const h = ringHeights[i];
+    const outer = curbOuter + (ringHeights.length - 1 - i) * 0.06;
+    const inner = curbInner - i * 0.04;
     addMesh(
       group,
-      new THREE.BoxGeometry(0.16, frameHeight, 0.16),
+      new THREE.CylinderGeometry(outer, outer + 0.08, h, 14, 1, false),
+      stoneMaterial(i === 0 ? 'mid' : 'light'),
+      new THREE.Vector3(0, curbY + h * 0.5, 0),
+    );
+    addMesh(
+      group,
+      new THREE.CylinderGeometry(inner, inner + 0.04, h + 0.04, 12, 1, true),
+      stoneMaterial('mortar'),
+      new THREE.Vector3(0, curbY + h * 0.5, 0),
+    );
+    curbY += h;
+  }
+
+  // Cast-iron rim and dark water surface below the lip.
+  addMesh(
+    group,
+    new THREE.TorusGeometry(curbInner + 0.06, 0.07, 8, 16),
+    metalMaterial('iron'),
+    new THREE.Vector3(0, curbY + 0.04, 0),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+  addMesh(
+    group,
+    new THREE.CircleGeometry(curbInner - 0.05, 14),
+    metalMaterial('steel'),
+    new THREE.Vector3(0, curbY - 0.18, 0),
+    new THREE.Euler(-Math.PI * 0.5, 0, 0),
+  );
+
+  const frameBaseY = curbY + 0.06;
+  const frameTopY = frameBaseY + postHeight;
+
+  // Four timber posts and upper tie beams — square shelter frame.
+  for (const [xSign, zSign] of [[-1, -1], [-1, 1], [1, -1], [1, 1]] as const) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.18, postHeight, 0.18),
       timberMaterial('dark'),
-      new THREE.Vector3(side * (radius - 0.08), stoneHeight + frameHeight * 0.5, 0),
+      new THREE.Vector3(xSign * halfSpan, frameBaseY + postHeight * 0.5, zSign * halfSpan),
+    );
+  }
+  for (const axis of ['x', 'z'] as const) {
+    const size = axis === 'x' ? postSpan + 0.22 : 0.16;
+    const depth = axis === 'x' ? 0.16 : postSpan + 0.22;
+    addMesh(
+      group,
+      new THREE.BoxGeometry(size, 0.16, depth),
+      timberMaterial('weathered'),
+      new THREE.Vector3(0, frameTopY, 0),
+    );
+    addMesh(
+      group,
+      new THREE.BoxGeometry(size, 0.12, depth),
+      timberMaterial('mid'),
+      new THREE.Vector3(0, frameTopY - 0.28, 0),
+    );
+  }
+
+  // Pyramidal shingle roof — four slopes meeting at a finial cap.
+  const roofBaseY = frameTopY + 0.04;
+  const roofHalf = halfSpan + 0.28;
+  const roofPitch = Math.atan2(roofPeak, roofHalf);
+  const slopeLen = roofHalf / Math.cos(roofPitch) + 0.12;
+
+  for (let i = 0; i < 4; i++) {
+    const yaw = i * Math.PI * 0.5;
+    addMesh(
+      group,
+      new THREE.BoxGeometry(slopeLen, 0.1, postSpan + 0.55),
+      shingleMaterial(),
+      new THREE.Vector3(0, roofBaseY + roofPeak * 0.48, 0),
+      new THREE.Euler(-roofPitch, yaw, 0),
     );
   }
   addMesh(
     group,
-    new THREE.BoxGeometry(radius * 1.7, 0.14, 0.16),
+    new THREE.BoxGeometry(0.22, 0.28, 0.22),
+    timberMaterial('dark'),
+    new THREE.Vector3(0, roofBaseY + roofPeak + 0.08, 0),
+  );
+
+  // Side crank and rope with bucket.
+  const crankX = halfSpan - 0.08;
+  const crankY = frameTopY - 0.42;
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(0.08, 0.08, 0.55, 10),
+    metalMaterial('iron'),
+    new THREE.Vector3(crankX, crankY, 0),
+    new THREE.Euler(0, 0, Math.PI * 0.5),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.38, 0.07, 0.07),
+    timberMaterial('light'),
+    new THREE.Vector3(crankX + 0.28, crankY, 0),
+  );
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(0.11, 0.11, 0.06, 10),
+    metalMaterial('iron'),
+    new THREE.Vector3(crankX + 0.08, crankY, 0),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+
+  const ropeTopY = crankY - 0.06;
+  const bucketTopY = frameBaseY + 0.35;
+  const ropeHeight = ropeTopY - bucketTopY;
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.045, ropeHeight, 0.045),
+    timberMaterial('mid'),
+    new THREE.Vector3(0.08, bucketTopY + ropeHeight * 0.5, 0.12),
+  );
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(0.2, 0.17, 0.34, 10),
     timberMaterial('weathered'),
-    new THREE.Vector3(0, stoneHeight + frameHeight, 0),
+    new THREE.Vector3(0.08, bucketTopY - 0.12, 0.12),
+  );
+  addMesh(
+    group,
+    new THREE.TorusGeometry(0.19, 0.025, 6, 12),
+    metalMaterial('iron'),
+    new THREE.Vector3(0.08, bucketTopY + 0.04, 0.12),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+
+  // Low bench beside the apron for drawing water.
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.85, 0.14, 0.38),
+    timberMaterial('weathered'),
+    new THREE.Vector3(-apronRadius + 0.55, 0.22, 0.55),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.12, 0.32, 0.12),
+    timberMaterial('dark'),
+    new THREE.Vector3(-apronRadius + 0.28, 0.16, 0.72),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.12, 0.32, 0.12),
+    timberMaterial('dark'),
+    new THREE.Vector3(-apronRadius + 0.82, 0.16, 0.38),
   );
 
   return group;
 }
 
+function addGameDryingRack(group: THREE.Group, x: number, z: number, floorY: number): void {
+  const postH = 1.85;
+  const span = 1.65;
+  for (const zSign of [-1, 1] as const) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(0.14, postH, 0.14),
+      timberMaterial('dark'),
+      new THREE.Vector3(x, floorY + postH * 0.5, z + zSign * span * 0.5),
+    );
+  }
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.12, 0.12, span + 0.18),
+    timberMaterial('weathered'),
+    new THREE.Vector3(x, floorY + postH - 0.08, z),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.12, 0.12, span + 0.18),
+    timberMaterial('mid'),
+    new THREE.Vector3(x, floorY + postH * 0.62, z),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.55, 0.32, 0.42),
+    timberMaterial('dark'),
+    new THREE.Vector3(x + 0.45, floorY + 0.16, z),
+  );
+}
+
+function addForagerBaskets(group: THREE.Group, x: number, z: number, floorY: number): void {
+  for (let i = 0; i < 3; i++) {
+    const bx = x + (i - 1) * 0.42;
+    const bz = z + (i % 2) * 0.18;
+    addMesh(
+      group,
+      new THREE.CylinderGeometry(0.22, 0.18, 0.28, 10),
+      timberMaterial(i === 1 ? 'light' : 'weathered'),
+      new THREE.Vector3(bx, floorY + 0.14, bz),
+    );
+    addMesh(
+      group,
+      new THREE.TorusGeometry(0.21, 0.035, 6, 10),
+      timberMaterial('mid'),
+      new THREE.Vector3(bx, floorY + 0.29, bz),
+      new THREE.Euler(Math.PI * 0.5, 0, 0),
+    );
+  }
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.14, 0.95, 0.14),
+    timberMaterial('dark'),
+    new THREE.Vector3(x - 0.75, floorY + 0.48, z + 0.35),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.14, 0.95, 0.14),
+    timberMaterial('dark'),
+    new THREE.Vector3(x + 0.75, floorY + 0.48, z + 0.35),
+  );
+  addMesh(
+    group,
+    new THREE.BoxGeometry(1.72, 0.08, 0.08),
+    timberMaterial('weathered'),
+    new THREE.Vector3(x, floorY + 0.82, z + 0.35),
+  );
+}
+
 function createHuntersHallMesh(): THREE.Group {
   const group = createReforesterHutMesh();
+  group.name = "Hunter's hall";
   group.scale.setScalar(1.18);
+
+  const halfW = 6.4 * 0.5;
+  const halfD = 5.8 * 0.5;
+  addGameDryingRack(group, halfW + 1.35, -0.4, 0);
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.48, 0.38, 0.48),
+    timberMaterial('dark'),
+    new THREE.Vector3(halfW - 0.65, 1.0 + 0.19, halfD - 0.55),
+  );
+
   return group;
 }
 
 function createForagersShedMesh(): THREE.Group {
   const group = createReforesterHutMesh();
+  group.name = "Forager's shed";
   group.scale.setScalar(0.92);
+
+  const halfW = 6.4 * 0.5;
+  const halfD = 5.8 * 0.5;
+  addForagerBaskets(group, halfW + 0.95, halfD + 0.55, 0);
+
   return group;
 }
 

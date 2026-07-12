@@ -37,6 +37,7 @@ export type FirstPersonControllerConfig = {
   getOrbitSpawn?: () => FirstPersonSpawn;
   onModeChange?: (active: boolean) => void;
   isMenuOpen?: () => boolean;
+  isSessionReady?: () => boolean;
 };
 
 export type FirstPersonSpawn = {
@@ -334,6 +335,7 @@ export class FirstPersonController {
     if (this.isTextInputFocused()) return;
 
     if (this.isToggleKey(event)) {
+      if (!this.config.isSessionReady?.()) return;
       event.preventDefault();
       event.stopPropagation();
       this.toggleRequested = true;

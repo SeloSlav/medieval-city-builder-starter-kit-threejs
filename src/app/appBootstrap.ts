@@ -13,9 +13,11 @@ import { InputManager } from '../input/InputManager.ts';
 import {
   isBurgagePlacementBlocked,
   isBuildingPlacementBlocked,
+  isRoadPlacementBlocked,
   isWorldInspectionBlocked,
   type PlacementInteractionGate,
 } from '../input/PlacementInteractionGate.ts';
+import { SessionConnectionGate } from '../network/SessionConnectionGate.ts';
 import { createInitialGameState } from '../resources/GameState.ts';
 import type { GameState } from '../resources/types.ts';
 import { countTreesNearBuilding } from '../resources/ForestVisualSync.ts';
@@ -32,6 +34,7 @@ import { SceneManager } from '../scene/SceneManager.ts';
 import { createInspectorSpacetimeActions } from './inspectorSpacetimeActions.ts';
 import { createWorldMapIcons, type WorldMapIconsBundle } from './worldMapIcons.ts';
 import { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
+import { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import { beginStartupTextureLoad } from '../scene/startupTextures.ts';
 import { sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
 import { BuildToolbar } from '../ui/BuildToolbar.ts';
@@ -83,6 +86,7 @@ export type BootstrappedSession = {
   burgageTool: BurgageTool;
   buildingMarkers: BuildingMarkers;
   deliveryAgents: DeliveryAgentRenderer;
+  villagers: VillagerRenderer;
   residenceMarkers: ResidenceMarkers;
   backyardGardenMarkers: BackyardGardenMarkers;
   burgageFencing: BurgageFencing;
@@ -93,7 +97,9 @@ export type BootstrappedSession = {
   worldMapIcons: WorldMapIconsBundle;
   ambientAudio: AmbientAudioController;
   spacetimeStore: SpacetimeGameStore;
+  sessionGate: SessionConnectionGate;
   placementGate: PlacementInteractionGate;
+  uiRoot: HTMLElement;
 };
 
 function mustElement(root: HTMLElement, selector: string): HTMLElement {
@@ -140,7 +146,14 @@ export async function bootstrapAppSession(
   const liveContext: SessionLiveContext = { gameState, treeRegistry: null };
   const input = new InputManager(sceneManager.renderer.domElement);
   const spacetimeStore = new SpacetimeGameStore();
+  const sessionGate = new SessionConnectionGate();
   const roadNetwork = new RoadNetwork();
+
+  const requireSessionReady = (): void => {
+    if (!sessionGate.isReady()) {
+      throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
+    }
+  };
 
   let cameraController: CameraController;
   let firstPersonController: FirstPersonController;
@@ -181,7 +194,13 @@ export async function bootstrapAppSession(
     terrain: sceneManager.terrain,
     parent: sceneManager.selectionGroup,
   });
+  const villagers = new VillagerRenderer({
+    parent: sceneManager.selectionGroup,
+    getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
+    getRoadDeckY: (x, z) => sceneManager.sampleRoadDeckY(x, z),
+  });
   const placementGate: PlacementInteractionGate = {
+    isSessionReady: () => sessionGate.isReady(),
     isRoadToolEnabled: () => false,
     isBuildingToolEnabled: () => false,
     isBurgageToolEnabled: () => false,
@@ -216,6 +235,10 @@ export async function bootstrapAppSession(
   });
 
   const toggleRoadTool = (): void => {
+    if (!sessionGate.isReady()) {
+      toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
+      return;
+    }
     roadTool.setEnabled(!roadTool.isEnabled());
     if (roadTool.isEnabled()) {
       buildingTool.setMode('off');
@@ -236,11 +259,10 @@ export async function bootstrapAppSession(
       sceneManager.syncRoadNetwork(roadNetwork);
       roadSelection.refresh();
       bridge.syncToolbar();
-      if (spacetimeStore.isConnected) {
-        spacetimeStore.queueRoadSync(roadNetwork.snapshot());
-      }
+      spacetimeStore.queueRoadSync(roadNetwork.snapshot());
     },
     onStateChanged: () => bridge.syncToolbar(),
+    isBlocked: () => isRoadPlacementBlocked(placementGate),
     onDeleteRequested: (request) => {
       if (!toolbar) return;
       if (!request) {
@@ -266,15 +288,11 @@ export async function bootstrapAppSession(
     markers: buildingMarkers,
     getState: () => liveContext.gameState,
     onPlaceBuilding: async (kind, x, z) => {
-      if (!spacetimeStore.isConnected) {
-        throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
-      }
+      requireSessionReady();
       await spacetimeStore.placeBuilding(kind, x, z);
     },
     onDemolishBuilding: async (buildingId) => {
-      if (!spacetimeStore.isConnected) {
-        throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
-      }
+      requireSessionReady();
       await spacetimeStore.demolishBuilding(buildingId);
     },
     isWaterAt: (x, z) => sceneManager.riverField.isRenderedWetAt(x, z),
@@ -317,9 +335,7 @@ export async function bootstrapAppSession(
     isWaterAt: (x, z) => sceneManager.riverField.isRenderedWetAt(x, z),
     isQuarryPitAt: (x, z) => sceneManager.worldLayout.quarryLayout.isBlockedForProps(x, z),
     onCommit: async (commit) => {
-      if (!spacetimeStore.isConnected) {
-        throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
-      }
+      requireSessionReady();
       await spacetimeStore.placeBurgageZone({
         corners: commit.corners.map((corner) => ({ x: corner.x, z: corner.z })),
         frontageEdge: commit.frontageEdge,
@@ -327,9 +343,7 @@ export async function bootstrapAppSession(
       });
     },
     onDemolishBurgageZone: async (zoneId) => {
-      if (!spacetimeStore.isConnected) {
-        throw new Error('SpacetimeDB is not connected. Start the local server and refresh.');
-      }
+      requireSessionReady();
       await spacetimeStore.demolishBurgageZone(zoneId);
     },
     onModeChanged: () => bridge.syncToolbar(),
@@ -381,6 +395,10 @@ export async function bootstrapAppSession(
       roadTool.commitDraft();
     },
     onToggleBuilding: (kind: BuildingKind) => {
+      if (!sessionGate.isReady()) {
+        toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
+        return;
+      }
       buildingTool.toggleMode(kind);
       if (buildingTool.isEnabled()) {
         roadTool.setEnabled(false);
@@ -389,6 +407,10 @@ export async function bootstrapAppSession(
       bridge.syncToolbar();
     },
     onToggleResidences: () => {
+      if (!sessionGate.isReady()) {
+        toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
+        return;
+      }
       const wasEnabled = burgageTool.isEnabled();
       burgageTool.setEnabled(!wasEnabled);
       if (burgageTool.isEnabled()) {
@@ -433,7 +455,7 @@ export async function bootstrapAppSession(
       && !buildingTool.isEnabled()
       && !burgageTool.isEnabled(),
     onNewWorld: () => {
-      void beginNewWorld({ connected: spacetimeStore.isConnected });
+      void beginNewWorld(() => sessionGate.isReady());
     },
   });
 
@@ -443,10 +465,7 @@ export async function bootstrapAppSession(
     getTaxRate: () => spacetimeStore.snapshot.economicActivityTaxRate ?? ECONOMIC_ACTIVITY_TAX_RATE_DEFAULT,
     getParishPolicy: () => spacetimeStore.snapshot.parishPolicy ?? DEFAULT_PARISH_POLICY,
     onTaxRateChange: async (taxRate) => {
-      if (!spacetimeStore.isConnected) {
-        toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
-        throw new Error('SpacetimeDB is not connected.');
-      }
+      requireSessionReady();
       await spacetimeStore.setEconomicActivityTaxRate(taxRate);
     },
     onTaxRateChangeFailed: (error) => {
@@ -454,10 +473,7 @@ export async function bootstrapAppSession(
       toastManager?.show(message, { variant: 'error' });
     },
     onParishPolicyChange: async (autoSweepEnabled, cofferReserveGold, sabbathObservanceEnabled) => {
-      if (!spacetimeStore.isConnected) {
-        toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
-        throw new Error('SpacetimeDB is not connected.');
-      }
+      requireSessionReady();
       await spacetimeStore.setChapelParishPolicy(
         autoSweepEnabled,
         cofferReserveGold,
@@ -483,6 +499,7 @@ export async function bootstrapAppSession(
   });
   const inspectorActions = createInspectorSpacetimeActions(
     () => spacetimeStore,
+    () => sessionGate.isReady(),
     toastManager,
   );
   const resourceInspector = new ResourceInspector({
@@ -533,6 +550,7 @@ export async function bootstrapAppSession(
       return { x: target.x, z: target.z, yaw: cameraController.getYaw() };
     },
     isMenuOpen: () => toolbar.isGameMenuOpen(),
+    isSessionReady: () => sessionGate.isReady(),
     onModeChange: (active) => {
       cameraController.setInputEnabled(!active && !toolbar.isGameMenuOpen());
       toolbar.setFirstPersonMode(active);
@@ -554,6 +572,8 @@ export async function bootstrapAppSession(
   placementGate.isMenuOpen = () => toolbar.isGameMenuOpen();
 
   toolbar.setWaterOverlayActive(isHydrologyOverlayEnabled());
+  toolbar.setGameplayEnabled(false);
+  loadingScreen?.setProgress({ label: 'Connecting…', detail: 'Syncing with SpacetimeDB' });
 
   return {
     loadingScreen,
@@ -571,6 +591,7 @@ export async function bootstrapAppSession(
     burgageTool,
     buildingMarkers,
     deliveryAgents,
+    villagers,
     residenceMarkers,
     backyardGardenMarkers,
     burgageFencing,
@@ -581,6 +602,8 @@ export async function bootstrapAppSession(
     worldMapIcons,
     ambientAudio,
     spacetimeStore,
+    sessionGate,
     placementGate,
+    uiRoot,
   };
 }

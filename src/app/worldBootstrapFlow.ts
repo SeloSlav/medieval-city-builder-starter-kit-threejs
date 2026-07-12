@@ -18,23 +18,23 @@ export async function resolveWorldGenerationSettings(
   return loadStoredWorldGenerationSettings() ?? DEFAULT_WORLD_GENERATION_SETTINGS;
 }
 
-export async function beginNewWorld(options?: { connected?: boolean }): Promise<void> {
-  const offlineNote = options?.connected === false
-    ? '\n\nSpacetimeDB is offline — the shared server database will NOT be reset until you reconnect.'
-    : '';
+export async function beginNewWorld(isReady: () => boolean): Promise<void> {
+  if (!isReady()) {
+    window.alert('SpacetimeDB is not connected. Start the local server and try again.');
+    return;
+  }
+
   const confirmed = window.confirm(
-    `Start a new world? This clears your saved world settings and local player identity, then reloads the page.${offlineNote}`,
+    'Start a new world? This clears your saved world settings and local player identity, then reloads the page.',
   );
   if (!confirmed) return;
 
-  if (options?.connected) {
-    try {
-      await resetWorld();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not reset the server database.';
-      window.alert(`New world failed: ${message}\n\nThe page was not reloaded.`);
-      return;
-    }
+  try {
+    await resetWorld();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not reset the server database.';
+    window.alert(`New world failed: ${message}\n\nThe page was not reloaded.`);
+    return;
   }
 
   clearStoredWorldGenerationSettings();

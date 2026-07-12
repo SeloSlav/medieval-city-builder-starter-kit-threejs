@@ -154,6 +154,7 @@ export class BurgageTool {
   }
 
   setEnabled(enabled: boolean): void {
+    if (enabled && this.options.isBlocked()) return;
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) {

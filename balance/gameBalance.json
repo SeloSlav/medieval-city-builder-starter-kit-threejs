@@ -100,10 +100,13 @@
     "foodDeliverySpeedMps": 1.25,
     "firewoodDeliveryUnloadSec": 10,
     "waterDeliveryUnloadSec": 5,
-    "foodDeliveryUnloadSec": 6
+    "foodDeliveryUnloadSec": 6,
+    "timberDeliverySpeedMps": 0.85,
+    "timberDeliveryUnloadSec": 8
   },
   "production": {
     "lodgeTimberPerCycle": 3,
+    "lodgeTimberPerDelivery": 3,
     "lodgeFirewoodPerCycle": 3,
     "lodgeFirewoodPerDelivery": 2,
     "stonePerHarvest": 3,

@@ -15,6 +15,8 @@ export default __t.row({
   owner: __t.identity(),
   buildingId: __t.u64().name("building_id"),
   residenceId: __t.u64().name("residence_id"),
+  destinationKind: __t.u8().name("destination_kind"),
+  targetBuildingId: __t.u64().name("target_building_id"),
   cargoKind: __t.u8().name("cargo_kind"),
   amount: __t.f64(),
   phase: __t.u8(),

@@ -139,9 +139,12 @@ export type GameBalance = {
     firewoodDeliveryUnloadSec: number;
     waterDeliveryUnloadSec: number;
     foodDeliveryUnloadSec: number;
+    timberDeliverySpeedMps: number;
+    timberDeliveryUnloadSec: number;
   };
   production: {
     lodgeTimberPerCycle: number;
+    lodgeTimberPerDelivery: number;
     lodgeFirewoodPerCycle: number;
     lodgeFirewoodPerDelivery: number;
     stonePerHarvest: number;
@@ -270,8 +273,11 @@ function generateRust(): string {
     `pub const FIREWOOD_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.roads.firewoodDeliveryUnloadSec)};`,
     `pub const WATER_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.roads.waterDeliveryUnloadSec)};`,
     `pub const FOOD_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.roads.foodDeliveryUnloadSec)};`,
+    `pub const TIMBER_DELIVERY_SPEED_MPS: f64 = ${rustF64(b.roads.timberDeliverySpeedMps)};`,
+    `pub const TIMBER_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.roads.timberDeliveryUnloadSec)};`,
     '',
     `pub const LODGE_TIMBER_PER_CYCLE: f64 = ${rustF64(b.production.lodgeTimberPerCycle)};`,
+    `pub const LODGE_TIMBER_PER_DELIVERY: f64 = ${rustF64(b.production.lodgeTimberPerDelivery)};`,
     `pub const LODGE_FIREWOOD_PER_CYCLE: f64 = ${rustF64(b.production.lodgeFirewoodPerCycle)};`,
     `pub const LODGE_FIREWOOD_PER_DELIVERY: f64 = ${rustF64(b.production.lodgeFirewoodPerDelivery)};`,
     `pub const STONE_PER_HARVEST: f64 = ${rustF64(b.production.stonePerHarvest)};`,
@@ -530,8 +536,11 @@ function generateTypeScript(): string {
     `export const FIREWOOD_DELIVERY_UNLOAD_SEC = ${b.roads.firewoodDeliveryUnloadSec};`,
     `export const WATER_DELIVERY_UNLOAD_SEC = ${b.roads.waterDeliveryUnloadSec};`,
     `export const FOOD_DELIVERY_UNLOAD_SEC = ${b.roads.foodDeliveryUnloadSec};`,
+    `export const TIMBER_DELIVERY_SPEED_MPS = ${b.roads.timberDeliverySpeedMps};`,
+    `export const TIMBER_DELIVERY_UNLOAD_SEC = ${b.roads.timberDeliveryUnloadSec};`,
     '',
     `export const LODGE_TIMBER_PER_CYCLE = ${b.production.lodgeTimberPerCycle};`,
+    `export const LODGE_TIMBER_PER_DELIVERY = ${b.production.lodgeTimberPerDelivery};`,
     `export const LODGE_FIREWOOD_PER_CYCLE = ${b.production.lodgeFirewoodPerCycle};`,
     `export const LODGE_FIREWOOD_PER_DELIVERY = ${b.production.lodgeFirewoodPerDelivery};`,
     `export const STONE_PER_HARVEST = ${b.production.stonePerHarvest};`,

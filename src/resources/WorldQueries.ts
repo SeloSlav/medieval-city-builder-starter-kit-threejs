@@ -15,7 +15,7 @@ import {
   WellDeliveryClaimQueries,
 } from '../logistics/deliveryClaimQueries.ts';
 import { findNearestResourceNodeWithRemaining } from './depletableNodes.ts';
-import { findActiveTripForBuilding, tripRemainingSeconds } from '../logistics/deliveryTrips.ts';
+import { findActiveTripForBuilding, findInboundTimberTripForBuilding, tripPathDistance, tripRemainingSeconds } from '../logistics/deliveryTrips.ts';
 import type { DeliveryTripState } from '../logistics/deliveryTrips.ts';
 import {
   foodLaborSplit,
@@ -444,16 +444,11 @@ export class WorldQueries {
   }
 
   getActiveTripPathDistance(trip: DeliveryTripState): number | null {
-    const building = this.getGameState().buildings.get(trip.buildingId);
-    const residence = this.getGameState().residences.get(trip.residenceId);
-    if (!building || !residence) return null;
-    return roadPathDistance(
-      this.getRoadNetwork(),
-      building.x,
-      building.z,
-      residence.x,
-      residence.z,
-    );
+    return tripPathDistance(this.getRoadNetwork(), trip, this.getGameState());
+  }
+
+  getInboundTimberTrip(lodge: BuildingState): DeliveryTripState | null {
+    return findInboundTimberTripForBuilding(this.getGameState().deliveryTrips.values(), lodge.id);
   }
 
   getActiveTripRemainingSeconds(building: BuildingState): number | null {

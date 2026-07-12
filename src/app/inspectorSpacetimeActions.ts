@@ -15,11 +15,12 @@ export type InspectorSpacetimeActions = {
 
 export function createInspectorSpacetimeActions(
   getStore: () => SpacetimeGameStore | null,
+  isSessionReady: () => boolean,
   toastManager: ToastManager,
 ): InspectorSpacetimeActions {
-  const requireConnected = (): SpacetimeGameStore | null => {
+  const requireReady = (): SpacetimeGameStore | null => {
     const store = getStore();
-    if (!store?.isConnected) {
+    if (!store || !isSessionReady()) {
       toastManager.show('SpacetimeDB is not connected.', { variant: 'error' });
       return null;
     }
@@ -40,22 +41,22 @@ export function createInspectorSpacetimeActions(
 
   return {
     onDemolishBuilding: async (buildingId) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(() => store.demolishBuilding(buildingId), 'Demolition failed.');
     },
     onDemolishBurgageZone: async (zoneId) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(() => store.demolishBurgageZone(zoneId), 'Residence plot demolition failed.');
     },
     onDemolishResidence: async (residenceId) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(() => store.demolishResidence(residenceId), 'Residence removal failed.');
     },
     onPlaceBackyardGarden: async (residenceId, kind) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(
         () => store.placeBackyardGarden(residenceId, kind),
@@ -63,7 +64,7 @@ export function createInspectorSpacetimeActions(
       );
     },
     onDemolishBackyardGarden: async (residenceId) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(
         () => store.demolishBackyardGarden(residenceId),
@@ -71,12 +72,12 @@ export function createInspectorSpacetimeActions(
       );
     },
     onAssignBuildingLabor: async (buildingId, labor) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(() => store.assignBuildingLabor(buildingId, labor), 'Labor assignment failed.');
     },
     onMarketplaceTrade: async (buildingId, tradeId) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(
         () => store.marketplaceTrade(buildingId, tradeId),
@@ -84,7 +85,7 @@ export function createInspectorSpacetimeActions(
       );
     },
     onCollectChapelCoffer: async (buildingId) => {
-      const store = requireConnected();
+      const store = requireReady();
       if (!store) return;
       await runReducer(
         () => store.collectChapelCoffer(buildingId),

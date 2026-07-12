@@ -50,6 +50,7 @@ export class RoadTool {
     onPlacementRejected?: (event: RoadPlacementRejectedEvent) => void;
     onToggle?: () => void;
     getGameState?: () => GameState | undefined;
+    isBlocked: () => boolean;
   };
   private enabled = false;
   private points: THREE.Vector3[] = [];
@@ -90,6 +91,7 @@ export class RoadTool {
     onPlacementRejected?: (event: RoadPlacementRejectedEvent) => void;
     onToggle?: () => void;
     getGameState?: () => GameState | undefined;
+    isBlocked: () => boolean;
   }) {
     this.options = options;
     this.preview = new RoadPreview(options.sceneManager.roadMeshBuilder, options.sceneManager.materials);
@@ -113,6 +115,7 @@ export class RoadTool {
   }
 
   setEnabled(enabled: boolean): void {
+    if (enabled && this.options.isBlocked()) return;
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     this.options.onDeleteRequested(null);
@@ -155,6 +158,7 @@ export class RoadTool {
   }
 
   commitDraft(): void {
+    if (this.options.isBlocked()) return;
     const path = this.buildDraftPath();
     const meshBuilder = this.options.sceneManager.roadMeshBuilder;
     const sampledPath = meshBuilder.samplePath(path, COMMIT_VALIDATION_SAMPLE_SPACING);
@@ -227,7 +231,7 @@ export class RoadTool {
   }
 
   private readonly onPointerDown = (event: MouseEvent): void => {
-    if (!this.enabled) return;
+    if (!this.enabled || this.options.isBlocked()) return;
     if (event.button === 0 && event.altKey) {
       this.requestDelete(event);
       return;
@@ -295,6 +299,7 @@ export class RoadTool {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTypingTarget(event.target)) return;
+    if (this.options.isBlocked()) return;
     const key = event.key.toLowerCase();
     if (key === 'r') {
       event.preventDefault();

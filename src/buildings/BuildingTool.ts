@@ -95,6 +95,7 @@ export class BuildingTool {
   }
 
   setMode(mode: BuildingToolMode): void {
+    if (mode !== 'off' && this.options.isBlocked()) return;
     this.mode = mode;
     this.resetPreviewCache();
     if (mode === 'off') {

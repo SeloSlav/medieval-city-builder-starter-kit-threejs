@@ -3,7 +3,8 @@ use spacetimedb::ReducerContext;
 use crate::building_defs::building_def;
 use crate::constants::{
     FIREWOOD_DELIVERY_SPEED_MPS, FIREWOOD_DELIVERY_UNLOAD_SEC, LODGE_FIREWOOD_PER_CYCLE,
-    LODGE_FIREWOOD_PER_DELIVERY, LODGE_TIMBER_PER_CYCLE, TICK_DT,
+    LODGE_FIREWOOD_PER_DELIVERY, LODGE_TIMBER_PER_CYCLE, LODGE_TIMBER_PER_DELIVERY,
+    TIMBER_DELIVERY_SPEED_MPS, TIMBER_DELIVERY_UNLOAD_SEC, TICK_DT,
 };
 use crate::db::*;
 use crate::economy::{building_storage_caps, deposit_building, withdraw_building};
@@ -11,6 +12,9 @@ use crate::simulation::delivery_cargo::{any_target_needs_delivery, collect_claim
 use crate::simulation::delivery_supplier::{
     delivery_work_ready, dispatch_delivery_if_ready, should_alternate_single_worker,
     DeliveryDispatchConfig,
+};
+use crate::simulation::delivery_trips::{
+    building_has_inbound_supply_trip, try_start_timber_supply_trip,
 };
 use crate::simulation::residence_needs::{
     load_needs, need_stock, ResidenceNeedKind,
@@ -64,7 +68,8 @@ pub fn step_woodcutters_lodge(ctx: &ReducerContext, tick: &SimTickContext, clock
     );
 
     if do_process {
-        lodge = process_timber_to_firewood(ctx, tick, network, lodge, split.processing);
+        lodge = dispatch_timber_supply_if_needed(ctx, clock, network, lodge, split.processing);
+        lodge = process_timber_to_firewood(lodge, split.processing);
         lodge.action_cooldown = def.action_interval;
     }
     if do_deliver {
@@ -111,10 +116,62 @@ fn collect_delivery_targets(
     })
 }
 
-fn process_timber_to_firewood(
+fn dispatch_timber_supply_if_needed(
     ctx: &ReducerContext,
-    tick: &SimTickContext,
+    clock: &GameClock,
     network: &crate::roads::RoadNetwork,
+    lodge: Building,
+    processing_workers: u32,
+) -> Building {
+    if processing_workers == 0 || building_has_inbound_supply_trip(ctx, lodge.id) {
+        return lodge;
+    }
+
+    let labor = processing_workers as f64;
+    let timber_needed = LODGE_TIMBER_PER_CYCLE * labor;
+    if lodge.timber + 1e-6 >= timber_needed {
+        return lodge;
+    }
+
+    let remaining = timber_needed - lodge.timber;
+    let mut mills: Vec<Building> = ctx
+        .db
+        .building()
+        .owner()
+        .filter(&lodge.owner)
+        .filter(|row| {
+            row.kind == "lumber_mill"
+                && row.timber > 0.0
+                && network.road_path_route(row.x, row.z, lodge.x, lodge.z).is_some()
+        })
+        .collect();
+    sort_mills_by_road_path(network, &lodge, &mut mills);
+
+    for mut mill in mills {
+        if remaining <= 1e-6 {
+            break;
+        }
+        if try_start_timber_supply_trip(
+            ctx,
+            clock,
+            network,
+            &mut mill,
+            &lodge,
+            processing_workers,
+            TIMBER_DELIVERY_SPEED_MPS,
+            TIMBER_DELIVERY_UNLOAD_SEC,
+            LODGE_TIMBER_PER_DELIVERY,
+            remaining,
+        ) {
+            ctx.db.building().id().update(mill);
+            break;
+        }
+    }
+
+    lodge
+}
+
+fn process_timber_to_firewood(
     lodge: Building,
     processing_workers: u32,
 ) -> Building {
@@ -131,7 +188,6 @@ fn process_timber_to_firewood(
     let timber_needed = LODGE_TIMBER_PER_CYCLE * labor;
     let firewood_output = LODGE_FIREWOOD_PER_CYCLE * labor;
 
-    let lodge = ensure_lodge_timber(ctx, tick, network, lodge, timber_needed);
     if lodge.timber + 1e-6 < timber_needed {
         return lodge;
     }
@@ -143,52 +199,4 @@ fn process_timber_to_firewood(
         return lodge;
     }
     processed
-}
-
-fn ensure_lodge_timber(
-    ctx: &ReducerContext,
-    tick: &SimTickContext,
-    network: &crate::roads::RoadNetwork,
-    mut lodge: Building,
-    needed: f64,
-) -> Building {
-    if lodge.timber + 1e-6 >= needed {
-        return lodge;
-    }
-
-    let caps = building_storage_caps(&lodge.kind);
-    let mut remaining = needed - lodge.timber;
-    let mut mills: Vec<Building> = ctx
-        .db
-        .building()
-        .owner()
-        .filter(&lodge.owner)
-        .filter(|row| {
-            row.kind == "lumber_mill"
-                && row.timber > 0.0
-                && tick.road_connected(lodge.owner, row.x, row.z, lodge.x, lodge.z)
-        })
-        .collect();
-    sort_mills_by_road_path(network, &lodge, &mut mills);
-
-    for mill in mills {
-        if remaining <= 1e-6 {
-            break;
-        }
-        let lodge_room = (caps.timber - lodge.timber).max(0.0);
-        if lodge_room <= 1e-6 {
-            break;
-        }
-        let request = remaining.min(lodge_room).min(mill.timber);
-        let (withdrawn, _, _, reduced_mill) = withdraw_building(&mill, request, 0.0, 0.0);
-        if withdrawn <= 0.0 {
-            continue;
-        }
-        ctx.db.building().id().update(reduced_mill);
-        let (_, _, _, updated_lodge) = deposit_building(&lodge, caps, withdrawn, 0.0, 0.0);
-        lodge = updated_lodge;
-        remaining = needed - lodge.timber;
-    }
-
-    lodge
 }

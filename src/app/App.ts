@@ -23,6 +23,7 @@ import { GameRuntime } from '../runtime/GameRuntime.ts';
 import { SceneManager } from '../scene/SceneManager.ts';
 import type { WorldMapIconsBundle } from './worldMapIcons.ts';
 import { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
+import { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
 import { CityAdministrationPanel } from '../ui/CityAdministrationPanel.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
@@ -30,12 +31,15 @@ import { SettlementPresentationController } from './settlementSchedulePresentati
 import { SpacetimeSnapshotApplier, type SpacetimeSnapshotApplierDeps } from './spacetimeSnapshotApplier.ts';
 import { bootstrapAppSession, type BootstrappedSession, type SessionLiveContext } from './appBootstrap.ts';
 import { WorldGenerationMismatchError } from '../world/worldConfigAuthority.ts';
+import { SessionConnectionGate } from '../network/SessionConnectionGate.ts';
+import { SessionConnectionOverlay } from '../ui/SessionConnectionOverlay.ts';
 import {
   disposeSettlementWorld,
   syncSettlementWorld,
   tickSettlementWorld,
 } from './settlementWorldSync.ts';
 import { syncPlacedBuildingTerrain } from './placedBuildingTerrainSync.ts';
+import { SessionLifecycleController } from './SessionLifecycleController.ts';
 import { clearAuthoritativeWorldGeneration } from '../world/worldGenerationContext.ts';
 import { createSmokeTestHooks, installSmokeTestHooks } from '../e2e/smokeTestHooks.ts';
 import { sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
@@ -67,11 +71,15 @@ export class App {
   private resourceInspector: ResourceInspector | null = null;
   private worldMapIcons: WorldMapIconsBundle | null = null;
   private deliveryAgents: DeliveryAgentRenderer | null = null;
+  private villagers: VillagerRenderer | null = null;
   private gameState: GameState | null = null;
   private layoutRegistry: WorldLayoutRegistry | null = null;
   private treeRegistry: TreeRegistry | null = null;
   private forestVisualSync: ForestVisualSync | null = null;
   private spacetimeStore: SpacetimeGameStore | null = null;
+  private sessionGate: SessionConnectionGate | null = null;
+  private connectionOverlay: SessionConnectionOverlay | null = null;
+  private sessionLifecycle: SessionLifecycleController | null = null;
   private gameRuntime: GameRuntime | null = null;
   private snapshotApplierDeps: SpacetimeSnapshotApplierDeps | null = null;
   private readonly spacetimeSnapshotApplier = new SpacetimeSnapshotApplier();
@@ -112,6 +120,7 @@ export class App {
     this.burgageTool = session.burgageTool;
     this.buildingMarkers = session.buildingMarkers;
     this.deliveryAgents = session.deliveryAgents;
+    this.villagers = session.villagers;
     this.residenceMarkers = session.residenceMarkers;
     this.backyardGardenMarkers = session.backyardGardenMarkers;
     this.burgageFencing = session.burgageFencing;
@@ -122,6 +131,26 @@ export class App {
     this.worldMapIcons = session.worldMapIcons;
     this.ambientAudio = session.ambientAudio;
     this.spacetimeStore = session.spacetimeStore;
+    this.sessionGate = session.sessionGate;
+
+    this.connectionOverlay = new SessionConnectionOverlay(session.uiRoot);
+    this.sessionLifecycle = new SessionLifecycleController({
+      sessionGate: session.sessionGate,
+      loadingScreen: session.loadingScreen,
+      connectionOverlay: this.connectionOverlay,
+      spacetimeStore: session.spacetimeStore,
+      toolbar: session.toolbar,
+      roadTool: session.roadTool,
+      buildingTool: session.buildingTool,
+      burgageTool: session.burgageTool,
+      firstPersonController: session.firstPersonController,
+    });
+
+    session.spacetimeStore.setConnectErrorListener((error) => {
+      console.warn('SpacetimeDB connection error:', error);
+      clearAuthoritativeWorldGeneration();
+      this.sessionLifecycle?.onBootConnectionFailure();
+    });
 
     this.snapshotApplierDeps = {
       sceneManager: this.sceneManager,
@@ -132,7 +161,9 @@ export class App {
         residenceMarkers: this.residenceMarkers,
         backyardGardenMarkers: this.backyardGardenMarkers,
         deliveryAgents: this.deliveryAgents,
+        villagers: this.villagers,
         getHeightAt: (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
+        getRoadNetwork: () => this.roadNetwork,
       },
       onForestClearanceChanged: () => this.syncForestClearance(),
     };
@@ -148,20 +179,33 @@ export class App {
           this.sceneManager?.syncRoadNetwork(this.roadNetwork!);
           this.roadSelection?.refresh();
           this.syncToolbar();
+          if (this.gameState && this.villagers && this.roadNetwork) {
+            this.villagers.sync({
+              residences: this.gameState.residences.values(),
+              roadNetwork: this.roadNetwork,
+            });
+          }
         },
         onConnectError: (error) => {
           console.warn('SpacetimeDB unavailable — game simulation requires the server.', error);
           clearAuthoritativeWorldGeneration();
-          this.toastManager?.show('SpacetimeDB is offline. Run `spacetime start` and refresh.', { variant: 'error' });
+          this.sessionLifecycle?.onBootConnectionFailure();
         },
         onBootstrapFailed: (error) => {
-          const message = error instanceof WorldGenerationMismatchError
-            ? error.message
-            : error instanceof Error
-              ? error.message
-              : 'World bootstrap failed.';
-          this.toastManager?.show(message, { variant: 'error', durationMs: 8000 });
+          if (error instanceof WorldGenerationMismatchError) {
+            this.sessionLifecycle?.onWorldGenerationMismatch(
+              error.message,
+              () => this.sessionLifecycle?.retryConnection(),
+            );
+            return;
+          }
+          this.sessionLifecycle?.onBootstrapFailed(
+            error,
+            () => this.sessionLifecycle?.retryConnection(),
+          );
         },
+        onSessionReady: () => this.sessionLifecycle?.onReady(),
+        onSessionLost: () => this.sessionLifecycle?.onLost(),
       },
     );
     this.gameRuntime.start();
@@ -179,9 +223,8 @@ export class App {
     this.lastTime = performance.now();
     this.frameBudgetTime = this.lastTime;
     this.fpsSampleStart = this.lastTime;
-    session.loadingScreen?.setProgress({ label: 'Almost ready…', detail: 'Rendering first frame' });
+    session.loadingScreen?.setProgress({ label: 'Connecting…', detail: 'Waiting for SpacetimeDB' });
     session.sceneManager.render(0, session.cameraController.getOrbitDistance());
-    session.loadingScreen?.dismiss();
     window.setTimeout(() => {
       void (async () => {
         try {
@@ -211,10 +254,14 @@ export class App {
       residenceMarkers: this.residenceMarkers,
       backyardGardenMarkers: this.backyardGardenMarkers,
       deliveryAgents: this.deliveryAgents,
+      villagers: this.villagers,
       getHeightAt: () => 0,
+      getRoadNetwork: () => null,
     });
     this.burgageFencing?.dispose();
     this.gameRuntime?.dispose();
+    this.sessionLifecycle?.dispose();
+    this.connectionOverlay?.dispose();
     this.resourceInspector?.dispose();
     this.worldMapIcons?.quarry.dispose();
     this.worldMapIcons?.foraging.dispose();
@@ -274,7 +321,11 @@ export class App {
     }
     this.updateFps(time, dt);
     tickSettlementWorld(
-      { residenceMarkers: this.residenceMarkers, deliveryAgents: this.deliveryAgents },
+      {
+        residenceMarkers: this.residenceMarkers,
+        deliveryAgents: this.deliveryAgents,
+        villagers: this.villagers,
+      },
       dt,
     );
     this.ambientAudio?.tick(dt);
@@ -460,7 +511,7 @@ export class App {
     installSmokeTestHooks(createSmokeTestHooks({
       getState: () => this.gameState!,
       getBuildingMode: () => this.buildingTool!.getMode(),
-      isConnected: () => this.spacetimeStore!.isConnected,
+      isConnected: () => this.sessionGate?.isReady() ?? false,
       placeBuilding: async (kind, x, z) => {
         await this.spacetimeStore!.placeBuilding(kind, x, z);
       },

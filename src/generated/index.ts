@@ -136,6 +136,9 @@ const tablesSchema = __schema({
       { name: 'residence_id', algorithm: 'btree', columns: [
         'residenceId',
       ] },
+      { name: 'target_building_id', algorithm: 'btree', columns: [
+        'targetBuildingId',
+      ] },
     ],
     constraints: [
       { name: 'delivery_trip_id_key', constraint: 'unique', columns: ['id'] },

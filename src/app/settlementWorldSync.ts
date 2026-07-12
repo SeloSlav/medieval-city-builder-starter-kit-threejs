@@ -1,4 +1,6 @@
 import type { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
+import type { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
+import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import type { BackyardGardenMarkers } from '../residences/BackyardGardenMarkers.ts';
 import type { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
 import type { GameState } from '../resources/types.ts';
@@ -7,7 +9,9 @@ export type SettlementWorldSyncTargets = {
   residenceMarkers: ResidenceMarkers | null;
   backyardGardenMarkers: BackyardGardenMarkers | null;
   deliveryAgents: DeliveryAgentRenderer | null;
+  villagers: VillagerRenderer | null;
   getHeightAt: (x: number, z: number) => number;
+  getRoadNetwork: () => RoadNetwork | null;
 };
 
 export function syncSettlementWorld(
@@ -23,14 +27,19 @@ export function syncSettlementWorld(
     getHeightAt,
   });
   targets.deliveryAgents?.syncTrips(state.deliveryTrips.values());
+  targets.villagers?.sync({
+    residences: state.residences.values(),
+    roadNetwork: targets.getRoadNetwork(),
+  });
 }
 
 export function tickSettlementWorld(
-  targets: Pick<SettlementWorldSyncTargets, 'residenceMarkers' | 'deliveryAgents'>,
+  targets: Pick<SettlementWorldSyncTargets, 'residenceMarkers' | 'deliveryAgents' | 'villagers'>,
   dt: number,
 ): void {
   targets.residenceMarkers?.tick(dt);
   targets.deliveryAgents?.update(dt);
+  targets.villagers?.tick(dt);
 }
 
 export function disposeSettlementWorld(
@@ -39,4 +48,5 @@ export function disposeSettlementWorld(
   targets.residenceMarkers?.dispose();
   targets.backyardGardenMarkers?.dispose();
   targets.deliveryAgents?.dispose();
+  targets.villagers?.dispose();
 }

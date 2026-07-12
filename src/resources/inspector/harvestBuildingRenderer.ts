@@ -11,7 +11,7 @@ import {
   buildingWorkRadiusRow,
 } from './buildingCommon.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
-import { formatTripPhaseLabel } from '../../logistics/deliveryTrips.ts';
+import { formatTripDestinationLabel, formatTripPhaseLabel } from '../../logistics/deliveryTrips.ts';
 import {
   formatDeliveryRoadDistance,
   formatDeliveryTripDuration,
@@ -112,7 +112,7 @@ export function renderHarvestBuildingInspector(
   }
 
   const deliveryRow = crew.delivering > 0
-    ? `<li><span>Next delivery</span><span>${activeTrip ? `Parcel #${(context.worldQueries.getResidence(activeTrip.residenceId)?.parcelIndex ?? 0) + 1}` : nextTargetLabel}</span></li>
+    ? `<li><span>Next delivery</span><span>${formatTripDestinationLabel(activeTrip, (id) => context.worldQueries.getResidence(id), nextTargetLabel)}</span></li>
       <li><span>Road distance</span><span>${formatDeliveryRoadDistance(deliveryDistance)}</span></li>
       <li><span>Delivery timer</span><span>${activeTrip ? `${formatTripPhaseLabel(activeTrip.phase)} — ${formatCooldown(tripRemaining ?? Infinity)} left` : `Ready / ${formatDeliveryTripDuration(deliveryTripSeconds)}`}</span></li>
       <li><span>Food per trip</span><span>${foodPerTrip}</span></li>`

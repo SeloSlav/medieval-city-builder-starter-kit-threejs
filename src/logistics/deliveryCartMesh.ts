@@ -55,6 +55,29 @@ function addCargo(group: THREE.Group, kind: DeliveryCargoKind): void {
       addMesh(group, new THREE.BoxGeometry(0.62, 0.34, 0.48), material, new THREE.Vector3(-0.12, 0.7, 0));
       addMesh(group, new THREE.BoxGeometry(0.48, 0.28, 0.4), material, new THREE.Vector3(0.28, 0.76, 0.08));
       break;
+    case 'timber':
+      addMesh(
+        group,
+        new THREE.CylinderGeometry(0.11, 0.11, 0.82, 8),
+        timberMaterial('weathered'),
+        new THREE.Vector3(-0.2, 0.78, 0.04),
+        new THREE.Euler(0, 0, Math.PI * 0.5),
+      );
+      addMesh(
+        group,
+        new THREE.CylinderGeometry(0.1, 0.1, 0.78, 8),
+        timberMaterial('mid'),
+        new THREE.Vector3(0.08, 0.8, -0.02),
+        new THREE.Euler(0.08, 0.2, Math.PI * 0.5),
+      );
+      addMesh(
+        group,
+        new THREE.CylinderGeometry(0.095, 0.095, 0.74, 8),
+        timberMaterial('light'),
+        new THREE.Vector3(0.24, 0.76, 0.06),
+        new THREE.Euler(-0.06, -0.15, Math.PI * 0.5),
+      );
+      break;
     default: {
       const unreachable: never = kind;
       throw new Error(`Unknown cargo kind: ${unreachable}`);

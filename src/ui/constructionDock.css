@@ -31,6 +31,11 @@
   backdrop-filter: blur(12px);
 }
 
+.construction-dock.is-session-blocked .construction-dock-button--hotkey {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 .construction-dock-button {
   position: relative;
   width: 54px;

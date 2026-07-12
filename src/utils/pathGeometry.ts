@@ -1,5 +1,50 @@
 import * as THREE from 'three';
 
+export type PointXZ = { x: number; z: number };
+
+export function polylineLengthXZ(path: readonly PointXZ[]): number {
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    total += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
+  }
+  return total;
+}
+
+export function samplePolylineXZ(
+  path: readonly PointXZ[],
+  distance: number,
+): { x: number; z: number; yaw: number } | null {
+  if (path.length === 0) return null;
+  if (path.length === 1) {
+    return { x: path[0].x, z: path[0].z, yaw: 0 };
+  }
+
+  let remaining = Math.max(0, distance);
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const segmentLength = Math.hypot(b.x - a.x, b.z - a.z);
+    if (segmentLength <= 1e-6) continue;
+    if (remaining <= segmentLength + 1e-6) {
+      const t = remaining / segmentLength;
+      return {
+        x: a.x + (b.x - a.x) * t,
+        z: a.z + (b.z - a.z) * t,
+        yaw: Math.atan2(b.x - a.x, b.z - a.z),
+      };
+    }
+    remaining -= segmentLength;
+  }
+
+  const last = path[path.length - 1];
+  const prev = path[path.length - 2];
+  return {
+    x: last.x,
+    z: last.z,
+    yaw: Math.atan2(last.x - prev.x, last.z - prev.z),
+  };
+}
+
 export type RockObstacle = {
   x: number;
   z: number;

@@ -67,6 +67,46 @@
         line-height: 1.35;
       }
 
+      .app-loading-spinner.is-hidden {
+        display: none;
+      }
+
+      .app-loading-retry {
+        margin-top: 4px;
+        padding: 10px 18px;
+        border: 1px solid rgba(215, 180, 99, 0.45);
+        border-radius: 8px;
+        background: rgba(215, 180, 99, 0.12);
+        color: #eee8dc;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .app-loading-retry:hover {
+        background: rgba(215, 180, 99, 0.22);
+      }
+
+      .session-connection-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        display: grid;
+        place-items: center;
+        background: rgba(23, 26, 21, 0.82);
+        backdrop-filter: blur(4px);
+        font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Arial, sans-serif;
+      }
+
+      .session-connection-card {
+        display: grid;
+        gap: 14px;
+        justify-items: center;
+        width: min(320px, calc(100vw - 48px));
+        text-align: center;
+      }
+
       @keyframes app-loading-spin {
         to {
           transform: rotate(360deg);
@@ -80,6 +120,7 @@
         <div class="app-loading-spinner" aria-hidden="true"></div>
         <p class="app-loading-label" data-loading-label>Starting world…</p>
         <p class="app-loading-detail" data-loading-detail>Preparing renderer</p>
+        <button type="button" class="app-loading-retry" data-loading-retry hidden>Retry connection</button>
       </div>
     </div>
     <div id="app"></div>

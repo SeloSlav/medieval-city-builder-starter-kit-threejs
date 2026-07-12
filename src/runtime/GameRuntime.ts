@@ -16,6 +16,8 @@ export type GameRuntimeCallbacks = {
   onRoadsHydrated: (roads: RoadNetworkSnapshot) => void;
   onConnectError: (error: unknown) => void;
   onBootstrapFailed?: (error: unknown) => void;
+  onSessionReady?: () => void;
+  onSessionLost?: () => void;
 };
 
 export class GameRuntime {
@@ -25,7 +27,9 @@ export class GameRuntime {
   private readonly callbacks: GameRuntimeCallbacks;
   private unsubscribe: (() => void) | null = null;
   private roadsHydrated = false;
-  private worldBootstrapped = false;
+  private bootstrapComplete = false;
+  private bootstrapInFlight = false;
+  private sessionReadyEmitted = false;
 
   constructor(
     store: SpacetimeGameStore,
@@ -51,18 +55,31 @@ export class GameRuntime {
       const gameState = this.store.toGameState(this.registry);
       this.callbacks.onSnapshot(snapshot, gameState);
 
-      if (!this.worldBootstrapped && snapshot.connected) {
-        this.worldBootstrapped = true;
-        void this.ensureWorldBootstrap(snapshot).catch((error) => {
-          console.warn('[GameRuntime] Failed to bootstrap world entities', error);
-          this.callbacks.onBootstrapFailed?.(error);
-          this.worldBootstrapped = false;
-        });
+      if (!snapshot.connected) {
+        if (this.sessionReadyEmitted) {
+          this.roadsHydrated = false;
+          this.sessionReadyEmitted = false;
+          this.callbacks.onSessionLost?.();
+        }
+        return;
       }
 
-      if (!this.roadsHydrated && snapshot.connected && snapshot.roads) {
+      if (!this.bootstrapComplete && !this.bootstrapInFlight) {
+        this.bootstrapInFlight = true;
+        void this.ensureWorldBootstrap(snapshot)
+          .catch((error) => {
+            console.warn('[GameRuntime] Failed to bootstrap world entities', error);
+            this.callbacks.onBootstrapFailed?.(error);
+          })
+          .finally(() => {
+            this.bootstrapInFlight = false;
+          });
+      }
+
+      if (!this.roadsHydrated && snapshot.roads) {
         this.roadsHydrated = true;
         this.callbacks.onRoadsHydrated(snapshot.roads);
+        this.tryEmitSessionReady();
       }
     });
   }
@@ -83,6 +100,19 @@ export class GameRuntime {
       applyAuthoritativeWorldGeneration(authoritative);
     }
     await this.store.bootstrapWorld(this.registry, this.worldLayout);
+    this.bootstrapComplete = true;
+    this.tryEmitSessionReady();
+  }
+
+  private tryEmitSessionReady(): void {
+    if (this.sessionReadyEmitted || !this.bootstrapComplete || !this.roadsHydrated) {
+      return;
+    }
+    if (!this.store.isConnected) {
+      return;
+    }
+    this.sessionReadyEmitted = true;
+    this.callbacks.onSessionReady?.();
   }
 
   private waitForWorldConfig(maxAttempts = 40): Promise<void> {

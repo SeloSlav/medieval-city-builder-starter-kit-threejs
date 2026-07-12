@@ -257,10 +257,15 @@ When real auth is added later, swap the token source in `src/network/identityPer
 
 **Player reducers:** `place_building`, `demolish_building`, `assign_building_labor`, `collect_chapel_coffer`, `marketplace_trade`, `set_economic_activity_tax_rate`, `set_chapel_parish_policy`, `reset_world`, `configure_world`, `place_backyard_garden`, `demolish_backyard_garden`, `sync_road_network`, `remove_road_edge`, plus place/demolish residence zone. **Bootstrap reducers:** `bootstrap_quarries`, `bootstrap_trees`, `bootstrap_foraging`.
 
-### Offline / disconnected behavior
+### Server connection required
 
-- **Roads** — drawing, editing, and undo/redo work locally; changes queue and sync to SpacetimeDB when connected.
-- **Buildings & economy** — require SpacetimeDB. If the server is offline, the client shows a toast and building or residence placement is blocked.
+Medieval Settlement is **not playable without a live SpacetimeDB connection**. The client renders replicated server state; it does not queue roads, buildings, or economy actions offline.
+
+- **Boot** — the loading screen stays up until SpacetimeDB connects, subscribes, and world bootstrap completes. If the server is down, you get a retry screen instead of partial gameplay.
+- **Mid-session disconnect** — all construction tools are disabled and a reconnect overlay appears with automatic retry.
+- **New world** — requires a live connection; `reset_world` must succeed on the server before local settings and identity are cleared.
+
+See `docs/design/server-authoritative-connection.md` for the full connection model.
 
 ## Project Structure
 
@@ -304,6 +309,7 @@ scripts/
   generateGameBalance.mts         Generates Rust + TypeScript balance constants
   testLodgeLogistics.mts         Standalone firewood delivery logic validation
 docs/
+  design/     Connection model and design decisions
   screenshots/ Project screenshots used by this README
 ```
 

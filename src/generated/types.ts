@@ -58,6 +58,8 @@ export const DeliveryTrip = __t.object("DeliveryTrip", {
   owner: __t.identity(),
   buildingId: __t.u64(),
   residenceId: __t.u64(),
+  destinationKind: __t.u8(),
+  targetBuildingId: __t.u64(),
   cargoKind: __t.u8(),
   amount: __t.f64(),
   phase: __t.u8(),

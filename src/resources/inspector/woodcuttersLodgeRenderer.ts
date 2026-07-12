@@ -28,7 +28,7 @@ import {
   formatNextDeliveryTargetLabel,
   resolveWoodcuttersLodgeStatus,
 } from './woodcuttersLodgeStatus.ts';
-import { formatTripPhaseLabel } from '../../logistics/deliveryTrips.ts';
+import { formatTripPhaseLabel, formatTripDestinationLabel, tripRemainingSeconds } from '../../logistics/deliveryTrips.ts';
 
 export function renderWoodcuttersLodgeInspector(
   target: Extract<InspectableTarget, { kind: 'building' }>,
@@ -54,6 +54,13 @@ export function renderWoodcuttersLodgeInspector(
   const firewoodPerTrip = lodgeFirewoodPerDelivery(crew.delivering);
   const activeTrip = context.worldQueries.getActiveDeliveryTrip(building);
   const tripRemaining = context.worldQueries.getActiveTripRemainingSeconds(building);
+  const inboundTimberTrip = context.worldQueries.getInboundTimberTrip(building);
+  const timberTripRemaining = inboundTimberTrip
+    ? tripRemainingSeconds(
+      inboundTimberTrip,
+      context.worldQueries.getActiveTripPathDistance(inboundTimberTrip),
+    )
+    : null;
   const processingWorkers = lodgeLaborAlternates(building.assignedLabor) ? 1 : crew.processing;
   const timberPerCycle = LODGE_TIMBER_PER_CYCLE * processingWorkers;
   const firewoodPerCycle = LODGE_FIREWOOD_PER_CYCLE * processingWorkers;
@@ -69,6 +76,8 @@ export function renderWoodcuttersLodgeInspector(
     crew,
     tripRemainingSeconds: tripRemaining,
     activeTrip,
+    inboundTimberTrip,
+    timberTripRemainingSeconds: timberTripRemaining,
     nextTargetLabel,
     hasNextTarget: nextDeliveryTarget != null,
     firewoodPerTrip,
@@ -87,7 +96,7 @@ export function renderWoodcuttersLodgeInspector(
     : `${claimedResidences.length} claimed`;
 
   const deliveryRow = crew.delivering > 0
-    ? `<li><span>Next delivery</span><span>${activeTrip ? `Parcel #${(context.worldQueries.getResidence(activeTrip.residenceId)?.parcelIndex ?? 0) + 1}` : nextTargetLabel}</span></li>
+    ? `<li><span>Next delivery</span><span>${formatTripDestinationLabel(activeTrip, (id) => context.worldQueries.getResidence(id), nextTargetLabel)}</span></li>
       <li><span>Road distance</span><span>${formatDeliveryRoadDistance(deliveryDistance)}</span></li>
       <li><span>Delivery timer</span><span>${activeTrip ? `${formatTripPhaseLabel(activeTrip.phase)} — ${formatCooldown(tripRemaining ?? Infinity)} left` : `Ready / ${formatDeliveryTripDuration(deliveryTripSeconds)}`}</span></li>
       <li><span>Firewood per trip</span><span>${firewoodPerTrip}</span></li>`

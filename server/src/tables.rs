@@ -193,6 +193,7 @@ pub struct BackyardGarden {
     public,
     index(accessor = building_id, btree(columns = [building_id])),
     index(accessor = residence_id, btree(columns = [residence_id])),
+    index(accessor = target_building_id, btree(columns = [target_building_id])),
     index(accessor = owner, btree(columns = [owner]))
 )]
 pub struct DeliveryTrip {
@@ -202,7 +203,11 @@ pub struct DeliveryTrip {
     pub owner: Identity,
     pub building_id: u64,
     pub residence_id: u64,
-    /// 0 = firewood, 1 = water, 2 = food (matches `ResidenceNeedKind`)
+    /// 0 = residence delivery, 1 = building supply (see `target_building_id`)
+    pub destination_kind: u8,
+    /// Lodge or other building receiving a supply haul when `destination_kind == 1`.
+    pub target_building_id: u64,
+    /// 0 = firewood, 1 = water, 2 = food (matches `ResidenceNeedKind`), 3 = timber
     pub cargo_kind: u8,
     /// Cargo still on the cart (decreases when unloaded at residence).
     pub amount: f64,

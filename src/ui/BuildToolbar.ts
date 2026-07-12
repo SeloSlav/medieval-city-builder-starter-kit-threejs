@@ -88,8 +88,10 @@ export class BuildToolbar {
     onOpenRoads: () => void;
     onSetWaterOverlay?: (active: boolean) => void;
   };
+  private gameplayEnabled = true;
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTypingTarget(event.target) || this.firstPersonActive || this.gameMenu?.isOpen()) return;
+    if (!this.gameplayEnabled) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     const key = event.key.toLowerCase();
@@ -403,6 +405,22 @@ export class BuildToolbar {
 
   setWaterOverlayActive(active: boolean): void {
     this.applyWaterOverlay(active, false);
+  }
+
+  setGameplayEnabled(enabled: boolean): void {
+    if (this.gameplayEnabled === enabled) return;
+    this.gameplayEnabled = enabled;
+    this.constructionDock.classList.toggle('is-session-blocked', !enabled);
+    this.roadButton.disabled = !enabled;
+    this.buildMenuButton.disabled = !enabled;
+    this.waterOverlayButton.disabled = !enabled;
+    if (!enabled) {
+      this.setBuildMenuOpen(false);
+      dismissDockToggles(this.dockToggles);
+      if (this.waterOverlayActive) {
+        this.applyWaterOverlay(false);
+      }
+    }
   }
 
   private applyWaterOverlay(active: boolean, notify = true): void {
