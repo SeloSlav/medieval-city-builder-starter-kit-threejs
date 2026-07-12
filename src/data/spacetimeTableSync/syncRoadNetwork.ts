@@ -22,5 +22,6 @@ export function syncRoadNetwork(
       return { ...EMPTY_ROAD_SNAPSHOT };
     }
   }
-  return null;
+  // No server row yet — treat as an empty network so session bootstrap can finish.
+  return { ...EMPTY_ROAD_SNAPSHOT };
 }

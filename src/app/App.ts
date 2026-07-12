@@ -223,11 +223,12 @@ export class App {
     this.lastTime = performance.now();
     this.frameBudgetTime = this.lastTime;
     this.fpsSampleStart = this.lastTime;
-    session.loadingScreen?.setProgress({ label: 'Connecting…', detail: 'Waiting for SpacetimeDB' });
+    session.loadingScreen?.setProgress({ label: 'Connecting…', detail: 'Syncing world with SpacetimeDB' });
     session.sceneManager.render(0, session.cameraController.getOrbitDistance());
     window.setTimeout(() => {
       void (async () => {
         try {
+          session.loadingScreen?.setProgress({ label: 'Growing forest…', detail: 'Building procedural trees' });
           await session.sceneManager.finishVegetation();
           if (this.roadNetwork) session.sceneManager.syncRoadNetwork(this.roadNetwork);
           this.onForestReady();
