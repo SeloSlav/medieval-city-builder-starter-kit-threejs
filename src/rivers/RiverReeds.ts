@@ -171,7 +171,8 @@ export function createRiverReeds(
       const focusMoved =
         becameVisible ||
         !Number.isFinite(lastFocusX) ||
-        Math.hypot(focusX - lastFocusX, focusZ - lastFocusZ) >= 1.25;
+        Math.hypot(focusX - lastFocusX, focusZ - lastFocusZ) >=
+          (firstPersonActive ? 3.25 : 1.25);
 
       if (focusMoved) {
         refreshProximity(focusX, focusZ);

@@ -47,6 +47,18 @@ export const GRASS_BLADE_REVEAL = {
 /** Horizontal radius where 3D grass tufts render — fades before dirt ends. */
 export const GRASS_BLADE_NEAR_RADIUS = 62;
 
+/** Tighter stream disc while walking in first person — enough cover, fewer chunks. */
+export const GRASS_BLADE_NEAR_RADIUS_FIRST_PERSON = 46;
+
+/** Slot columns/rows refreshed per frame when the stream recentres (orbit zoom). */
+export const GRASS_STREAM_SLOTS_PER_FRAME = 14;
+
+/** Lower per-frame budget while the first-person focus moves continuously. */
+export const GRASS_STREAM_SLOTS_PER_FRAME_FIRST_PERSON = 6;
+
+/** Max slots processed in one frame even during an initial fill burst. */
+export const GRASS_STREAM_BURST_CAP = 36;
+
 /** Spatial chunk size for streamed grass batches (larger = fewer pan hitches). */
 export const GRASS_BLADE_CHUNK_SIZE = 8;
 
@@ -63,11 +75,9 @@ export const GRASS_BLADES_PER_TUFT = 9;
 export const GRASS_STREAM_CHUNK_RADIUS =
   Math.ceil(GRASS_BLADE_NEAR_RADIUS / GRASS_BLADE_CHUNK_SIZE) + 2;
 
-/** Slot columns/rows refreshed per frame when the stream recenters. */
-export const GRASS_STREAM_SLOTS_PER_FRAME = 14;
-
-/** Recentre the grass stream when focus drifts this far (world units). */
-export const GRASS_STREAM_FOCUS_DRIFT = 3.5;
+export function grassStreamNearRadius(firstPersonActive: boolean): number {
+  return firstPersonActive ? GRASS_BLADE_NEAR_RADIUS_FIRST_PERSON : GRASS_BLADE_NEAR_RADIUS;
+}
 
 /** Soft falloff band at the outer edge of the grass patch (world units). */
 export const GRASS_EDGE_FADE_BAND = 24;

@@ -24,11 +24,13 @@ import {
   GRASS_BLADE_CHUNK_SIZE,
   GRASS_BLADE_NEAR_RADIUS,
   GRASS_BLADES_PER_TUFT,
+  GRASS_STREAM_BURST_CAP,
   GRASS_STREAM_CHUNK_RADIUS,
-  GRASS_STREAM_FOCUS_DRIFT,
   GRASS_STREAM_SLOTS_PER_FRAME,
+  GRASS_STREAM_SLOTS_PER_FRAME_FIRST_PERSON,
   GRASS_TUFT_SCATTER_ATTEMPTS,
   GRASS_TUFTS_PER_CHUNK,
+  grassStreamNearRadius,
   resolveCloseGroundLod,
 } from './grassLodMath.ts';
 
@@ -144,7 +146,7 @@ export async function createGrassBladeField(
       const mesh = new THREE.InstancedMesh(geometry, material, MAX_STREAM_INSTANCES);
       mesh.name = index === 0 ? 'SeedThree grass meadow' : 'SeedThree grass clump';
       mesh.count = 0;
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.renderOrder = 2;
@@ -187,8 +189,6 @@ export async function createGrassBladeField(
 
   let anchorChunkX = Number.NaN;
   let anchorChunkZ = Number.NaN;
-  let anchorFocusX = 0;
-  let anchorFocusZ = 0;
   let needsFullStream = true;
   let roadClearanceDirty = false;
   let pendingSlots: PendingSlot[] = [];
@@ -197,11 +197,18 @@ export async function createGrassBladeField(
   let wasFirstPerson = false;
   let wasGrassVisible = false;
   let streamBurstPending = false;
+  let streamNearRadius = GRASS_BLADE_NEAR_RADIUS;
 
-  const chunkInStreamRange = (chunkX: number, chunkZ: number, focusX: number, focusZ: number): boolean => {
+  const chunkInStreamRange = (
+    chunkX: number,
+    chunkZ: number,
+    focusX: number,
+    focusZ: number,
+    nearRadius = streamNearRadius,
+  ): boolean => {
     const chunkCenterX = (chunkX + 0.5) * GRASS_BLADE_CHUNK_SIZE;
     const chunkCenterZ = (chunkZ + 0.5) * GRASS_BLADE_CHUNK_SIZE;
-    const includeRadiusSq = (GRASS_BLADE_NEAR_RADIUS + GRASS_BLADE_CHUNK_SIZE * 0.85) ** 2;
+    const includeRadiusSq = (nearRadius + GRASS_BLADE_CHUNK_SIZE * 0.85) ** 2;
     const dx = chunkCenterX - focusX;
     const dz = chunkCenterZ - focusZ;
     return dx * dx + dz * dz <= includeRadiusSq;
@@ -241,6 +248,11 @@ export async function createGrassBladeField(
     focusX: number,
     focusZ: number,
   ): void => {
+    const existing = slotRecords[gridIdx]!;
+    if (existing.worldChunkX === worldChunkX && existing.worldChunkZ === worldChunkZ) {
+      return;
+    }
+
     const slotStart = gridIdx * SLOT_CAPACITY;
     for (const entry of streamMeshes) {
       clearSlotRange(entry.mesh, slotStart, SLOT_CAPACITY);
@@ -276,14 +288,23 @@ export async function createGrassBladeField(
     slotRecords[gridIdx] = { worldChunkX, worldChunkZ, meshCounts };
   };
 
-  const queueFullStream = (centerChunkX: number, centerChunkZ: number, focusX: number, focusZ: number): void => {
+  const queueFullStream = (
+    centerChunkX: number,
+    centerChunkZ: number,
+    focusX: number,
+    focusZ: number,
+    nearRadius: number,
+  ): void => {
     pendingSlots = [];
     for (let localZ = 0; localZ < GRID_SIDE; localZ++) {
       for (let localX = 0; localX < GRID_SIDE; localX++) {
         const { chunkX, chunkZ } = worldChunkAt(centerChunkX, centerChunkZ, localX, localZ);
-        if (!chunkInStreamRange(chunkX, chunkZ, focusX, focusZ)) continue;
+        if (!chunkInStreamRange(chunkX, chunkZ, focusX, focusZ, nearRadius)) continue;
+        const gridIdx = gridIndex(localX, localZ);
+        const existing = slotRecords[gridIdx]!;
+        if (existing.worldChunkX === chunkX && existing.worldChunkZ === chunkZ) continue;
         pendingSlots.push({
-          gridIndex: gridIndex(localX, localZ),
+          gridIndex: gridIdx,
           worldChunkX: chunkX,
           worldChunkZ: chunkZ,
           sortKey: slotDistanceSq(chunkX, chunkZ, focusX, focusZ),
@@ -293,26 +314,28 @@ export async function createGrassBladeField(
     pendingSlots.sort((a, b) => a.sortKey - b.sortKey);
     anchorChunkX = centerChunkX;
     anchorChunkZ = centerChunkZ;
-    anchorFocusX = focusX;
-    anchorFocusZ = focusZ;
     needsFullStream = false;
     roadClearanceDirty = false;
-    streamBurstPending = true;
   };
 
   let buildInteractionActive = false;
   let roadDraftActive = false;
   let boundingSphereFrame = 0;
 
-  const stepPendingSlots = (focusX: number, focusZ: number): void => {
+  const stepPendingSlots = (focusX: number, focusZ: number, firstPersonActive: boolean): void => {
     if (pendingSlots.length === 0) return;
 
+    const steadyBudget = firstPersonActive
+      ? GRASS_STREAM_SLOTS_PER_FRAME_FIRST_PERSON
+      : GRASS_STREAM_SLOTS_PER_FRAME;
     const slotBudget = buildInteractionActive
-      ? Math.max(2, Math.floor(GRASS_STREAM_SLOTS_PER_FRAME * 0.4))
+      ? Math.max(2, Math.floor(steadyBudget * 0.4))
       : streamBurstPending
-        ? pendingSlots.length
-        : GRASS_STREAM_SLOTS_PER_FRAME;
+        ? Math.min(pendingSlots.length, GRASS_STREAM_BURST_CAP)
+        : steadyBudget;
     const end = Math.min(slotBudget, pendingSlots.length);
+    if (end <= 0) return;
+
     for (let index = 0; index < end; index++) {
       const slot = pendingSlots[index]!;
       regenerateSlot(slot.gridIndex, slot.worldChunkX, slot.worldChunkZ, focusX, focusZ);
@@ -329,24 +352,15 @@ export async function createGrassBladeField(
       if (entry.anchorAttr) entry.anchorAttr.needsUpdate = true;
     }
     boundingSphereFrame++;
-    const sphereInterval = buildInteractionActive ? 4 : 1;
+    const sphereInterval = buildInteractionActive ? 6 : firstPersonActive ? 5 : 3;
     if (boundingSphereFrame % sphereInterval === 0) {
       for (const entry of streamMeshes) entry.mesh.computeBoundingSphere();
     }
   };
 
-  const shouldRecentreStream = (
-    centerChunkX: number,
-    centerChunkZ: number,
-    focusX: number,
-    focusZ: number,
-  ): boolean => {
+  const shouldRecentreStream = (centerChunkX: number, centerChunkZ: number): boolean => {
     if (needsFullStream || roadClearanceDirty || !Number.isFinite(anchorChunkX)) return true;
-    if (centerChunkX !== anchorChunkX || centerChunkZ !== anchorChunkZ) return true;
-    const driftSq = GRASS_STREAM_FOCUS_DRIFT * GRASS_STREAM_FOCUS_DRIFT;
-    const dx = focusX - anchorFocusX;
-    const dz = focusZ - anchorFocusZ;
-    return dx * dx + dz * dz >= driftSq;
+    return centerChunkX !== anchorChunkX || centerChunkZ !== anchorChunkZ;
   };
 
   return {
@@ -370,8 +384,10 @@ export async function createGrassBladeField(
     ) {
       if (firstPersonActive && !wasFirstPerson) {
         needsFullStream = true;
+        streamBurstPending = true;
       }
       wasFirstPerson = firstPersonActive;
+      streamNearRadius = grassStreamNearRadius(firstPersonActive);
 
       const { grassOpacity } = resolveCloseGroundLod(cameraDistance, firstPersonActive);
       grassZoomVisible = grassOpacity > 0.02;
@@ -407,11 +423,11 @@ export async function createGrassBladeField(
       const centerChunkX = Math.floor(focusX / GRASS_BLADE_CHUNK_SIZE);
       const centerChunkZ = Math.floor(focusZ / GRASS_BLADE_CHUNK_SIZE);
 
-      if (shouldRecentreStream(centerChunkX, centerChunkZ, focusX, focusZ)) {
-        queueFullStream(centerChunkX, centerChunkZ, focusX, focusZ);
+      if (shouldRecentreStream(centerChunkX, centerChunkZ)) {
+        queueFullStream(centerChunkX, centerChunkZ, focusX, focusZ, streamNearRadius);
       }
 
-      stepPendingSlots(focusX, focusZ);
+      stepPendingSlots(focusX, focusZ, firstPersonActive);
     },
     dispose() {
       disposeResources();
