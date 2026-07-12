@@ -19,6 +19,12 @@ import {
 } from './RoadStumps.ts';
 import { createTreeSaplingMesh, updateTreeSaplingInstance } from './TreeSaplings.ts';
 import type { TreePhase } from '../resources/types.ts';
+import type { SeedThreeForestInstances } from '../vegetation/seedthree/seedThreeForestBuilder.ts';
+import {
+  commitSeedThreeForestMatrices,
+  setSeedThreeForestShadows,
+  setSeedThreeTreeVisible,
+} from '../vegetation/seedthree/seedThreeForestBuilder.ts';
 
 const ROAD_CLEAR_MARGIN = 1.35;
 const BUILDING_CLEAR_MARGIN = 1.35;
@@ -82,6 +88,7 @@ export class ForestManager {
   private readonly harvestStumpMesh: THREE.InstancedMesh;
   private readonly saplingMesh: THREE.InstancedMesh;
   private readonly terrain: Terrain;
+  private readonly seedThreeForest: SeedThreeForestInstances | null;
   private readonly hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
   private removedTrees = new Set<number>();
   private removedUndergrowth = new Set<number>();
@@ -96,7 +103,9 @@ export class ForestManager {
     undergrowthPlacements: UndergrowthPlacement[],
     terrain: Terrain,
     disposeResources: () => void,
+    seedThreeForest: SeedThreeForestInstances | null = null,
   ) {
+    this.seedThreeForest = seedThreeForest;
     this.group = root;
     this.rockPlacements = rockPlacements;
     this.disposeResources = disposeResources;
@@ -174,6 +183,9 @@ export class ForestManager {
   }
 
   setTreeShadowsEnabled(enabled: boolean): void {
+    if (this.seedThreeForest) {
+      setSeedThreeForestShadows(this.seedThreeForest, enabled);
+    }
     this.trunkMesh.castShadow = enabled;
     this.coniferShadowMesh.castShadow = enabled;
     this.broadleafShadowMesh.castShadow = enabled;
@@ -331,12 +343,20 @@ export class ForestManager {
   }
 
   private hideTree(treeIndex: number): void {
+    if (this.seedThreeForest) {
+      setSeedThreeTreeVisible(this.seedThreeForest, treeIndex, false);
+      return;
+    }
     this.trunkMesh.setMatrixAt(treeIndex, this.hiddenMatrix);
     this.hideConiferLayers(treeIndex);
     this.hideBroadleafLayers(treeIndex);
   }
 
   private showTree(treeIndex: number): void {
+    if (this.seedThreeForest) {
+      setSeedThreeTreeVisible(this.seedThreeForest, treeIndex, true);
+      return;
+    }
     this.trunkMesh.setMatrixAt(treeIndex, this.trunkMatrices[treeIndex]);
     this.showConiferLayers(treeIndex);
     this.showBroadleafLayers(treeIndex);
@@ -376,11 +396,15 @@ export class ForestManager {
   }
 
   private commitTreeInstanceUpdates(): void {
-    this.trunkMesh.instanceMatrix.needsUpdate = true;
-    this.coniferFoliageMesh.instanceMatrix.needsUpdate = true;
-    this.broadleafFoliageMesh.instanceMatrix.needsUpdate = true;
-    this.coniferShadowMesh.instanceMatrix.needsUpdate = true;
-    this.broadleafShadowMesh.instanceMatrix.needsUpdate = true;
+    if (this.seedThreeForest) {
+      commitSeedThreeForestMatrices(this.seedThreeForest);
+    } else {
+      this.trunkMesh.instanceMatrix.needsUpdate = true;
+      this.coniferFoliageMesh.instanceMatrix.needsUpdate = true;
+      this.broadleafFoliageMesh.instanceMatrix.needsUpdate = true;
+      this.coniferShadowMesh.instanceMatrix.needsUpdate = true;
+      this.broadleafShadowMesh.instanceMatrix.needsUpdate = true;
+    }
     this.harvestStumpMesh.instanceMatrix.needsUpdate = true;
     this.saplingMesh.instanceMatrix.needsUpdate = true;
   }

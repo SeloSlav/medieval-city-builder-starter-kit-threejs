@@ -98,6 +98,12 @@ type RockOutcrop = {
 };
 
 import { loadMossyRockTextures, loadPineFoliageTextures } from '../utils/propTextureLoad.ts';
+import { createStubForestInstances } from './forestInstanceStub.ts';
+import {
+  createSeedThreeForest,
+  disposeSeedThreeForest,
+} from '../vegetation/seedthree/seedThreeForestBuilder.ts';
+import { disposeSeedThreeAssetCache } from '../vegetation/seedthree/seedThreeAssets.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const TAU = Math.PI * 2;
@@ -149,8 +155,45 @@ export async function createForestProps(
   const hillEdgePlacements = createHillEdgeTreePlacements(rng, spawnConfig, treePlacements, isBlockedAt);
   const saplingPlacements = createSaplingPlacements(rng, forestCores, spawnConfig, treePlacements, isBlockedAt);
   const allTreePlacements = [...treePlacements, ...hillEdgePlacements, ...saplingPlacements];
-  const treeInstances = createMixedMountainForest(allTreePlacements, terrain, materials, rng);
   const rockPlacements = createRockPlacements(rng, forestCores, allTreePlacements, spawnConfig, isBlockedAt);
+
+  if (options?.rendererBackend === 'webgpu') {
+    const seedThreeForest = await createSeedThreeForest(
+      allTreePlacements,
+      terrain,
+      maxAnisotropy,
+      options?.treeSeed ?? 0x5eedf0a5,
+    );
+    const treeInstances = createStubForestInstances(allTreePlacements);
+    forest.add(seedThreeForest.group);
+    forest.add(
+      createRockField(
+        rockPlacements,
+        terrain,
+        materials.rock,
+        materials.shadowCast,
+        materials.shadowDepth,
+        rng,
+      ),
+    );
+
+    return new ForestManager(
+      forest,
+      treeInstances,
+      rockPlacements,
+      null,
+      [],
+      terrain,
+      () => {
+        disposeForestMaterials(materials);
+        disposeSeedThreeForest(seedThreeForest);
+        disposeSeedThreeAssetCache();
+      },
+      seedThreeForest,
+    );
+  }
+
+  const treeInstances = createMixedMountainForest(allTreePlacements, terrain, materials, rng);
 
   forest.add(treeInstances.group);
   forest.add(
