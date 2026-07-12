@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import type { Terrain } from '../terrain/Terrain.ts';
 import { ForestManager, type MixedForestInstances } from './ForestManager.ts';
 import { applyForestFoliageMaterialPatches, applyTreeShadowReceiveFilter, setTreeShadowInstanceAttributes } from './treeShadowReceiveFilter.ts';
 import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
-import type { RendererBackendKind } from '../scene/RendererBackend.ts';
+import type { RendererBackendKind, SupportedRenderer } from '../scene/RendererBackend.ts';
 import {
   CENTRAL_CLEARING_RADIUS,
   createForestCores,
@@ -45,6 +46,7 @@ const TAU = Math.PI * 2;
 export type ForestPropsOptions = {
   isBlockedAt?: (x: number, z: number) => boolean;
   rendererBackend?: RendererBackendKind;
+  webgpuRenderer?: SupportedRenderer;
   treeSeed?: number;
   densityScale?: number;
   forestCores?: ForestCore[];
@@ -98,13 +100,18 @@ export async function createForestProps(
   const rockPlacements = createRockPlacements(rng, options?.forestCores ?? createForestCores(rng, spawnConfig), allTreePlacements, spawnConfig, isBlockedAt);
 
   if (options?.rendererBackend === 'webgpu') {
+    if (!options.webgpuRenderer) {
+      throw new Error('createForestProps: webgpuRenderer is required when rendererBackend is webgpu');
+    }
     const seedThree = await import('../vegetation/seedthree/seedThreeForestBuilder.ts');
     const { disposeSeedThreeAssetCache } = await import('../vegetation/seedthree/seedThreeAssets.ts');
+    const { disposeSeedThreeBranchCardCache } = await import('../vegetation/seedthree/seedThreeBranchCards.ts');
     const seedThreeForest = await seedThree.createSeedThreeForest(
       allTreePlacements,
       terrain,
       maxAnisotropy,
       options?.treeSeed ?? 0x5eedf0a5,
+      options.webgpuRenderer as WebGPURenderer,
     );
     const seedThreeController = seedThree.createSeedThreeForestController(seedThreeForest);
     const treeInstances = createStubForestInstances(allTreePlacements);
@@ -131,6 +138,7 @@ export async function createForestProps(
         disposeForestMaterials(materials);
         seedThreeController.dispose();
         disposeSeedThreeAssetCache();
+        disposeSeedThreeBranchCardCache();
       },
       seedThreeController,
     );

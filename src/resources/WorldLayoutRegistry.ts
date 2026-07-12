@@ -44,8 +44,14 @@ export class WorldLayoutRegistry {
       });
     }
 
+    let berryIndex = 0;
     for (const site of layout.foragingLayout.sites) {
-      definitions.push(foragingDefinition(site));
+      if (site.kind === 'berries') {
+        definitions.push(foragingDefinition(site, berryIndex));
+        berryIndex++;
+      } else {
+        definitions.push(foragingDefinition(site));
+      }
     }
 
     return new WorldLayoutRegistry(definitions);
@@ -142,10 +148,10 @@ export function buildingKindLabel(kind: BuildingKind): string {
   return getBuildingDefinition(kind).label;
 }
 
-function foragingDefinition(site: ForagingSite): ResourceNodeDefinition {
+function foragingDefinition(site: ForagingSite, berryIndex = 0): ResourceNodeDefinition {
   const isGame = site.kind === 'game';
   return {
-    id: isGame ? 'foraging-game-0' : 'foraging-berries-0',
+    id: isGame ? 'foraging-game-0' : `foraging-berries-${berryIndex}`,
     kind: site.kind,
     resource: isGame ? 'game' : 'berries',
     x: site.x,

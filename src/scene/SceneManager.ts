@@ -231,6 +231,7 @@ export class SceneManager {
     this.forestManager = await createForestProps(this.terrain, this.maxAnisotropy, {
       isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z) || this.quarrySystem.isBlockedAt(x, z),
       rendererBackend: this.rendererBackend,
+      webgpuRenderer: this.rendererBackend === 'webgpu' ? this.renderer : undefined,
       treeSeed: this.worldLayout.treeSeed,
       densityScale: forestDensityScale(this.worldLayout.settings.forestDensity),
       forestCores: this.worldLayout.forestCores,

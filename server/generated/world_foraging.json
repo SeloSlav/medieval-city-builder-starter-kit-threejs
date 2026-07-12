@@ -14,9 +14,18 @@
       "nodeKind": "berries",
       "x": -274.9947069143876,
       "z": 52.346475516818465,
-      "maxYield": 120,
+      "maxYield": 60,
       "anchorX": -274.9947069143876,
       "anchorZ": 52.346475516818465
+    },
+    {
+      "nodeId": "foraging-berries-1",
+      "nodeKind": "berries",
+      "x": 327.1112253328785,
+      "z": 111.66617432907223,
+      "maxYield": 60,
+      "anchorX": 327.1112253328785,
+      "anchorZ": 111.66617432907223
     }
   ],
   "gameRespawnCandidates": [

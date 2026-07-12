@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import { buildTree, forestBarkMaterial } from '@seedthree/core/tree.js';
 import { forestCardMaterial } from '@seedthree/core/branch-cards.js';
 import { Rng } from '@seedthree/core/rng.js';
@@ -12,6 +13,7 @@ import {
 } from './gorskiKotarSpecies.ts';
 import { GORSKI_KOTAR_SPECIES } from './gorskiKotarPresets.ts';
 import { loadSeedThreeSpeciesAssets, type SeedThreeSpeciesAssets } from './seedThreeAssets.ts';
+import { ensureSeedThreeBranchCards } from './seedThreeBranchCards.ts';
 import type { SeedThreeForestController } from './seedThreeForestTypes.ts';
 import { yieldToMain } from '../../utils/yieldToMain.ts';
 
@@ -209,6 +211,7 @@ export async function createSeedThreeForest(
   terrain: Terrain,
   maxAnisotropy: number,
   treeSeed: number,
+  renderer: WebGPURenderer,
 ): Promise<SeedThreeForestInstances> {
   const rng = new Rng(`gorski-kotar:${treeSeed}`);
   const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -223,7 +226,19 @@ export async function createSeedThreeForest(
     if (!species) continue;
     const assets = await loadSeedThreeSpeciesAssets(species, maxAnisotropy);
     assetsByPreset.set(presetKey, assets);
-    const { group: prototype } = buildTree(species, `prototype:${presetKey}`, assets, FOREST_LOD_OPTS);
+    const branchCards = await ensureSeedThreeBranchCards(
+      renderer,
+      species,
+      assets,
+      FOREST_LOD_OPTS.mobileTarget,
+    );
+    if (!branchCards) {
+      console.warn('[SeedThree] no branch cards for', presetKey, '— foliage may be missing');
+    }
+    const { group: prototype } = buildTree(species, `prototype:${presetKey}`, assets, {
+      ...FOREST_LOD_OPTS,
+      branchCards: branchCards ?? undefined,
+    });
     prototypeByPreset.set(presetKey, prototype as THREE.LOD);
     await yieldToMain();
   }

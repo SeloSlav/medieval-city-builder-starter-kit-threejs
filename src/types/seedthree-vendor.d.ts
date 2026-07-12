@@ -30,7 +30,30 @@ declare module '@seedthree/core/leaf-cards.js' {
 declare module '@seedthree/core/branch-cards.js' {
   import type * as THREE from 'three';
 
+  export type BranchCardsSet = {
+    variants: Array<{
+      geometry: THREE.BufferGeometry;
+      material: THREE.Material;
+      textures: Record<string, THREE.Texture>;
+      chordLen: number;
+    }>;
+    centerUniform: { value: THREE.Vector3 };
+    foliageOnly?: boolean;
+  };
+
   export function forestCardMaterial(srcMat: THREE.Material): THREE.Material;
+
+  export function bakeBranchCards(
+    renderer: unknown,
+    species: unknown,
+    assets: unknown,
+    opts?: Record<string, unknown>,
+  ): Promise<BranchCardsSet | null>;
+
+  export function disposeBranchCards(cards: {
+    byLevel?: Map<string, BranchCardsSet>;
+    variants?: BranchCardsSet['variants'];
+  }): void;
 }
 
 declare module '@seedthree/core/rng.js' {

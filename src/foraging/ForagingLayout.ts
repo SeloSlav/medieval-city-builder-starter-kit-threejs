@@ -61,8 +61,10 @@ export class ForagingLayout {
     const gameSite = pickGameSite(rng, seed, extent, forestCores, gameRespawnCandidates, sites);
     if (gameSite) sites.push(gameSite);
 
-    const berrySite = pickBerrySite(rng, seed ^ 0x9e37, extent, forestCores, sites);
-    if (berrySite) sites.push(berrySite);
+    for (let i = 0; i < 2; i++) {
+      const berrySite = pickBerrySite(rng, seed ^ (0x9e37 + i * 0x5151), extent, forestCores, sites);
+      if (berrySite) sites.push(berrySite);
+    }
 
     return new ForagingLayout(seed, sites, gameRespawnCandidates);
   }

@@ -1,5 +1,6 @@
 export const GAME_PATCH_MAX_YIELD = 200;
-export const BERRY_PATCH_MAX_YIELD = 120;
+/** Two berry patches share the old single-patch budget (2 × 60 = 120). */
+export const BERRY_PATCH_MAX_YIELD = 60;
 
 export const GAME_PATCH_PICK_RADIUS = 42;
 export const BERRY_PATCH_PICK_RADIUS = 28;
