@@ -46,6 +46,7 @@ type TreeSpecies =
   | 'hornbeam'
   | 'sessileOak'
   | 'scotsPine'
+  | 'blackPine'
   | 'larch';
 
 type LocalForestHabitat = {
@@ -55,6 +56,8 @@ type LocalForestHabitat = {
   lowerWarmth: number;
   poorerGround: number;
   plantedPatch: number;
+  /** Nearest forest-core conifer share; drives local evergreen vs beech mix. */
+  coniferBias: number;
 };
 
 type TreeSpeciesProfile = {
@@ -94,7 +97,7 @@ function createTreePlacements(
     const density = forestDensityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (density < 0.12 || rng() > density * 1.14) continue;
 
-    const habitat = sampleLocalForestHabitat(x, z, density, spawnConfig);
+    const habitat = sampleLocalForestHabitat(x, z, density, spawnConfig, forestCores);
     const formNoise = valueNoise2(x * 0.025 + 37.2, z * 0.025 - 11.8);
     const species = pickTreeSpecies(rng, habitat, 'core');
     const form = pickTreeForm(rng, species, habitat, 'core', formNoise);
@@ -131,7 +134,13 @@ function createHillEdgeTreePlacements(
     const density = forestDensityAt(x, z, [], spawnConfig.extent, spawnConfig.terrainExtent);
     if (rng() > 0.22 + hillFactor * 0.74) continue;
 
-    const habitat = sampleLocalForestHabitat(x, z, clamp(density + hillFactor * 0.42, 0, 1), spawnConfig);
+    const habitat = sampleLocalForestHabitat(
+      x,
+      z,
+      clamp(density + hillFactor * 0.42, 0, 1),
+      spawnConfig,
+      [],
+    );
     const formNoise = valueNoise2(x * 0.025 + 37.2, z * 0.025 - 11.8);
     const species = pickTreeSpecies(rng, habitat, 'hillEdge');
     const form = pickTreeForm(rng, species, habitat, 'hillEdge', formNoise);
@@ -172,7 +181,7 @@ function createSaplingPlacements(
     const minDistance = lerp(2.8, 1.9, density);
     if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
     if (distanceToNearest(existingTrees, x, z) < 2.4) continue;
-    const habitat = sampleLocalForestHabitat(x, z, density, spawnConfig);
+    const habitat = sampleLocalForestHabitat(x, z, density, spawnConfig, forestCores);
     const species = pickTreeSpecies(rng, habitat, 'sapling');
     const form = pickTreeForm(rng, species, habitat, 'sapling', valueNoise2(x * 0.032, z * 0.032));
     const scale = pickTreeScale(rng, species, form, habitat);
@@ -195,6 +204,7 @@ function sampleLocalForestHabitat(
   z: number,
   density: number,
   spawnConfig: ForestSpawnConfig,
+  forestCores: ForestCore[],
 ): LocalForestHabitat {
   const hillFactor = getEdgeHillFactor(x, z, spawnConfig.playableSize, spawnConfig.terrainSize);
   const dampNoise = fbm2(x * 0.017 + 9.4, z * 0.017 - 12.8, 4);
@@ -209,7 +219,29 @@ function sampleLocalForestHabitat(
     lowerWarmth: saturate(smoothstep(0.48, 0.78, warmNoise) * (1 - hillFactor * 0.82)),
     poorerGround: saturate(smoothstep(0.56, 0.86, poorNoise) * (0.42 + hillFactor * 0.48)),
     plantedPatch: saturate(smoothstep(0.62, 0.88, plantedNoise) * (0.28 + hillFactor * 0.86)),
+    coniferBias: sampleConiferBias(x, z, forestCores, hillFactor),
   };
+}
+
+function sampleConiferBias(
+  x: number,
+  z: number,
+  forestCores: ForestCore[],
+  hillFactor: number,
+): number {
+  let bias = lerp(0.48, 0.72, hillFactor);
+  if (forestCores.length === 0) return bias;
+
+  let bestScore = Infinity;
+  for (const core of forestCores) {
+    const dist = Math.hypot(x - core.x, z - core.z);
+    const score = dist / Math.max(core.radiusX, core.radiusZ);
+    if (score < bestScore) {
+      bestScore = score;
+      bias = core.coniferBias;
+    }
+  }
+  return bias;
 }
 
 function pickTreeSpecies(rng: () => number, habitat: LocalForestHabitat, zone: ForestZone): TreeSpecies {
@@ -220,25 +252,32 @@ function pickTreeSpecies(rng: () => number, habitat: LocalForestHabitat, zone: F
   const poor = habitat.poorerGround;
   const planted = habitat.plantedPatch;
   const edgeLight = 1 - habitat.density;
+  const dry = 1 - damp;
 
-  addSpeciesWeight(weights, 'beech', 34 + damp * 6 + warm * 7 - cold * 8);
-  addSpeciesWeight(weights, 'silverFir', 30 + cold * 17 + damp * 5 + habitat.density * 4);
-  addSpeciesWeight(weights, 'norwaySpruce', 10 + cold * 22 + planted * 9 + poor * 3);
-  addSpeciesWeight(weights, 'sycamoreMaple', 4 + damp * 9 + warm * 2);
-  addSpeciesWeight(weights, 'norwayMaple', 2.6 + warm * 5 + edgeLight * 1.6);
-  addSpeciesWeight(weights, 'ash', 1.8 + damp * 7);
-  addSpeciesWeight(weights, 'wychElm', 1.3 + damp * 5.2);
-  addSpeciesWeight(weights, 'lime', 1.8 + warm * 4.4);
-  addSpeciesWeight(weights, 'hornbeam', 0.9 + warm * 6.5 + edgeLight * 1.2);
-  addSpeciesWeight(weights, 'sessileOak', 0.65 + warm * 5.4 + edgeLight * 2.2);
-  addSpeciesWeight(weights, 'scotsPine', 0.8 + poor * 6.8 + edgeLight * 1.2);
-  addSpeciesWeight(weights, 'larch', 0.24 + planted * 4.8 + cold * 0.8);
+  // Gorski Kotar mix: beech–fir in moist valleys, spruce on cold slopes, pines on karst and ridges.
+  addSpeciesWeight(weights, 'beech', 26 + damp * 9 + warm * 5 - cold * 7);
+  addSpeciesWeight(weights, 'silverFir', 24 + cold * 12 + damp * 9 + habitat.density * 3 - warm * 3);
+  addSpeciesWeight(weights, 'norwaySpruce', 11 + cold * 16 + planted * 8 + poor * 2);
+  addSpeciesWeight(weights, 'scotsPine', 5 + poor * 11 + edgeLight * 6 + dry * 5 + cold * 3);
+  addSpeciesWeight(weights, 'blackPine', 3.5 + poor * 9 + cold * 5 + edgeLight * 4 + dry * 3);
+  addSpeciesWeight(weights, 'larch', 1.8 + planted * 4.5 + cold * 1.1);
+  addSpeciesWeight(weights, 'sycamoreMaple', 3.5 + damp * 8 + warm * 2);
+  addSpeciesWeight(weights, 'norwayMaple', 2.4 + warm * 4.5 + edgeLight * 1.4);
+  addSpeciesWeight(weights, 'ash', 1.6 + damp * 6);
+  addSpeciesWeight(weights, 'wychElm', 1.2 + damp * 4.8);
+  addSpeciesWeight(weights, 'lime', 1.6 + warm * 4);
+  addSpeciesWeight(weights, 'hornbeam', 0.85 + warm * 5.8 + edgeLight * 1.1);
+  addSpeciesWeight(weights, 'sessileOak', 0.6 + warm * 4.8 + edgeLight * 2);
+
+  applyConiferBiasToWeights(weights, habitat.coniferBias);
 
   if (zone === 'hillEdge') {
-    multiplySpeciesWeight(weights, 'beech', 0.68);
-    multiplySpeciesWeight(weights, 'silverFir', 1.18);
-    multiplySpeciesWeight(weights, 'norwaySpruce', 1.5);
-    multiplySpeciesWeight(weights, 'larch', 1.7);
+    multiplySpeciesWeight(weights, 'beech', 0.52);
+    multiplySpeciesWeight(weights, 'silverFir', 1.14);
+    multiplySpeciesWeight(weights, 'norwaySpruce', 1.42);
+    multiplySpeciesWeight(weights, 'scotsPine', 2.1);
+    multiplySpeciesWeight(weights, 'blackPine', 1.95);
+    multiplySpeciesWeight(weights, 'larch', 1.65);
     multiplySpeciesWeight(weights, 'sessileOak', 0.34);
     multiplySpeciesWeight(weights, 'hornbeam', 0.45);
     multiplySpeciesWeight(weights, 'lime', 0.58);
@@ -249,11 +288,27 @@ function pickTreeSpecies(rng: () => number, habitat: LocalForestHabitat, zone: F
     multiplySpeciesWeight(weights, 'sycamoreMaple', 1.2);
     multiplySpeciesWeight(weights, 'hornbeam', 1.32);
     multiplySpeciesWeight(weights, 'sessileOak', 0.42);
-    multiplySpeciesWeight(weights, 'scotsPine', 0.55);
+    multiplySpeciesWeight(weights, 'scotsPine', 1.15);
+    multiplySpeciesWeight(weights, 'blackPine', 1.05);
     multiplySpeciesWeight(weights, 'larch', 0.38);
   }
 
   return pickWeightedSpecies(weights, rng);
+}
+
+function applyConiferBiasToWeights(
+  weights: Array<{ species: TreeSpecies; weight: number }>,
+  coniferBias: number,
+): void {
+  const coniferMul = lerp(0.76, 1.34, coniferBias);
+  const broadleafMul = lerp(1.2, 0.84, coniferBias);
+  for (const entry of weights) {
+    if (getTreeSpeciesProfile(entry.species).canopy === 'conifer') {
+      entry.weight *= coniferMul;
+    } else {
+      entry.weight *= broadleafMul;
+    }
+  }
 }
 
 function addSpeciesWeight(
@@ -353,7 +408,9 @@ function pickTreeScale(
             ? lerp(0.9, 1.5, Math.pow(rng(), 0.8))
             : species === 'scotsPine'
               ? lerp(0.88, 1.48, Math.pow(rng(), 0.74))
-              : species === 'larch'
+              : species === 'blackPine'
+                ? lerp(0.9, 1.42, Math.pow(rng(), 0.76))
+                : species === 'larch'
                 ? lerp(0.92, 1.56, Math.pow(rng(), 0.72))
                 : lerp(0.86, 1.48, Math.pow(rng(), 0.78));
   return speciesScale * densityMul * highSiteMul;
@@ -506,14 +563,26 @@ export function getTreeSpeciesProfile(species: TreeSpecies): TreeSpeciesProfile 
     case 'scotsPine':
       return {
         canopy: 'conifer',
-        barkColor: 0x9a6b42,
-        foliageColor: 0x5c7045,
-        heightMul: 1,
-        spreadMul: 0.78,
+        barkColor: 0xa87048,
+        foliageColor: 0x5a7548,
+        heightMul: 1.02,
+        spreadMul: 0.8,
         trunkMul: 0.84,
-        lowWhorl: 0.36,
-        crownSpan: 0.52,
-        radiusPower: 1.0,
+        lowWhorl: 0.34,
+        crownSpan: 0.54,
+        radiusPower: 0.96,
+      };
+    case 'blackPine':
+      return {
+        canopy: 'conifer',
+        barkColor: 0x4a3d32,
+        foliageColor: 0x4a6348,
+        heightMul: 1.06,
+        spreadMul: 0.74,
+        trunkMul: 0.88,
+        lowWhorl: 0.4,
+        crownSpan: 0.5,
+        radiusPower: 0.92,
       };
     case 'larch':
       return {

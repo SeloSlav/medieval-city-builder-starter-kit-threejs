@@ -446,6 +446,7 @@ export class ForestManager {
 function isConiferSpecies(species: string): boolean {
   return species === 'norwaySpruce'
     || species === 'scotsPine'
+    || species === 'blackPine'
     || species === 'silverFir'
     || species === 'larch';
 }

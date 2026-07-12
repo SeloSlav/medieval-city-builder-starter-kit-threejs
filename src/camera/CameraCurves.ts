@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { TerrainBounds } from '../terrain/Terrain.ts';
 
 /**
  * Close-zoom ground-eye rig tuning. The normal camera uses the classic
@@ -26,6 +27,22 @@ export const RTS_ORBIT_PITCH = THREE.MathUtils.degToRad(68);
 
 /** Minimum clearance between camera and sampled terrain height. */
 export const MIN_CAMERA_TERRAIN_CLEARANCE = 1.8;
+
+/** Orbit distance that fits the full terrain in view at the default RTS pitch/FOV. */
+export function computeMaxOrbitDistance(
+  bounds: TerrainBounds,
+  fovDeg: number,
+  pitchRad: number,
+  margin = 1.35,
+): number {
+  const halfExtent = Math.max(
+    (bounds.maxX - bounds.minX) * 0.5,
+    (bounds.maxZ - bounds.minZ) * 0.5,
+  );
+  const fovRad = THREE.MathUtils.degToRad(fovDeg);
+  const sinPitch = Math.max(Math.sin(pitchRad), 0.15);
+  return (halfExtent * margin) / (Math.tan(fovRad * 0.5) / sinPitch);
+}
 
 function smoothstep01(t: number): number {
   const x = THREE.MathUtils.clamp(t, 0, 1);

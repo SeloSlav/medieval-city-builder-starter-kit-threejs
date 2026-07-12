@@ -3,7 +3,7 @@
  * @see https://github.com/SkyeShark/SeedThree
  *
  * Gorski Kotar (Dinaric Alps, Croatia) is dominated by European beech–fir forest,
- * with spruce plantations, Scots pine on rocky ridges, and oak/maple in warmer valleys.
+ * with spruce plantations, Scots and black pine on rocky karst ridges, and oak/maple in warmer valleys.
  */
 export type SeedThreePresetKey =
   | 'americanBeech'
@@ -26,6 +26,7 @@ export type GorskiKotarTreeSpecies =
   | 'hornbeam'
   | 'sessileOak'
   | 'scotsPine'
+  | 'blackPine'
   | 'larch';
 
 const SPECIES_TO_PRESET: Record<GorskiKotarTreeSpecies, SeedThreePresetKey> = {
@@ -46,8 +47,9 @@ const SPECIES_TO_PRESET: Record<GorskiKotarTreeSpecies, SeedThreePresetKey> = {
   larch: 'douglasFir',
   // Planted / managed Norway spruce
   norwaySpruce: 'loblolly',
-  // Scots pine on karst ridges
+  // Scots pine on open karst ridges; black pine on rocky Dinaric slopes
   scotsPine: 'pine',
+  blackPine: 'pine',
 };
 
 /** Scale multipliers tuned to match existing placement height profiles. */

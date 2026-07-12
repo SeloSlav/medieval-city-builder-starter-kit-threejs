@@ -5,8 +5,6 @@ export type TipCardId = 'rts' | 'fp' | 'road';
 export type TipCardContext = {
   firstPersonActive: boolean;
   hudMode: 'road' | 'idle';
-  /** Keep builder instructions visible even when tips are turned off in the menu. */
-  builderModeActive?: boolean;
 };
 
 export function resolveActiveTipCard(ctx: TipCardContext): TipCardId | null {
@@ -17,7 +15,7 @@ export function resolveActiveTipCard(ctx: TipCardContext): TipCardId | null {
 
 /** Show exactly one contextual tip card, or none when tips are disabled. */
 export function syncTipCardVisibility(root: ParentNode, ctx: TipCardContext): void {
-  const activeId = areTipCardsDisabled() && !ctx.builderModeActive ? null : resolveActiveTipCard(ctx);
+  const activeId = areTipCardsDisabled() ? null : resolveActiveTipCard(ctx);
   for (const element of root.querySelectorAll<HTMLElement>('[data-tip-card]')) {
     element.hidden = element.dataset.tipCard !== activeId;
   }

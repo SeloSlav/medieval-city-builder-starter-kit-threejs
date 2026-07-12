@@ -12,6 +12,7 @@ import {
   CLOSE_PAN_SPEED_SCALE,
   RTS_ORBIT_DISTANCE,
   RTS_ORBIT_PITCH,
+  computeMaxOrbitDistance,
   evalCloseBlendFromDistance,
 } from './CameraCurves.ts';
 
@@ -19,8 +20,8 @@ const MIN_PITCH = THREE.MathUtils.degToRad(5);
 const MAX_PITCH = THREE.MathUtils.degToRad(70);
 const BASELINE_ZOOM_PERCENT = 100;
 const MAX_ZOOM_PERCENT = 1000;
+const MIN_ZOOM_PERCENT = 0;
 const MIN_DISTANCE = BASELINE_ORBIT_DISTANCE / (MAX_ZOOM_PERCENT / BASELINE_ZOOM_PERCENT);
-const MAX_DISTANCE = 300;
 const ZOOM_MULTIPLIER = 1.18;
 const PAN_LERP_SPEED = 10;
 const ROTATE_LERP_SPEED = 12;
@@ -43,6 +44,7 @@ export type CameraControllerConfig = {
 
 export class CameraController {
   private readonly config: CameraControllerConfig;
+  private readonly maxDistance: number;
   private currentDistance = RTS_ORBIT_DISTANCE;
   private targetDistance = RTS_ORBIT_DISTANCE;
   private currentYaw = -Math.PI / 2;
@@ -64,6 +66,11 @@ export class CameraController {
 
   constructor(config: CameraControllerConfig) {
     this.config = config;
+    this.maxDistance = computeMaxOrbitDistance(
+      config.bounds,
+      config.camera.fov,
+      RTS_ORBIT_PITCH,
+    );
     this.config.target.set(0, config.getHeightAt(0, 0), 0);
     this.desiredTarget.copy(this.config.target);
     this.applyRtsOrbitView();
@@ -77,6 +84,7 @@ export class CameraController {
   }
 
   getZoomPercent(): number {
+    if (this.currentDistance >= this.maxDistance - 0.5) return MIN_ZOOM_PERCENT;
     return (BASELINE_ORBIT_DISTANCE / this.currentDistance) * BASELINE_ZOOM_PERCENT;
   }
 
@@ -103,7 +111,7 @@ export class CameraController {
   applyRtsOrbitView(): void {
     this.currentPitch = RTS_ORBIT_PITCH;
     this.targetPitch = RTS_ORBIT_PITCH;
-    this.targetDistance = THREE.MathUtils.clamp(RTS_ORBIT_DISTANCE, this.getMinDistance(), MAX_DISTANCE);
+    this.targetDistance = THREE.MathUtils.clamp(RTS_ORBIT_DISTANCE, this.getMinDistance(), this.maxDistance);
     this.currentDistance = this.targetDistance;
     this.updateCamera();
   }
@@ -255,7 +263,7 @@ export class CameraController {
   }
 
   private clampDistance(value: number): number {
-    return THREE.MathUtils.clamp(value, this.getMinDistance(), MAX_DISTANCE);
+    return THREE.MathUtils.clamp(value, this.getMinDistance(), this.maxDistance);
   }
 
   private clampTarget(): void {

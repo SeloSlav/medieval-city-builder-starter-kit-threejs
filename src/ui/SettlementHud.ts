@@ -121,7 +121,7 @@ export class SettlementHud {
   }
 
   setZoomPercent(zoomPercent: number): void {
-    const displayZoom = Math.max(1, Math.round(zoomPercent));
+    const displayZoom = Math.max(0, Math.round(zoomPercent));
     this.zoomValue.textContent = `${displayZoom}%`;
   }
 

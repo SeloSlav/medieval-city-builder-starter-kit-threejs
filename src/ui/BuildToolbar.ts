@@ -558,13 +558,11 @@ export class BuildToolbar {
   }
 
   private syncContextPanels(): void {
-    const builderActive = isBuilderHudMode(this.hudMode);
-    const tipHudMode = builderActive ? 'road' : 'idle';
+    const tipHudMode = isBuilderHudMode(this.hudMode) ? 'road' : 'idle';
     this.helpButton.setAttribute('aria-pressed', String(!areTipCardsDisabled()));
     syncTipCardVisibility(this.root, {
       firstPersonActive: this.firstPersonActive,
       hudMode: tipHudMode,
-      builderModeActive: builderActive,
     });
   }
 

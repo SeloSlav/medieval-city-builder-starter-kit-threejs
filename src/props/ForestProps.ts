@@ -585,7 +585,7 @@ function getConiferLayerCount(placement: TreePlacement, rng: () => number): numb
         ? 9
         : placement.species === 'silverFir'
           ? 8
-          : placement.species === 'scotsPine'
+          : placement.species === 'scotsPine' || placement.species === 'blackPine'
             ? 6
             : 7;
   return base + Math.floor(rng() * 2);
@@ -736,8 +736,8 @@ function placeConiferCrown(options: {
       (1.95 * (1 - t * (placement.species === 'norwaySpruce' ? 0.28 : 0.36)) + 0.18) *
       placement.scale *
       scaleMul *
-      (placement.species === 'silverFir' ? 0.9 : placement.species === 'norwaySpruce' ? 1.08 : 1);
-    const sway = (1 - t) * (placement.species === 'scotsPine' ? 0.7 : 0.46);
+      (placement.species === 'silverFir' ? 0.9 : placement.species === 'norwaySpruce' ? 1.08 : placement.species === 'blackPine' ? 0.94 : 1);
+    const sway = (1 - t) * (placement.species === 'scotsPine' || placement.species === 'blackPine' ? 0.64 : 0.46);
 
     position.set(
       placement.x + lean.x * height * whorl + Math.cos(yawOffset + i * 1.74) * sway * rng(),

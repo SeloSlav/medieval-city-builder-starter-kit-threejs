@@ -24,6 +24,7 @@ function speciesYieldMultiplier(species: string): number {
       return 1.15;
     case 'norwaySpruce':
     case 'scotsPine':
+    case 'blackPine':
     case 'silverFir':
       return 1.05;
     case 'ash':
