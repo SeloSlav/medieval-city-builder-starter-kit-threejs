@@ -71,7 +71,6 @@ declare module '@seedthree/core/wind.js' {
   export const windSpeed: { value: number };
   export const WIND_DIR: THREE.Vector3;
   export function grassWindPosition(bladeHeight?: number): unknown;
-  export function instancedGrassWindPosition(bladeHeight?: number): unknown;
 }
 
 declare module '@seedthree/species/index.js' {
