@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { Terrain } from '../terrain/Terrain.ts';
 import { ForestManager, type MixedForestInstances } from './ForestManager.ts';
+import {
+  buildUndergrowthInstances,
+  createUndergrowthMaterials,
+  createUndergrowthPlacements,
+  disposeUndergrowthInstances,
+} from './ForestUndergrowth.ts';
 import { applyForestFoliageMaterialPatches, applyTreeShadowReceiveFilter, setTreeShadowInstanceAttributes } from './treeShadowReceiveFilter.ts';
 import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import type { RendererBackendKind, SupportedRenderer } from '../scene/RendererBackend.ts';
@@ -97,7 +103,11 @@ export async function createForestProps(
       forestCores: options?.forestCores,
     },
   );
-  const rockPlacements = createRockPlacements(rng, options?.forestCores ?? createForestCores(rng, spawnConfig), allTreePlacements, spawnConfig, isBlockedAt);
+  const forestCores = options?.forestCores ?? createForestCores(rng, spawnConfig);
+  const rockPlacements = createRockPlacements(rng, forestCores, allTreePlacements, spawnConfig, isBlockedAt);
+  const undergrowthMaterials = await createUndergrowthMaterials(maxAnisotropy, options?.rendererBackend, materials.textures);
+  const undergrowthPlacements = createUndergrowthPlacements(rng, forestCores, spawnConfig, isBlockedAt);
+  const undergrowth = buildUndergrowthInstances(undergrowthPlacements, terrain, undergrowthMaterials, rng);
 
   if (options?.rendererBackend === 'webgpu') {
     if (!options.webgpuRenderer) {
@@ -126,15 +136,17 @@ export async function createForestProps(
         rng,
       ),
     );
+    forest.add(undergrowth.group);
 
     return new ForestManager(
       forest,
       treeInstances,
       rockPlacements,
-      null,
-      [],
+      undergrowth,
+      undergrowthPlacements,
       terrain,
       () => {
+        disposeUndergrowthInstances(undergrowth, undergrowthMaterials);
         disposeForestMaterials(materials);
         seedThreeController.dispose();
         disposeSeedThreeAssetCache();
@@ -157,15 +169,17 @@ export async function createForestProps(
       rng,
     ),
   );
+  forest.add(undergrowth.group);
 
   return new ForestManager(
     forest,
     treeInstances,
     rockPlacements,
-    null,
-    [],
+    undergrowth,
+    undergrowthPlacements,
     terrain,
     () => {
+      disposeUndergrowthInstances(undergrowth, undergrowthMaterials);
       disposeForestMaterials(materials);
     },
   );
