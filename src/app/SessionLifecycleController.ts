@@ -27,7 +27,6 @@ export class SessionLifecycleController {
   private reconnectTimer: number | null = null;
   private disconnectOverlayTimer: number | null = null;
   private unsubscribeStore: (() => void) | null = null;
-  private sawTransport = false;
   private readonly deps: SessionLifecycleDeps;
 
   constructor(deps: SessionLifecycleDeps) {
@@ -105,7 +104,6 @@ export class SessionLifecycleController {
 
   private onStoreSnapshot(transportLive: boolean): void {
     if (transportLive) {
-      this.sawTransport = true;
       this.clearDisconnectOverlayTimer();
       this.deps.connectionOverlay.hide();
       if (!this.deps.sessionGate.isReady()) {
@@ -114,7 +112,7 @@ export class SessionLifecycleController {
       return;
     }
 
-    if (!this.sawTransport && !this.deps.sessionGate.hasEverBeenReady()) {
+    if (!this.deps.sessionGate.hasEverBeenReady()) {
       return;
     }
 

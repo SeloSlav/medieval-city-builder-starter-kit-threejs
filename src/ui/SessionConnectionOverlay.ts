@@ -4,7 +4,6 @@ export class SessionConnectionOverlay {
   private readonly root: HTMLElement;
   private readonly labelEl: HTMLElement;
   private readonly detailEl: HTMLElement;
-  private visible = false;
 
   constructor(parent: HTMLElement) {
     const existing = document.getElementById(OVERLAY_ROOT_ID);
@@ -23,7 +22,7 @@ export class SessionConnectionOverlay {
       <div class="session-connection-card">
         <div class="app-loading-spinner" aria-hidden="true"></div>
         <p id="session-connection-label" class="app-loading-label" data-session-label>Connection lost</p>
-        <p class="app-loading-detail" data-session-detail>Retrying…</p>
+        <p class="app-loading-detail" data-session-detail>Retrying SpacetimeDB connection…</p>
       </div>
     `;
     parent.appendChild(this.root);
@@ -41,13 +40,10 @@ export class SessionConnectionOverlay {
     this.labelEl.textContent = label;
     this.detailEl.textContent = detail;
     this.root.hidden = false;
-    this.visible = true;
   }
 
   hide(): void {
-    if (!this.visible) return;
     this.root.hidden = true;
-    this.visible = false;
   }
 
   dispose(): void {
