@@ -8,6 +8,7 @@ import {
   disposeSeedThreeGrassTextureCache,
   loadSeedThreeGrassTextures,
   sampleSeedThreeGrassTint,
+  seedThreeGrassWindVecForYaw,
   type SeedThreeTuftVariant,
 } from '../vegetation/seedthree/seedThreeGrass.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
@@ -29,7 +30,6 @@ import {
   GRASS_STREAM_SLOTS_PER_FRAME,
   GRASS_TUFT_SCATTER_ATTEMPTS,
   GRASS_TUFTS_PER_CHUNK,
-  grassEdgeFadeFromFocusDistance,
   resolveCloseGroundLod,
 } from './grassLodMath.ts';
 
@@ -93,6 +93,8 @@ type GrassStreamMesh = {
   mesh: THREE.InstancedMesh;
   variant?: SeedThreeTuftVariant;
   tintAttr?: THREE.InstancedBufferAttribute;
+  anchorAttr?: THREE.InstancedBufferAttribute;
+  windVecAttr?: THREE.InstancedBufferAttribute;
 };
 
 export type GrassBladeFieldOptions = {
@@ -131,7 +133,11 @@ export async function createGrassBladeField(
     streamMeshes = variants.map((variant, index) => {
       const geometry = variant.geometry;
       const tintAttr = new THREE.InstancedBufferAttribute(new Float32Array(MAX_STREAM_INSTANCES * 3), 3);
+      const anchorAttr = new THREE.InstancedBufferAttribute(new Float32Array(MAX_STREAM_INSTANCES * 3), 3);
+      const windVecAttr = new THREE.InstancedBufferAttribute(new Float32Array(MAX_STREAM_INSTANCES * 3), 3);
       geometry.setAttribute('aTint', tintAttr);
+      geometry.setAttribute('aAnchorPos', anchorAttr);
+      geometry.setAttribute('aWindVec', windVecAttr);
       const mesh = new THREE.InstancedMesh(geometry, material, MAX_STREAM_INSTANCES);
       mesh.name = index === 0 ? 'SeedThree grass meadow' : 'SeedThree grass clump';
       mesh.count = 0;
@@ -139,7 +145,7 @@ export async function createGrassBladeField(
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.visible = false;
-      return { mesh, variant, tintAttr };
+      return { mesh, variant, tintAttr, anchorAttr, windVecAttr };
     });
     disposeResources = () => {
       for (const entry of streamMeshes) entry.mesh.geometry.dispose();
@@ -247,8 +253,6 @@ export async function createGrassBladeField(
           slotStart,
           worldChunkX,
           worldChunkZ,
-          focusX,
-          focusZ,
           context,
           SLOT_CAPACITY,
         )
@@ -258,8 +262,6 @@ export async function createGrassBladeField(
             slotStart,
             worldChunkX,
             worldChunkZ,
-            focusX,
-            focusZ,
             context,
             SLOT_CAPACITY,
           ) - slotStart,
@@ -311,6 +313,8 @@ export async function createGrassBladeField(
       entry.mesh.instanceMatrix.needsUpdate = true;
       if (entry.mesh.instanceColor) entry.mesh.instanceColor.needsUpdate = true;
       if (entry.tintAttr) entry.tintAttr.needsUpdate = true;
+      if (entry.anchorAttr) entry.anchorAttr.needsUpdate = true;
+      if (entry.windVecAttr) entry.windVecAttr.needsUpdate = true;
     }
     boundingSphereFrame++;
     const sphereInterval = buildInteractionActive ? 4 : 1;
@@ -438,8 +442,6 @@ function writeSeedThreeChunkInstances(
   startIndex: number,
   chunkX: number,
   chunkZ: number,
-  focusX: number,
-  focusZ: number,
   context: GrassFieldContext,
   maxInstancesPerMesh = Number.POSITIVE_INFINITY,
 ): number[] {
@@ -495,10 +497,6 @@ function writeSeedThreeChunkInstances(
     if (isBlockedAt?.(x, z)) continue;
     if (isGrassNearAnyRoad(x, z, roadSpatialIndex)) continue;
 
-    const focusDist = Math.hypot(x - focusX, z - focusZ);
-    const edgeFade = grassEdgeFadeFromFocusDistance(focusDist);
-    if (edgeFade <= 0.02) continue;
-
     const variantIndex = rng() < (streamMeshes[0]?.variant?.share ?? 0.62) ? 0 : 1;
     const entry = streamMeshes[variantIndex];
     if (!entry?.variant || meshWriteIndices[variantIndex]! - startIndex >= maxInstancesPerMesh) continue;
@@ -510,15 +508,18 @@ function writeSeedThreeChunkInstances(
     const height =
       THREE.MathUtils.lerp(0.55, 1.15, rng()) *
       THREE.MathUtils.lerp(0.9, 1.06, density) *
-      edgeFade *
       entry.variant.tall;
     const widthScale = (height * THREE.MathUtils.lerp(1.4, 2.1, rng())) / entry.variant.tall;
 
-    composeSeedThreeTuftMatrix(x, z, height, widthScale, rng, heightAt, writeMatrix, writeQuaternion, writePosition, writeScale);
+    const rootY = heightAt(x, z) - 0.02;
+    const yaw = composeSeedThreeTuftMatrix(x, z, rootY, height, widthScale, rng, writeMatrix, writeQuaternion, writePosition, writeScale);
     const instanceIndex = meshWriteIndices[variantIndex]!;
     entry.mesh.setMatrixAt(instanceIndex, writeMatrix);
     const tint = sampleSeedThreeGrassTint(rng, dry);
     entry.tintAttr?.setXYZ(instanceIndex, tint.x, tint.y, tint.z);
+    entry.anchorAttr?.setXYZ(instanceIndex, x, rootY, z);
+    const windVec = seedThreeGrassWindVecForYaw(yaw);
+    entry.windVecAttr?.setXYZ(instanceIndex, windVec.x, windVec.y, windVec.z);
     meshWriteIndices[variantIndex] = instanceIndex + 1;
   }
 
@@ -539,19 +540,21 @@ function writeSeedThreeChunkInstances(
 function composeSeedThreeTuftMatrix(
   x: number,
   z: number,
+  rootY: number,
   height: number,
   widthScale: number,
   rng: () => number,
-  heightAt: (x: number, z: number) => number,
   matrix: THREE.Matrix4,
   quaternion: THREE.Quaternion,
   position: THREE.Vector3,
   scaleVector: THREE.Vector3,
-): void {
-  quaternion.setFromAxisAngle(Y_AXIS, rng() * TAU);
-  position.set(x, heightAt(x, z) - 0.02, z);
+): number {
+  const yaw = rng() * TAU;
+  quaternion.setFromAxisAngle(Y_AXIS, yaw);
+  position.set(x, rootY, z);
   scaleVector.set(widthScale, height, widthScale);
   matrix.compose(position, quaternion, scaleVector);
+  return yaw;
 }
 
 function writeChunkInstances(
@@ -559,8 +562,6 @@ function writeChunkInstances(
   startIndex: number,
   chunkX: number,
   chunkZ: number,
-  focusX: number,
-  focusZ: number,
   context: GrassFieldContext,
   maxInstances = Number.POSITIVE_INFINITY,
 ): number {
@@ -618,18 +619,13 @@ function writeChunkInstances(
     if (isBlockedAt?.(x, z)) continue;
     if (isGrassNearAnyRoad(x, z, roadSpatialIndex)) continue;
 
-    const focusDist = Math.hypot(x - focusX, z - focusZ);
-    const edgeFade = grassEdgeFadeFromFocusDistance(focusDist);
-    if (edgeFade <= 0.02) continue;
-
     localPlacements.push({ x, z, micro });
 
     const density = forestDensityAt(x, z, forestCores, extent, terrainExtent);
     const sizeRoll = Math.pow(rng(), micro ? 1.1 : 0.72);
     const scale =
       THREE.MathUtils.lerp(micro ? 0.58 : 0.88, micro ? 0.92 : 1.32, sizeRoll) *
-      THREE.MathUtils.lerp(0.9, 1.06, density) *
-      edgeFade;
+      THREE.MathUtils.lerp(0.9, 1.06, density);
 
     composeTuftMatrix(
       x,

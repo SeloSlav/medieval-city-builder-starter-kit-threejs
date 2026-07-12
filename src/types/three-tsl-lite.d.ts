@@ -5,6 +5,10 @@ declare module 'three/tsl' {
   export const cameraPosition: unknown;
   export const cameraViewMatrix: unknown;
   export const dot: (a: unknown, b: unknown) => unknown;
+  export const modelWorldMatrix: unknown;
+  export const positionLocal: unknown;
+  export const sin: (value: unknown) => unknown;
+  export const time: unknown;
   export const normalView: unknown;
   export const normalize: (value: unknown) => unknown;
   export const positionWorld: unknown;

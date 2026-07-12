@@ -65,6 +65,11 @@ declare module '@seedthree/core/rng.js' {
 }
 
 declare module '@seedthree/core/wind.js' {
+  import type * as THREE from 'three';
+
+  export const windStrength: { value: number };
+  export const windSpeed: { value: number };
+  export const WIND_DIR: THREE.Vector3;
   export function grassWindPosition(bladeHeight?: number): unknown;
 }
 
