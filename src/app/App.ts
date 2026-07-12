@@ -134,40 +134,6 @@ export class App {
     this.sessionGate = session.sessionGate;
 
     this.connectionOverlay = new SessionConnectionOverlay(session.uiRoot);
-    this.sessionLifecycle = new SessionLifecycleController({
-      sessionGate: session.sessionGate,
-      loadingScreen: session.loadingScreen,
-      connectionOverlay: this.connectionOverlay,
-      spacetimeStore: session.spacetimeStore,
-      toolbar: session.toolbar,
-      roadTool: session.roadTool,
-      buildingTool: session.buildingTool,
-      burgageTool: session.burgageTool,
-      firstPersonController: session.firstPersonController,
-    });
-
-    session.spacetimeStore.setConnectErrorListener((error) => {
-      console.warn('SpacetimeDB connection error:', error);
-      clearAuthoritativeWorldGeneration();
-      this.sessionLifecycle?.onBootConnectionFailure();
-    });
-
-    this.snapshotApplierDeps = {
-      sceneManager: this.sceneManager,
-      buildingMarkers: this.buildingMarkers,
-      burgageFencing: this.burgageFencing,
-      forestVisualSync: this.forestVisualSync,
-      settlementWorld: {
-        residenceMarkers: this.residenceMarkers,
-        backyardGardenMarkers: this.backyardGardenMarkers,
-        deliveryAgents: this.deliveryAgents,
-        villagers: this.villagers,
-        getHeightAt: (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
-        getRoadNetwork: () => this.roadNetwork,
-      },
-      onForestClearanceChanged: () => this.syncForestClearance(),
-    };
-
     this.gameRuntime = new GameRuntime(
       session.spacetimeStore,
       session.layoutRegistry,
@@ -208,6 +174,41 @@ export class App {
         onSessionLost: () => this.sessionLifecycle?.onLost(),
       },
     );
+    this.sessionLifecycle = new SessionLifecycleController({
+      sessionGate: session.sessionGate,
+      loadingScreen: session.loadingScreen,
+      connectionOverlay: this.connectionOverlay,
+      spacetimeStore: session.spacetimeStore,
+      toolbar: session.toolbar,
+      roadTool: session.roadTool,
+      buildingTool: session.buildingTool,
+      burgageTool: session.burgageTool,
+      firstPersonController: session.firstPersonController,
+      recoverSession: () => this.gameRuntime?.recoverSession(),
+    });
+
+    session.spacetimeStore.setConnectErrorListener((error) => {
+      console.warn('SpacetimeDB connection error:', error);
+      clearAuthoritativeWorldGeneration();
+      this.sessionLifecycle?.onBootConnectionFailure();
+    });
+
+    this.snapshotApplierDeps = {
+      sceneManager: this.sceneManager,
+      buildingMarkers: this.buildingMarkers,
+      burgageFencing: this.burgageFencing,
+      forestVisualSync: this.forestVisualSync,
+      settlementWorld: {
+        residenceMarkers: this.residenceMarkers,
+        backyardGardenMarkers: this.backyardGardenMarkers,
+        deliveryAgents: this.deliveryAgents,
+        villagers: this.villagers,
+        getHeightAt: (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
+        getRoadNetwork: () => this.roadNetwork,
+      },
+      onForestClearanceChanged: () => this.syncForestClearance(),
+    };
+
     this.gameRuntime.start();
 
     this.exposeDevHandles();

@@ -98,6 +98,7 @@ export class SpacetimeGameStore {
   private readonly listeners = new Set<SpacetimeGameStoreListener>();
   private roadSyncTimer: number | null = null;
   private pendingRoadSnapshot: string | null = null;
+  private subscribedConnection: DbConnection | null = null;
   private readonly tableSync: GameTableSync;
 
   constructor() {
@@ -176,6 +177,7 @@ export class SpacetimeGameStore {
         this.emit();
       },
       onDisconnect: () => {
+        this.subscribedConnection = null;
         this.tableState.identityHex = null;
         this.tableState.roads = null;
         this.emit();
@@ -353,21 +355,25 @@ export class SpacetimeGameStore {
     const connection = getConnection();
     if (!connection) return;
 
-    connection.subscriptionBuilder().subscribe('SELECT * FROM world_config');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM player_resources');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM quarry');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM foraging_node');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM tree_entity');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM building');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM burgage_zone');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM residence');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM backyard_garden');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM residence_need');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM delivery_trip');
-    connection.subscriptionBuilder().subscribe('SELECT * FROM road_network_state');
+    if (this.subscribedConnection !== connection) {
+      connection.subscriptionBuilder().subscribe('SELECT * FROM world_config');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM player_resources');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM quarry');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM foraging_node');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM tree_entity');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM building');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM burgage_zone');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM residence');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM backyard_garden');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM residence_need');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM delivery_trip');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM road_network_state');
+      this.tableSync.attachHandlers(connection);
+      this.subscribedConnection = connection;
+    }
 
     this.tableSync.syncAll(connection);
-    this.tableSync.attachHandlers(connection);
+    this.emit();
   }
 
   private emit(): void {

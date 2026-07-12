@@ -13,6 +13,7 @@ import {
 import { GORSKI_KOTAR_SPECIES } from './gorskiKotarPresets.ts';
 import { loadSeedThreeSpeciesAssets, type SeedThreeSpeciesAssets } from './seedThreeAssets.ts';
 import type { SeedThreeForestController } from './seedThreeForestTypes.ts';
+import { yieldToMain } from '../../utils/yieldToMain.ts';
 
 type TreeSlot = {
   layoutIndex: number;
@@ -224,6 +225,7 @@ export async function createSeedThreeForest(
     assetsByPreset.set(presetKey, assets);
     const { group: prototype } = buildTree(species, `prototype:${presetKey}`, assets, FOREST_LOD_OPTS);
     prototypeByPreset.set(presetKey, prototype as THREE.LOD);
+    await yieldToMain();
   }
 
   const placementsByPreset = new Map<SeedThreePresetKey, TreeSlot[]>();

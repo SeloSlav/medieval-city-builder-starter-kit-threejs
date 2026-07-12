@@ -18,17 +18,29 @@ export type SessionLifecycleDeps = {
   buildingTool: BuildingTool | null;
   burgageTool: BurgageTool | null;
   firstPersonController: FirstPersonController | null;
+  recoverSession?: () => void;
 };
 
 export class SessionLifecycleController {
   private reconnectTimer: number | null = null;
+  private unsubscribeStore: (() => void) | null = null;
+  private transportLive = false;
   private readonly deps: SessionLifecycleDeps;
 
   constructor(deps: SessionLifecycleDeps) {
     this.deps = deps;
+    this.unsubscribeStore = deps.spacetimeStore.subscribe((snapshot) => {
+      const live = snapshot.connected && snapshot.identityHex !== null;
+      if (live && !this.transportLive) {
+        this.onTransportConnected();
+      }
+      this.transportLive = live;
+    });
   }
 
   dispose(): void {
+    this.unsubscribeStore?.();
+    this.unsubscribeStore = null;
     this.clearReconnectTimer();
   }
 
@@ -44,6 +56,14 @@ export class SessionLifecycleController {
     this.deps.sessionGate.markDisconnected();
     this.deactivateAllTools();
     this.deps.toolbar?.setGameplayEnabled(false);
+    if (this.deps.spacetimeStore.isConnected) {
+      this.deps.connectionOverlay.show(
+        'Reconnecting…',
+        'Restoring SpacetimeDB session…',
+      );
+      this.deps.recoverSession?.();
+      return;
+    }
     this.deps.connectionOverlay.show(
       'Connection lost',
       'Retrying SpacetimeDB connection…',
@@ -54,6 +74,7 @@ export class SessionLifecycleController {
   onBootConnectionFailure(): void {
     if (this.deps.sessionGate.hasEverBeenReady()) {
       if (this.deps.spacetimeStore.isConnected) {
+        this.deps.recoverSession?.();
         return;
       }
       this.onLost();
@@ -99,12 +120,27 @@ export class SessionLifecycleController {
     this.scheduleReconnect();
   }
 
+  private onTransportConnected(): void {
+    if (!this.deps.sessionGate.hasEverBeenReady() || this.deps.sessionGate.isReady()) {
+      return;
+    }
+    this.deps.recoverSession?.();
+    if (!this.deps.sessionGate.isReady()) {
+      this.deps.connectionOverlay.show(
+        'Reconnecting…',
+        'Restoring SpacetimeDB session…',
+      );
+    }
+  }
+
   private scheduleReconnect(): void {
     if (this.reconnectTimer !== null || this.deps.sessionGate.isReady()) return;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (this.deps.sessionGate.isReady()) return;
-      if (!this.deps.spacetimeStore.isConnected) {
+      if (this.deps.spacetimeStore.isConnected) {
+        this.deps.recoverSession?.();
+      } else {
         try {
           this.deps.spacetimeStore.connect();
         } catch (error) {

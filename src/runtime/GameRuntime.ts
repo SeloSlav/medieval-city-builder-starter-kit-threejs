@@ -20,6 +20,8 @@ export type GameRuntimeCallbacks = {
   onSessionLost?: () => void;
 };
 
+const DISCONNECT_GRACE_MS = 2_000;
+
 export class GameRuntime {
   readonly store: SpacetimeGameStore;
   private readonly registry: WorldLayoutRegistry;
@@ -30,8 +32,8 @@ export class GameRuntime {
   private bootstrapComplete = false;
   private bootstrapInFlight = false;
   private sessionReadyEmitted = false;
-  private transportConnected = false;
   private awaitingSessionRecovery = false;
+  private pendingLossTimer: number | null = null;
 
   constructor(
     store: SpacetimeGameStore,
@@ -58,18 +60,11 @@ export class GameRuntime {
       this.callbacks.onSnapshot(snapshot, gameState);
 
       if (!snapshot.connected) {
-        this.transportConnected = false;
-        if (this.sessionReadyEmitted) {
-          this.roadsHydrated = false;
-          this.sessionReadyEmitted = false;
-          this.awaitingSessionRecovery = true;
-          this.callbacks.onSessionLost?.();
-        }
+        this.scheduleSessionLoss();
         return;
       }
 
-      const reconnected = !this.transportConnected && this.awaitingSessionRecovery;
-      this.transportConnected = true;
+      this.cancelPendingSessionLoss();
 
       if (!this.bootstrapComplete && !this.bootstrapInFlight) {
         this.bootstrapInFlight = true;
@@ -83,22 +78,57 @@ export class GameRuntime {
           });
       }
 
-      if (reconnected && this.bootstrapComplete) {
-        this.roadsHydrated = false;
-      }
-
-      if (!this.roadsHydrated && snapshot.roads) {
-        this.roadsHydrated = true;
-        this.callbacks.onRoadsHydrated(snapshot.roads);
-      }
-
+      this.hydrateRoadsIfNeeded(snapshot);
       this.tryEmitSessionReady();
     });
   }
 
+  /** Re-evaluate session readiness after transport reconnects. */
+  recoverSession(): void {
+    const snapshot = this.store.snapshot;
+    if (!snapshot.connected || !snapshot.identityHex || !this.bootstrapComplete) return;
+    this.cancelPendingSessionLoss();
+    if (this.awaitingSessionRecovery) {
+      this.roadsHydrated = false;
+    }
+    this.hydrateRoadsIfNeeded(snapshot);
+    this.tryEmitSessionReady();
+  }
+
   dispose(): void {
+    this.cancelPendingSessionLoss();
     this.unsubscribe?.();
     this.unsubscribe = null;
+  }
+
+  private scheduleSessionLoss(): void {
+    if (!this.sessionReadyEmitted && !this.awaitingSessionRecovery) return;
+    if (this.pendingLossTimer !== null) return;
+
+    this.pendingLossTimer = window.setTimeout(() => {
+      this.pendingLossTimer = null;
+      if (this.store.isConnected) {
+        this.recoverSession();
+        return;
+      }
+
+      this.roadsHydrated = false;
+      this.sessionReadyEmitted = false;
+      this.awaitingSessionRecovery = true;
+      this.callbacks.onSessionLost?.();
+    }, DISCONNECT_GRACE_MS);
+  }
+
+  private cancelPendingSessionLoss(): void {
+    if (this.pendingLossTimer === null) return;
+    window.clearTimeout(this.pendingLossTimer);
+    this.pendingLossTimer = null;
+  }
+
+  private hydrateRoadsIfNeeded(snapshot: SpacetimeGameSnapshot): void {
+    if (this.roadsHydrated || !snapshot.roads) return;
+    this.roadsHydrated = true;
+    this.callbacks.onRoadsHydrated(snapshot.roads);
   }
 
   private async ensureWorldBootstrap(snapshot: SpacetimeGameSnapshot): Promise<void> {
