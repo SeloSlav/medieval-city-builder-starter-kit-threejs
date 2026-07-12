@@ -1,4 +1,4 @@
-import { computeForestTreePlacements } from '../props/ForestProps.ts';
+import { computeForestTreePlacements } from '../props/forestPlacements.ts';
 import { RiverField } from '../rivers/RiverField.ts';
 import { treeWoodYield } from '../resources/treeYield.ts';
 import { createWorldLayout, type WorldLayout } from '../resources/WorldLayout.ts';

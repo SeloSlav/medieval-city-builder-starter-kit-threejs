@@ -93,7 +93,6 @@ declare module 'three/tsl' {
   export const sin: (value: TslNode) => TslNode;
   export const min: (a: TslNode, b: TslNode) => TslNode;
   export const max: (a: TslNode, b: TslNode) => TslNode;
-  export const max: (a: TslNode, b: TslNode) => TslNode;
   export const abs: (value: TslNode) => TslNode;
   export const cameraPosition: TslNode;
   export const positionWorld: TslNode;

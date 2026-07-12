@@ -3,7 +3,7 @@ import { buildTree, forestBarkMaterial } from '@seedthree/core/tree.js';
 import { forestCardMaterial } from '@seedthree/core/branch-cards.js';
 import { Rng } from '@seedthree/core/rng.js';
 import type { Terrain } from '../../terrain/Terrain.ts';
-import type { ForestTreePlacement } from '../../props/ForestProps.ts';
+import type { ForestTreePlacement } from '../../props/forestPlacements.ts';
 import {
   GORSKI_KOTAR_PRESETS,
   resolveSeedThreePreset,
@@ -12,6 +12,7 @@ import {
 } from './gorskiKotarSpecies.ts';
 import { GORSKI_KOTAR_SPECIES } from './gorskiKotarPresets.ts';
 import { loadSeedThreeSpeciesAssets, type SeedThreeSpeciesAssets } from './seedThreeAssets.ts';
+import type { SeedThreeForestController } from './seedThreeForestTypes.ts';
 
 type TreeSlot = {
   layoutIndex: number;
@@ -313,4 +314,14 @@ export function disposeSeedThreeForest(forest: SeedThreeForestInstances): void {
     if (mesh.geometry.userData.forestClone) mesh.geometry.dispose();
     mesh.dispose();
   });
+}
+
+export function createSeedThreeForestController(forest: SeedThreeForestInstances): SeedThreeForestController {
+  return {
+    hideTree: (layoutIndex) => setSeedThreeTreeVisible(forest, layoutIndex, false),
+    showTree: (layoutIndex) => setSeedThreeTreeVisible(forest, layoutIndex, true),
+    commit: () => commitSeedThreeForestMatrices(forest),
+    setShadows: (enabled) => setSeedThreeForestShadows(forest, enabled),
+    dispose: () => disposeSeedThreeForest(forest),
+  };
 }

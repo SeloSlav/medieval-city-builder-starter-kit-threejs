@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { MixedForestInstances } from './ForestManager.ts';
-import type { ForestTreePlacement } from './ForestProps.ts';
+import type { ForestTreePlacement } from './forestPlacements.ts';
 
 /** Minimal instanced meshes so ForestManager phase/clearance APIs keep working. */
 export function createStubForestInstances(placements: ForestTreePlacement[]): MixedForestInstances {
