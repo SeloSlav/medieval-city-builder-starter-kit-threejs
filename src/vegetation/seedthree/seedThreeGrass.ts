@@ -4,7 +4,6 @@ import {
   attribute,
   cameraViewMatrix,
   float,
-  modelWorldMatrix,
   normalMap,
   normalView,
   normalize,
@@ -35,7 +34,6 @@ const tsl = {
   attribute: attribute as (name: string, type: string) => TslNode,
   cameraViewMatrix: cameraViewMatrix as TslNode,
   float: float as (value: number) => TslNode,
-  modelWorldMatrix: modelWorldMatrix as TslNode,
   normalMap: normalMap as (sample: unknown) => TslNode,
   normalView: normalView as TslNode,
   normalize: normalize as (value: unknown) => TslNode,
@@ -62,7 +60,8 @@ function createInstancedGrassWindPosition(bladeHeight = 1): TslNode {
   const heightNorm = tsl.positionLocal.y.div(tsl.float(bladeHeight));
   const k = heightNorm.mul(heightNorm);
   const amp = tsl.windStrength.mul(0.22);
-  const anchorWorld = tsl.modelWorldMatrix.mul(tsl.vec4(tsl.attribute('aAnchorPos', 'vec3'), tsl.float(1))).xyz;
+  // World-space anchor baked per instance; grass root group stays at the origin.
+  const anchorWorld = tsl.attribute('aAnchorPos', 'vec3');
   const gust = swayAt(anchorWorld, 2.2).mul(amp);
   const jitterT = tsl.time
     .mul(tsl.windSpeed)
