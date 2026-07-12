@@ -1,8 +1,11 @@
 import type { RiverField } from '../rivers/RiverField.ts';
 import type { TerrainBounds } from '../terrain/Terrain.ts';
 import { sampleTerrainBlendWeights } from '../terrain/TerrainBlendWeights.ts';
+import { riverFieldBounds } from './worldToMapPercent.ts';
+import { yieldToMain } from '../utils/yieldToMain.ts';
 
 const MINIMAP_RESOLUTION = 512;
+const ROWS_PER_YIELD = 32;
 
 const GRASS_COLORS = {
   meadow: { r: 78, g: 118, b: 58 },
@@ -18,7 +21,7 @@ export type TerrainMinimapImage = {
   bounds: TerrainBounds;
 };
 
-export function createTerrainMinimapImage(riverField: RiverField): TerrainMinimapImage {
+export async function createTerrainMinimapImage(riverField: RiverField): Promise<TerrainMinimapImage> {
   const canvas = document.createElement('canvas');
   canvas.width = MINIMAP_RESOLUTION;
   canvas.height = MINIMAP_RESOLUTION;
@@ -29,18 +32,18 @@ export function createTerrainMinimapImage(riverField: RiverField): TerrainMinima
   }
 
   const image = context.createImageData(MINIMAP_RESOLUTION, MINIMAP_RESOLUTION);
-  const { startX, startZ, spanX, spanZ } = riverField;
-  const bounds: TerrainBounds = {
-    minX: startX,
-    maxX: startX + spanX,
-    minZ: startZ,
-    maxZ: startZ + spanZ,
-  };
+  const bounds = riverFieldBounds(riverField);
+  const rowDenominator = Math.max(MINIMAP_RESOLUTION - 1, 1);
+  const columnDenominator = Math.max(MINIMAP_RESOLUTION - 1, 1);
 
   for (let row = 0; row < MINIMAP_RESOLUTION; row++) {
-    const z = startZ + (row / (MINIMAP_RESOLUTION - 1)) * spanZ;
+    if (row > 0 && row % ROWS_PER_YIELD === 0) {
+      await yieldToMain();
+    }
+
+    const z = bounds.minZ + (row / rowDenominator) * (bounds.maxZ - bounds.minZ);
     for (let column = 0; column < MINIMAP_RESOLUTION; column++) {
-      const x = startX + (column / (MINIMAP_RESOLUTION - 1)) * spanX;
+      const x = bounds.minX + (column / columnDenominator) * (bounds.maxX - bounds.minX);
       const color = sampleMinimapColor(riverField, x, z);
       const index = (row * MINIMAP_RESOLUTION + column) * 4;
       image.data[index] = color.r;
