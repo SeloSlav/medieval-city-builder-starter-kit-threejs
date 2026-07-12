@@ -176,6 +176,7 @@ export class BuildToolbar {
               <li><span>Crouch</span><span class="road-controls-key">C</span></li>
               <li><span>Free look</span><span class="road-controls-key">Alt</span></li>
               <li><span>Toggle walk</span><span class="road-controls-key">~</span></li>
+              <li><span>World map</span><span class="road-controls-key">Hold G</span></li>
               <li><span>Exit walk</span><span class="road-controls-key">Esc</span></li>
             </ul>
           </section>
@@ -196,6 +197,8 @@ export class BuildToolbar {
               <li><span>Rotate view</span><span class="road-controls-key">MMB / Q E</span></li>
               <li><span>Zoom</span><span class="road-controls-key">Scroll</span></li>
               <li><span>Open menu</span><span class="road-controls-key">Esc</span></li>
+              <li><span>Water map</span><span class="road-controls-key">M</span></li>
+              <li><span>World map</span><span class="road-controls-key">Hold G</span></li>
               <li><span>Walk mode</span><span class="road-controls-key">~</span></li>
               <li><span>Road tool</span><span class="road-controls-key">R</span></li>
               <li><span>Build menu</span><span class="road-controls-key">B</span></li>

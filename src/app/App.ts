@@ -22,6 +22,7 @@ import { RoadTool } from '../roads/RoadTool.ts';
 import { GameRuntime } from '../runtime/GameRuntime.ts';
 import { SceneManager } from '../scene/SceneManager.ts';
 import type { WorldMapIconsBundle } from './worldMapIcons.ts';
+import type { TerrainMinimapOverlay } from '../map/TerrainMinimapOverlay.ts';
 import { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
 import { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
@@ -70,6 +71,7 @@ export class App {
   private disposeTooltips: (() => void) | null = null;
   private resourceInspector: ResourceInspector | null = null;
   private worldMapIcons: WorldMapIconsBundle | null = null;
+  private terrainMinimap: TerrainMinimapOverlay | null = null;
   private deliveryAgents: DeliveryAgentRenderer | null = null;
   private villagers: VillagerRenderer | null = null;
   private gameState: GameState | null = null;
@@ -129,6 +131,7 @@ export class App {
     this.disposeTooltips = session.disposeTooltips;
     this.resourceInspector = session.resourceInspector;
     this.worldMapIcons = session.worldMapIcons;
+    this.terrainMinimap = session.terrainMinimap;
     this.ambientAudio = session.ambientAudio;
     this.spacetimeStore = session.spacetimeStore;
     this.sessionGate = session.sessionGate;
@@ -273,6 +276,7 @@ export class App {
     this.resourceInspector?.dispose();
     this.worldMapIcons?.quarry.dispose();
     this.worldMapIcons?.foraging.dispose();
+    this.terrainMinimap?.dispose();
     this.toastManager?.dispose();
     this.disposeTooltips?.();
     this.disposeTooltips = null;
@@ -305,6 +309,7 @@ export class App {
       sceneManager: this.sceneManager,
       residenceMarkers: this.residenceMarkers,
     });
+    this.syncTerrainMinimap();
     if (firstPersonActive) {
       this.firstPersonController?.update(dt);
       this.toolbar?.setFirstPersonMode(true);
@@ -368,6 +373,15 @@ export class App {
     this.syncForestClearance();
     this.syncResourceUi();
     this.exposeDevHandles();
+  }
+
+  private syncTerrainMinimap(): void {
+    if (!this.input || !this.terrainMinimap) return;
+    const shouldShow = this.terrainMinimap.shouldShow(this.input.isDown('g'));
+    this.terrainMinimap.setVisible(shouldShow);
+    if (shouldShow) {
+      this.terrainMinimap.update();
+    }
   }
 
   private readonly onResize = (): void => {

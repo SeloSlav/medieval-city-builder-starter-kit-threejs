@@ -6,7 +6,7 @@ import { sampleTerrainMeshHeight } from './TerrainMeshHeight.ts';
 import type { WorldDimensions } from '../world/worldGenerationSettings.ts';
 import { resolveWorldDimensions } from '../world/worldGenerationSettings.ts';
 import { DEFAULT_WORLD_GENERATION_SETTINGS } from '../world/worldGenerationSettings.ts';
-import { getActiveWorldDimensions } from '../world/worldGenerationContext.ts';
+import { sampleTerrainBlendWeights, sampleTerrainUv } from './TerrainBlendWeights.ts';
 import { yieldToMain } from '../utils/yieldToMain.ts';
 
 export type TerrainBounds = {
@@ -107,8 +107,6 @@ export class Terrain {
     const dirtZoomGates = new Float32Array(vertexCount);
     const step = size / (resolution - 1);
     const half = size * 0.5;
-    const builder = new TerrainVertexBuilder();
-
     for (let zIndex = 0; zIndex < resolution; zIndex++) {
       const rowOffset = zIndex * resolution;
       for (let xIndex = 0; xIndex < resolution; xIndex++) {
@@ -120,12 +118,12 @@ export class Terrain {
         positions[positionOffset + 1] = sampleBaseTerrainHeight(x, z);
         positions[positionOffset + 2] = z;
 
-        const uv = builder.getTerrainUv(x, z);
+        const uv = sampleTerrainUv(x, z);
         const uvOffset = vertexIndex * 2;
         uvs[uvOffset] = uv[0];
         uvs[uvOffset + 1] = uv[1];
 
-        const weights = builder.getTerrainBlendWeights(x, z);
+        const weights = sampleTerrainBlendWeights(x, z);
         const colorOffset = vertexIndex * 3;
         colors[colorOffset] = weights[0];
         colors[colorOffset + 1] = weights[1];
@@ -176,78 +174,5 @@ export class Terrain {
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
     return geometry;
-  }
-}
-
-class TerrainVertexBuilder {
-  getTerrainBlendWeights(x: number, z: number): [number, number, number] {
-    const warpX = this.fbm(x * 0.006 + 41.1, z * 0.006 - 17.8, 4) * 22;
-    const warpZ = this.fbm(x * 0.006 - 12.5, z * 0.006 + 73.2, 4) * 22;
-    const wx = x + warpX;
-    const wz = z + warpZ;
-    const meadowNoise = this.fbm(wx * 0.011 + 101.3, wz * 0.011 - 55.8, 4) + 0.5;
-    const denseNoise = this.fbm(wx * 0.015, wz * 0.015, 4) + 0.5;
-    const dryNoise = this.fbm(wx * 0.0075 + 31.7, wz * 0.0075 - 19.4, 4) + 0.5;
-    const hillT = this.getEdgeHillFactor(x, z);
-    const rawMeadow = this.smoothstep(0.08, 0.54, meadowNoise) + 0.52 - hillT * 0.14;
-    const rawDense = this.smoothstep(0.72, 0.94, denseNoise) * 0.38 + 0.1 + hillT * 0.26;
-    const rawDry = this.smoothstep(0.72, 0.94, dryNoise) * 0.3 + 0.14 + hillT * 0.12;
-    const sum = Math.max(rawMeadow + rawDense + rawDry, 0.0001);
-    return [rawMeadow / sum, rawDense / sum, rawDry / sum];
-  }
-
-  getTerrainUv(x: number, z: number): [number, number] {
-    const scale = 48;
-    const rotatedX = x * 0.67 - z * 0.74;
-    const rotatedZ = x * 0.74 + z * 0.67;
-    const warpX = this.fbm(x * 0.0048 + 13.2, z * 0.0048 - 7.4, 4) * 0.38 + this.fbm(x * 0.018 - 71.5, z * 0.018 + 19.8, 3) * 0.055;
-    const warpZ = this.fbm(x * 0.0053 - 28.6, z * 0.0053 + 44.1, 4) * 0.38 + this.fbm(x * 0.016 + 53.7, z * 0.016 - 38.2, 3) * 0.055;
-    return [rotatedX / scale + warpX, rotatedZ / (scale * 1.17) + warpZ];
-  }
-
-  private getEdgeHillFactor(x: number, z: number): number {
-    const { playableSize, terrainSize } = getActiveWorldDimensions();
-    const edgeDistance = Math.max(Math.abs(x), Math.abs(z));
-    const hillStart = playableSize * 0.44;
-    const hillEnd = terrainSize * 0.5;
-    return this.smoothstep(hillStart, hillEnd, edgeDistance);
-  }
-
-  private smoothstep(edge0: number, edge1: number, value: number): number {
-    const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
-    return t * t * (3 - 2 * t);
-  }
-
-  private fbm(x: number, z: number, octaves: number): number {
-    let value = 0;
-    let amplitude = 0.5;
-    let frequency = 1;
-    let norm = 0;
-    for (let i = 0; i < octaves; i++) {
-      value += this.valueNoise(x * frequency, z * frequency) * amplitude;
-      norm += amplitude;
-      amplitude *= 0.5;
-      frequency *= 2;
-    }
-    return value / norm - 0.5;
-  }
-
-  private valueNoise(x: number, z: number): number {
-    const x0 = Math.floor(x);
-    const z0 = Math.floor(z);
-    const tx = x - x0;
-    const tz = z - z0;
-    const sx = tx * tx * (3 - 2 * tx);
-    const sz = tz * tz * (3 - 2 * tz);
-    const a = this.hash(x0, z0);
-    const b = this.hash(x0 + 1, z0);
-    const c = this.hash(x0, z0 + 1);
-    const d = this.hash(x0 + 1, z0 + 1);
-    return THREE.MathUtils.lerp(THREE.MathUtils.lerp(a, b, sx), THREE.MathUtils.lerp(c, d, sx), sz);
-  }
-
-  private hash(x: number, z: number): number {
-    const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
-    return n - Math.floor(n);
   }
 }

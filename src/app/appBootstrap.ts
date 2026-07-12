@@ -33,6 +33,7 @@ import { RoadTool } from '../roads/RoadTool.ts';
 import { SceneManager } from '../scene/SceneManager.ts';
 import { createInspectorSpacetimeActions } from './inspectorSpacetimeActions.ts';
 import { createWorldMapIcons, type WorldMapIconsBundle } from './worldMapIcons.ts';
+import { TerrainMinimapOverlay } from '../map/TerrainMinimapOverlay.ts';
 import { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
 import { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import { beginStartupTextureLoad } from '../scene/startupTextures.ts';
@@ -95,6 +96,7 @@ export type BootstrappedSession = {
   disposeTooltips: () => void;
   resourceInspector: ResourceInspector;
   worldMapIcons: WorldMapIconsBundle;
+  terrainMinimap: TerrainMinimapOverlay;
   ambientAudio: AmbientAudioController;
   spacetimeStore: SpacetimeGameStore;
   sessionGate: SessionConnectionGate;
@@ -574,6 +576,30 @@ export async function bootstrapAppSession(
   placementGate.isFirstPersonActive = () => firstPersonController.isActive();
   placementGate.isMenuOpen = () => toolbar.isGameMenuOpen();
 
+  const terrainMinimap = new TerrainMinimapOverlay({
+    uiRoot,
+    riverField: sceneManager.riverField,
+    registry: layoutRegistry,
+    getGameState: () => liveContext.gameState,
+    getFocus: () => {
+      if (firstPersonController.isActive()) {
+        const position = firstPersonController.getPosition();
+        return {
+          x: position.x,
+          z: position.z,
+          yaw: firstPersonController.getBodyYaw(),
+        };
+      }
+      const target = cameraController.getTargetPosition();
+      return {
+        x: target.x,
+        z: target.z,
+        yaw: cameraController.getYaw(),
+      };
+    },
+    isBlocked: () => !placementGate.isSessionReady() || placementGate.isMenuOpen(),
+  });
+
   toolbar.setWaterOverlayActive(isHydrologyOverlayEnabled());
   toolbar.setGameplayEnabled(false);
   loadingScreen?.setProgress({ label: 'Connecting…', detail: 'Syncing with SpacetimeDB' });
@@ -603,6 +629,7 @@ export async function bootstrapAppSession(
     disposeTooltips,
     resourceInspector,
     worldMapIcons,
+    terrainMinimap,
     ambientAudio,
     spacetimeStore,
     sessionGate,
