@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { vertexColor } from 'three/tsl';
+import { applyFoliageDoubleSideNormalsNode } from '../scene/foliageDoubleSideNormals.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { RoadSpatialIndex } from '../roads/roadSpatialIndex.ts';
@@ -500,6 +501,7 @@ function createGrassBladeMaterial(): MeshStandardNodeMaterial {
   material.metalness = 0;
   material.color.set(0xffffff);
   material.colorNode = (vertexColor() as TslNode).rgb;
+  applyFoliageDoubleSideNormalsNode(material);
   return material;
 }
 

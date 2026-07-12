@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { vertexColor } from 'three/tsl';
+import { applyFoliageDoubleSideNormalsNode } from '../scene/foliageDoubleSideNormals.ts';
 import { grassEdgeFadeFromFocusDistance, resolveReedLod } from '../grass/grassLodMath.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RiverField } from './RiverField.ts';
@@ -364,6 +365,7 @@ function createReedMaterial(): MeshStandardNodeMaterial {
   material.metalness = 0;
   material.color.set(0xffffff);
   material.colorNode = (vertexColor() as TslNode).rgb;
+  applyFoliageDoubleSideNormalsNode(material);
   return material;
 }
 

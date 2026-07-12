@@ -102,6 +102,7 @@ declare module 'three/tsl' {
   export const sub: (a: TslNode, b: TslNode) => TslNode;
   export const normalize: (value: TslNode) => TslNode;
   export const normalView: TslNode;
+  export const normalViewGeometry: TslNode;
   export const screenUV: TslNode;
   export const viewportSafeUV: (uv?: TslNode) => TslNode;
   export const viewportSharedTexture: (uv?: TslNode) => TslNode;

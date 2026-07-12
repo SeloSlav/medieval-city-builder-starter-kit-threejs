@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { applyFoliageDoubleSideNormals } from '../scene/foliageDoubleSideNormals.ts';
+import { chainMaterialShaderPatch } from '../scene/materialShaderPatch.ts';
 
 const DIRECTIONAL_SHADOW_LINE =
   'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
@@ -45,23 +47,38 @@ varying float vCanopyRadius;
 varying vec3 vTreeWorldPos;
 `;
 
+const TREE_SHADOW_RECEIVE_FILTER_CACHE_KEY = 'tree-shadow-receive-filter-v2';
+
+function patchTreeShadowReceiveFilterShader(shader: THREE.WebGLProgramParametersWithUniforms): void {
+  shader.defines ??= {};
+  shader.defines.USE_TREE_SHADOW_RECEIVE_FILTER = '';
+
+  shader.vertexShader = VERTEX_DECL + shader.vertexShader;
+  shader.fragmentShader = FRAGMENT_DECL + shader.fragmentShader;
+
+  if (!shader.vertexShader.includes(VERTEX_ASSIGN.trim())) {
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\n${VERTEX_ASSIGN}`);
+  }
+
+  if (shader.fragmentShader.includes(DIRECTIONAL_SHADOW_LINE)) {
+    shader.fragmentShader = shader.fragmentShader.replace(DIRECTIONAL_SHADOW_LINE, DIRECTIONAL_SHADOW_WITH_FILTER);
+  }
+}
+
 export function applyTreeShadowReceiveFilter(material: THREE.MeshStandardMaterial): void {
-  material.customProgramCacheKey = () => 'tree-shadow-receive-filter-v2';
-  material.onBeforeCompile = (shader) => {
-    shader.defines ??= {};
-    shader.defines.USE_TREE_SHADOW_RECEIVE_FILTER = '';
+  chainMaterialShaderPatch(material, TREE_SHADOW_RECEIVE_FILTER_CACHE_KEY, patchTreeShadowReceiveFilterShader);
+}
 
-    shader.vertexShader = VERTEX_DECL + shader.vertexShader;
-    shader.fragmentShader = FRAGMENT_DECL + shader.fragmentShader;
-
-    if (!shader.vertexShader.includes(VERTEX_ASSIGN.trim())) {
-      shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\n${VERTEX_ASSIGN}`);
-    }
-
-    if (shader.fragmentShader.includes(DIRECTIONAL_SHADOW_LINE)) {
-      shader.fragmentShader = shader.fragmentShader.replace(DIRECTIONAL_SHADOW_LINE, DIRECTIONAL_SHADOW_WITH_FILTER);
-    }
-  };
+/**
+ * Applies forest canopy shader patches in the order required for onBeforeCompile chaining:
+ * tree shadow filter first, then foliage double-side normals.
+ */
+export function applyForestFoliageMaterialPatches(
+  material: THREE.MeshStandardMaterial,
+  options: { enableTreeShadowFilter: boolean },
+): void {
+  if (options.enableTreeShadowFilter) applyTreeShadowReceiveFilter(material);
+  applyFoliageDoubleSideNormals(material);
 }
 
 export function setTreeShadowInstanceAttributes(

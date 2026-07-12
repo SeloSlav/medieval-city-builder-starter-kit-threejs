@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Terrain } from '../terrain/Terrain.ts';
 import { ForestManager, type MixedForestInstances } from './ForestManager.ts';
-import { applyTreeShadowReceiveFilter, setTreeShadowInstanceAttributes } from './treeShadowReceiveFilter.ts';
+import { applyForestFoliageMaterialPatches, applyTreeShadowReceiveFilter, setTreeShadowInstanceAttributes } from './treeShadowReceiveFilter.ts';
 import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import type { RendererBackendKind } from '../scene/RendererBackend.ts';
 import {
@@ -683,8 +683,8 @@ async function createForestMaterials(maxAnisotropy: number, enableTreeShadowFilt
     metalness: 0,
     side: THREE.DoubleSide,
   });
-  if (enableTreeShadowFilter) applyTreeShadowReceiveFilter(coniferFoliage);
-  if (enableTreeShadowFilter) applyTreeShadowReceiveFilter(broadleafFoliage);
+  applyForestFoliageMaterialPatches(coniferFoliage, { enableTreeShadowFilter });
+  applyForestFoliageMaterialPatches(broadleafFoliage, { enableTreeShadowFilter });
   if (enableTreeShadowFilter) applyTreeShadowReceiveFilter(bark);
 
   return {

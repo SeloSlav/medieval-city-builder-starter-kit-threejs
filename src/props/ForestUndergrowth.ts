@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Terrain } from '../terrain/Terrain.ts';
+import { applyFoliageDoubleSideNormals } from '../scene/foliageDoubleSideNormals.ts';
 import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import type { RendererBackendKind } from '../scene/RendererBackend.ts';
 import {
@@ -70,6 +71,9 @@ export function createUndergrowthMaterials(
     side: THREE.DoubleSide,
     vertexColors: true,
   });
+
+  applyFoliageDoubleSideNormals(bush);
+  applyFoliageDoubleSideNormals(fern);
 
   return {
     bush,
