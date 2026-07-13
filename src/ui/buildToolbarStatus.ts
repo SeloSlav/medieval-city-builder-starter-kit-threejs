@@ -6,7 +6,7 @@ import { getBuildingDefinition } from '../resources/buildings.ts';
 export type ToolbarStats = {
   canBuild: boolean;
   hasDraft: boolean;
-  mode: BuildingKind | 'road' | 'residences' | 'idle';
+  mode: BuildingKind | 'road' | 'residences' | 'farm-fields' | 'idle';
   statusDetail?: string | null;
 };
 
@@ -15,7 +15,7 @@ export function isBuildingToolMode(mode: ToolbarStats['mode']): mode is Building
 }
 
 export function isConstructionToolMode(mode: ToolbarStats['mode']): boolean {
-  return isBuildingToolMode(mode) || mode === 'residences';
+  return isBuildingToolMode(mode) || mode === 'residences' || mode === 'farm-fields';
 }
 
 export function isBuilderHudMode(mode: ToolbarStats['mode']): boolean {
@@ -36,6 +36,8 @@ export function describeBuilderTitle(mode: ToolbarStats['mode']): string {
       return 'Roads';
     case 'residences':
       return 'Residences';
+    case 'farm-fields':
+      return 'Farm fields';
     case 'idle':
       return 'Builder';
     default: {
@@ -71,6 +73,15 @@ export function describeBuilderHelp(mode: ToolbarStats['mode']): string {
           <li><span>Place residences</span><span class="road-controls-key">Hammer or Enter</span></li>
           <li><span>Cancel / exit</span><span class="road-controls-key">Esc</span></li>
         `;
+    case 'farm-fields':
+      return `
+          <li><span>Set baseline</span><span class="road-controls-key">1st + 2nd click</span></li>
+          <li><span>Set field depth</span><span class="road-controls-key">3rd click</span></li>
+          <li><span>Change crop</span><span class="road-controls-key">C</span></li>
+          <li><span>Undo last point</span><span class="road-controls-key">R-click or Backspace</span></li>
+          <li><span>Place field</span><span class="road-controls-key">Hammer or Enter</span></li>
+          <li><span>Cancel / exit</span><span class="road-controls-key">Esc</span></li>
+        `;
     case 'idle':
       return '';
     default: {
@@ -96,6 +107,9 @@ export function describeToolbarStatus(stats: ToolbarStats): string {
   }
   if (stats.mode === 'residences') {
     return stats.statusDetail ?? 'Click along a road to start the frontage, then set depth behind it';
+  }
+  if (stats.mode === 'farm-fields') {
+    return stats.statusDetail ?? 'Draw a field inside a farmstead working radius';
   }
   if (stats.mode !== 'road') return 'Road tool off';
   if (stats.canBuild) return 'Ready to build';

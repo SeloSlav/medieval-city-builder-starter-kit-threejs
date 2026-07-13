@@ -24,10 +24,11 @@ export function renderLumberMillInspector(
   const definition = getBuildingDefinition(building.kind);
   const storageCaps = buildingStorageCaps(building.kind);
   const connectedWells = context.worldQueries.getRoadConnectedWells(building);
+  const requiresWater = MILL_WATER_PER_HARVEST > 0;
   const wellsWithWater = connectedWells.filter((well) => well.water > 0).length;
   const storageFull = storageCaps.timber > 0 && building.timber >= storageCaps.timber - 0.001;
-  const hasWaterSupply = connectedWells.length > 0;
-  const hasHarvestWater = building.water + 1e-6 >= MILL_WATER_PER_HARVEST || wellsWithWater > 0;
+  const hasWaterSupply = !requiresWater || connectedWells.length > 0;
+  const hasHarvestWater = !requiresWater || building.water + 1e-6 >= MILL_WATER_PER_HARVEST || wellsWithWater > 0;
   const active = building.assignedLabor > 0 && matureTrees > 0 && !storageFull && hasWaterSupply && hasHarvestWater;
   const cycleSeconds = laborScaledInterval(definition.harvestInterval, building.assignedLabor);
 
@@ -42,9 +43,9 @@ export function renderLumberMillInspector(
   let statusText: string;
   if (building.assignedLabor === 0) {
     statusText = 'Idle — assign labor to harvest timber';
-  } else if (!hasWaterSupply) {
+  } else if (requiresWater && !hasWaterSupply) {
     statusText = 'Idle — needs a road-connected well to operate';
-  } else if (!hasHarvestWater) {
+  } else if (requiresWater && !hasHarvestWater) {
     statusText = `Waiting for water — needs ${MILL_WATER_PER_HARVEST} per harvest`;
   } else if (storageFull) {
     statusText = `Storage full — not harvesting (${matureTrees} mature trees in range)`;
@@ -62,8 +63,7 @@ export function renderLumberMillInspector(
     detailsHtml: `
       ${buildingCostRows(building.kind, cost)}
       ${buildingRoadAccessRow(context.worldQueries, building)}
-      <li><span>Road-linked wells</span><span>${wellSummary}</span></li>
-      <li><span>Water per harvest</span><span>${MILL_WATER_PER_HARVEST}</span></li>
+      ${requiresWater ? `<li><span>Road-linked wells</span><span>${wellSummary}</span></li><li><span>Water per harvest</span><span>${MILL_WATER_PER_HARVEST}</span></li>` : '<li><span>Water use</span><span>None — timber is air-seasoned</span></li>'}
       ${buildingWorkRadiusRow(building.kind)}
       <li><span>Harvest interval</span><span>${building.assignedLabor > 0 ? `${cycleSeconds.toFixed(1)}s` : `${definition.harvestInterval}s`} (${building.assignedLabor} workers)</span></li>
       ${treeCountRows(matureTrees, stumpTrees, growingTrees)}

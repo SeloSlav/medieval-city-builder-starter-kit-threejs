@@ -43,15 +43,19 @@ import ConfigureWorldReducer from "./configure_world_reducer";
 import DemolishBackyardGardenReducer from "./demolish_backyard_garden_reducer";
 import DemolishBuildingReducer from "./demolish_building_reducer";
 import DemolishBurgageZoneReducer from "./demolish_burgage_zone_reducer";
+import DemolishFarmFieldReducer from "./demolish_farm_field_reducer";
 import DemolishResidenceReducer from "./demolish_residence_reducer";
 import MarketplaceTradeReducer from "./marketplace_trade_reducer";
 import PlaceBackyardGardenReducer from "./place_backyard_garden_reducer";
 import PlaceBuildingReducer from "./place_building_reducer";
 import PlaceBurgageZoneReducer from "./place_burgage_zone_reducer";
+import PlaceFarmFieldReducer from "./place_farm_field_reducer";
 import RemoveRoadEdgeReducer from "./remove_road_edge_reducer";
 import ResetWorldReducer from "./reset_world_reducer";
 import SetChapelParishPolicyReducer from "./set_chapel_parish_policy_reducer";
 import SetEconomicActivityTaxRateReducer from "./set_economic_activity_tax_rate_reducer";
+import SetFarmFieldCropReducer from "./set_farm_field_crop_reducer";
+import SetFarmFieldPriorityReducer from "./set_farm_field_priority_reducer";
 import SetMonasteryPolicyReducer from "./set_monastery_policy_reducer";
 import SyncRoadNetworkReducer from "./sync_road_network_reducer";
 import TickSimReducer from "./tick_sim_reducer";
@@ -64,6 +68,7 @@ import BackyardGardenRow from "./backyard_garden_table";
 import BuildingRow from "./building_table";
 import BurgageZoneRow from "./burgage_zone_table";
 import DeliveryTripRow from "./delivery_trip_table";
+import FarmFieldRow from "./farm_field_table";
 import ForagingNodeRow from "./foraging_node_table";
 import MarketStateRow from "./market_state_table";
 import PlayerResourcesRow from "./player_resources_table";
@@ -147,6 +152,23 @@ const tablesSchema = __schema({
       { name: 'delivery_trip_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, DeliveryTripRow),
+  farm_field: __table({
+    name: 'farm_field',
+    indexes: [
+      { name: 'farmstead_id', algorithm: 'btree', columns: [
+        'farmsteadId',
+      ] },
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'owner', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+    ],
+    constraints: [
+      { name: 'farm_field_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, FarmFieldRow),
   foraging_node: __table({
     name: 'foraging_node',
     indexes: [
@@ -279,15 +301,19 @@ const reducersSchema = __reducers(
   __reducerSchema("demolish_backyard_garden", DemolishBackyardGardenReducer),
   __reducerSchema("demolish_building", DemolishBuildingReducer),
   __reducerSchema("demolish_burgage_zone", DemolishBurgageZoneReducer),
+  __reducerSchema("demolish_farm_field", DemolishFarmFieldReducer),
   __reducerSchema("demolish_residence", DemolishResidenceReducer),
   __reducerSchema("marketplace_trade", MarketplaceTradeReducer),
   __reducerSchema("place_backyard_garden", PlaceBackyardGardenReducer),
   __reducerSchema("place_building", PlaceBuildingReducer),
   __reducerSchema("place_burgage_zone", PlaceBurgageZoneReducer),
+  __reducerSchema("place_farm_field", PlaceFarmFieldReducer),
   __reducerSchema("remove_road_edge", RemoveRoadEdgeReducer),
   __reducerSchema("reset_world", ResetWorldReducer),
   __reducerSchema("set_chapel_parish_policy", SetChapelParishPolicyReducer),
   __reducerSchema("set_economic_activity_tax_rate", SetEconomicActivityTaxRateReducer),
+  __reducerSchema("set_farm_field_crop", SetFarmFieldCropReducer),
+  __reducerSchema("set_farm_field_priority", SetFarmFieldPriorityReducer),
   __reducerSchema("set_monastery_policy", SetMonasteryPolicyReducer),
   __reducerSchema("sync_road_network", SyncRoadNetworkReducer),
   __reducerSchema("tick_sim", TickSimReducer),

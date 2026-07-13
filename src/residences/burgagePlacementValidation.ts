@@ -32,6 +32,7 @@ export type BurgagePlacementFailureReason =
   | 'no_road_frontage'
   | 'overlaps_existing'
   | 'overlaps_building'
+  | 'overlaps_farm_field'
   | 'on_quarry_pit'
   | 'insufficient_resources'
   | 'no_fit';
@@ -139,6 +140,15 @@ export function validateBurgagePlacement(context: BurgagePlacementContext): Burg
 
   if (burgageZoneOverlapsBuildings(zoneCorners, context.existingBuildings, context.gameState)) {
     return { ok: false, reason: 'overlaps_building' };
+  }
+
+  if (context.gameState) {
+    const candidate = cornersToArray(zoneCorners);
+    for (const field of context.gameState.farmFields.values()) {
+      if (convexPolygonsOverlap2(candidate, field.corners)) {
+        return { ok: false, reason: 'overlaps_farm_field' };
+      }
+    }
   }
 
   const cost = residenceZoneCost(layout.residences.length);

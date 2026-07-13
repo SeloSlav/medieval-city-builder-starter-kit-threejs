@@ -40,8 +40,8 @@ const DETAILS: Record<PlacementArtKey, [title: string, hotkey: string, descripti
   woodcutters_lodge: ["Woodcutter's lodge", 'W', 'Splits timber into firewood and supplies connected homes.'],
   hunters_hall: ["Hunter's hall", 'K', 'Hunts game and delivers fresh food along the road network.'],
   foragers_shed: ["Forager's shed", 'Y', 'Gathers berries and provisions homes from forest edges.'],
-  grain_field: ['Rye and oat field', 'G', 'Cultivates historically appropriate upland grain.'],
-  threshing_barn: ['Threshing barn', 'T', 'Collects and threshes grain from surrounding fields.'],
+  grain_field: ['Draw farm field', 'G', 'Draw rye, oat, or fallow land inside a farmstead working radius. Area, terrain, water, crop rotation, and labor determine yield.'],
+  threshing_barn: ['Farmstead', 'T', 'Road-linked labor hub that ploughs, sows, tends, harvests, and stores grain from surrounding fields.'],
   watermill: ['Grain watermill', 'M', 'Uses a river wheel to grind grain into flour. Must touch open water.'],
   granary: ['Village granary', 'N', 'Stores grain and flour, bakes staple food, and buffers shortages.'],
   brewery: ['Brewhouse', 'B', 'Brews grain and water into ale for prosperous households and export.'],
@@ -68,13 +68,19 @@ export const INDUSTRY_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
 
 export const BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [...BASIC_BUILD_MENU_ENTRIES, ...INDUSTRY_BUILD_MENU_ENTRIES];
 
-export type BuildMenuHandlers = { onToggleBuilding: (kind: BuildingKind) => void; onToggleResidences: () => void };
+export type BuildMenuHandlers = {
+  onToggleBuilding: (kind: BuildingKind) => void;
+  onToggleResidences: () => void;
+  onToggleFarmFields: () => void;
+};
 
 export function renderBuildMenuCards(entries: readonly BuildMenuEntry[] = BUILD_MENU_ENTRIES): string {
   return entries.map((entry) => {
     const [title, hotkey, description] = DETAILS[entry.artKey];
     const cost = entry.artKey === 'residences'
       ? `${formatBuildingCost(residenceZoneCost(1))} per home`
+      : entry.action === 'grain-field'
+        ? 'Farmstead labor'
       : formatBuildingCost(getBuildingCost(entry.artKey));
     return `<button type="button" class="construction-card" data-action="${entry.action}" data-hotkey="${hotkey}" aria-label="${title} (${hotkey})">
       <img class="construction-card__art" src="${BUILD_CARD_ART[entry.artKey]}" alt="" draggable="false" />
@@ -92,5 +98,6 @@ export function resolveBuildMenuHotkey(key: string, entries: readonly BuildMenuE
 export function runBuildMenuAction(action: BuildMenuAction, handlers: BuildMenuHandlers, closeMenu: () => void): void {
   closeMenu();
   if (action === 'residences') handlers.onToggleResidences();
+  else if (action === 'grain-field') handlers.onToggleFarmFields();
   else handlers.onToggleBuilding(MENU_ACTION_TO_BUILDING_KIND[action]);
 }

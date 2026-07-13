@@ -41,7 +41,7 @@ pub fn step_lumber_mill(ctx: &ReducerContext, tick: &SimTickContext, clock: &Gam
 
     let labor_interval = interval / building.assigned_labor as f64;
 
-    if !building_has_road_connected_well(tick, ctx, &building) {
+    if MILL_WATER_PER_HARVEST > 1e-6 && !building_has_road_connected_well(tick, ctx, &building) {
         ctx.db.building().id().update(Building {
             action_cooldown: labor_interval,
             ..building

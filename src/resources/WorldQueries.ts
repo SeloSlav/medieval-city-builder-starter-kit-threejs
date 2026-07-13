@@ -36,6 +36,7 @@ import { buildingKindLabel, findNearestBuilding as findBuilding } from './WorldL
 import { countTreesNearBuilding } from './ForestVisualSync.ts';
 import type { TreeRegistry } from './TreeRegistry.ts';
 import { RESIDENCE_PICK_RADIUS } from '../residences/burgageLayout.ts';
+import { isPointInPolygon2 } from '../utils/polygonGeometry.ts';
 
 const RIVER_INSPECT_MAX_SHORE = 8;
 const NEAREST_ROAD_MAX_DISTANCE = 24;
@@ -142,6 +143,16 @@ export class WorldQueries {
     const backyardTarget = this.findNearestBackyardTarget(x, z);
     const building = findBuilding(state.buildings.values(), x, z);
     const residenceTarget = findNearestResidenceTarget(state, x, z);
+    let fieldTarget: Extract<InspectableTarget, { kind: 'farm-field' }> | null = null;
+    for (const field of state.farmFields.values()) {
+      if (!isPointInPolygon2({ x, z }, field.corners)) continue;
+      fieldTarget = {
+        kind: 'farm-field',
+        field,
+        farmstead: state.buildings.get(field.farmsteadId) ?? null,
+      };
+      break;
+    }
 
     if (backyardTarget) {
       const backyardPos = backyardIconPosition(backyardTarget.residence, backyardTarget.zone);
@@ -174,6 +185,8 @@ export class WorldQueries {
     }
 
     if (residenceTarget) return residenceTarget;
+
+    if (fieldTarget) return fieldTarget;
 
     if (building) {
       const treeRegistry = this.getTreeRegistry();
@@ -273,6 +286,16 @@ export class WorldQueries {
         && roadPathDistance(network, building.x, building.z, candidate.x, candidate.z) != null,
     );
     return sortByRoadPathDistance(network, building, wells);
+  }
+
+  getRoadConnectedWaterConsumers(well: BuildingState): BuildingState[] {
+    const state = this.getGameState();
+    const network = this.getRoadNetwork();
+    return [...state.buildings.values()].filter(
+      (candidate) =>
+        (candidate.kind === 'brewery' || candidate.kind === 'granary')
+        && roadPathDistance(network, well.x, well.z, candidate.x, candidate.z) != null,
+    );
   }
 
   getWellDeliveryTripSeconds(

@@ -79,6 +79,32 @@ export const DeliveryTrip = __t.object("DeliveryTrip", {
 });
 export type DeliveryTrip = __Infer<typeof DeliveryTrip>;
 
+export const FarmField = __t.object("FarmField", {
+  id: __t.u64(),
+  owner: __t.identity(),
+  farmsteadId: __t.u64(),
+  cornerAx: __t.f64(),
+  cornerAz: __t.f64(),
+  cornerBx: __t.f64(),
+  cornerBz: __t.f64(),
+  cornerCx: __t.f64(),
+  cornerCz: __t.f64(),
+  cornerDx: __t.f64(),
+  cornerDz: __t.f64(),
+  area: __t.f64(),
+  averageSlopeDegrees: __t.f64(),
+  moisture: __t.f64(),
+  fertility: __t.f64(),
+  crop: __t.u8(),
+  nextCrop: __t.u8(),
+  stage: __t.u8(),
+  stageProgress: __t.f64(),
+  priority: __t.u8(),
+  harvestCount: __t.u32(),
+  lastYield: __t.f64(),
+});
+export type FarmField = __Infer<typeof FarmField>;
+
 export const ForagingBootstrap = __t.object("ForagingBootstrap", {
   nodeId: __t.string(),
   nodeKind: __t.string(),

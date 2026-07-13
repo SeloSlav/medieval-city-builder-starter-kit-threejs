@@ -6,6 +6,7 @@ import type { BuildToolbar } from '../ui/BuildToolbar.ts';
 import type { RoadTool } from '../roads/RoadTool.ts';
 import type { BuildingTool } from '../buildings/BuildingTool.ts';
 import type { BurgageTool } from '../residences/BurgageTool.ts';
+import type { FarmFieldTool } from '../farming/FarmFieldTool.ts';
 import type { FirstPersonController } from '../camera/FirstPersonController.ts';
 
 export type SessionLifecycleDeps = {
@@ -17,6 +18,7 @@ export type SessionLifecycleDeps = {
   roadTool: RoadTool | null;
   buildingTool: BuildingTool | null;
   burgageTool: BurgageTool | null;
+  farmFieldTool: FarmFieldTool | null;
   firstPersonController: FirstPersonController | null;
   recoverSession?: () => void;
 };
@@ -185,6 +187,7 @@ export class SessionLifecycleController {
     this.deps.roadTool?.setEnabled(false);
     this.deps.buildingTool?.setMode('off');
     this.deps.burgageTool?.setEnabled(false);
+    this.deps.farmFieldTool?.setEnabled(false);
     if (this.deps.firstPersonController?.isActive()) {
       this.deps.firstPersonController.deactivate();
     }

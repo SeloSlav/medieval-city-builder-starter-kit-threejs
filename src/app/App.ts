@@ -3,6 +3,8 @@ import { CameraController } from '../camera/CameraController.ts';
 import { FirstPersonController } from '../camera/FirstPersonController.ts';
 import { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
 import { BuildingTool } from '../buildings/BuildingTool.ts';
+import { FarmFieldMarkers } from '../farming/FarmFieldMarkers.ts';
+import { FarmFieldTool } from '../farming/FarmFieldTool.ts';
 import { BurgageTool } from '../residences/BurgageTool.ts';
 import { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
 import { BackyardGardenMarkers } from '../residences/BackyardGardenMarkers.ts';
@@ -61,10 +63,12 @@ export class App {
   private roadSelection: RoadSelection | null = null;
   private buildingTool: BuildingTool | null = null;
   private burgageTool: BurgageTool | null = null;
+  private farmFieldTool: FarmFieldTool | null = null;
   private buildingMarkers: BuildingMarkers | null = null;
   private residenceMarkers: ResidenceMarkers | null = null;
   private backyardGardenMarkers: BackyardGardenMarkers | null = null;
   private burgageFencing: BurgageFencing | null = null;
+  private farmFieldMarkers: FarmFieldMarkers | null = null;
   private toolbar: BuildToolbar | null = null;
   private cityAdminPanel: CityAdministrationPanel | null = null;
   private toastManager: ToastManager | null = null;
@@ -119,12 +123,14 @@ export class App {
     this.roadSelection = session.roadSelection;
     this.buildingTool = session.buildingTool;
     this.burgageTool = session.burgageTool;
+    this.farmFieldTool = session.farmFieldTool;
     this.buildingMarkers = session.buildingMarkers;
     this.deliveryAgents = session.deliveryAgents;
     this.villagers = session.villagers;
     this.residenceMarkers = session.residenceMarkers;
     this.backyardGardenMarkers = session.backyardGardenMarkers;
     this.burgageFencing = session.burgageFencing;
+    this.farmFieldMarkers = session.farmFieldMarkers;
     this.toolbar = session.toolbar;
     this.toastManager = session.toastManager;
     this.disposeTooltips = session.disposeTooltips;
@@ -183,6 +189,7 @@ export class App {
       roadTool: session.roadTool,
       buildingTool: session.buildingTool,
       burgageTool: session.burgageTool,
+      farmFieldTool: session.farmFieldTool,
       firstPersonController: session.firstPersonController,
       recoverSession: () => this.gameRuntime?.recoverSession(),
     });
@@ -203,6 +210,7 @@ export class App {
       forestVisualSync: this.forestVisualSync,
       settlementWorld: {
         residenceMarkers: this.residenceMarkers,
+        farmFieldMarkers: this.farmFieldMarkers,
         backyardGardenMarkers: this.backyardGardenMarkers,
         deliveryAgents: this.deliveryAgents,
         villagers: this.villagers,
@@ -259,9 +267,11 @@ export class App {
     this.roadSelection?.dispose();
     this.buildingTool?.dispose();
     this.burgageTool?.dispose();
+    this.farmFieldTool?.dispose();
     this.buildingMarkers?.dispose();
     disposeSettlementWorld({
       residenceMarkers: this.residenceMarkers,
+      farmFieldMarkers: this.farmFieldMarkers,
       backyardGardenMarkers: this.backyardGardenMarkers,
       deliveryAgents: this.deliveryAgents,
       villagers: this.villagers,
@@ -316,6 +326,7 @@ export class App {
       this.roadTool?.update(dt);
       this.buildingTool?.update();
       this.burgageTool?.update();
+      this.farmFieldTool?.update();
       this.updateBuildButtonPosition();
       this.worldMapUi?.quarry.update();
       this.worldMapUi?.foraging.update();
@@ -327,6 +338,7 @@ export class App {
       this.roadTool?.update(dt);
       this.buildingTool?.update();
       this.burgageTool?.update();
+      this.farmFieldTool?.update();
       this.updateBuildButtonPosition();
       this.worldMapUi?.quarry.update();
       this.worldMapUi?.foraging.update();
@@ -383,20 +395,23 @@ export class App {
   };
 
   private syncToolbar(): void {
-    if (!this.toolbar || !this.roadNetwork || !this.roadTool || !this.roadSelection || !this.buildingTool || !this.burgageTool) return;
+    if (!this.toolbar || !this.roadNetwork || !this.roadTool || !this.roadSelection || !this.buildingTool || !this.burgageTool || !this.farmFieldTool) return;
     const buildingMode = this.buildingTool.getMode();
     const burgageEnabled = this.burgageTool.isEnabled();
+    const farmFieldEnabled = this.farmFieldTool.isEnabled();
     const stats: ToolbarStats = {
-      canBuild: burgageEnabled ? this.burgageTool.isDraftBuildable() : this.roadTool.isDraftBuildable(),
-      hasDraft: burgageEnabled ? this.burgageTool.hasDraft() : this.roadTool.hasDraft(),
-      mode: burgageEnabled
+      canBuild: farmFieldEnabled ? this.farmFieldTool.isDraftBuildable() : burgageEnabled ? this.burgageTool.isDraftBuildable() : this.roadTool.isDraftBuildable(),
+      hasDraft: farmFieldEnabled ? this.farmFieldTool.hasDraft() : burgageEnabled ? this.burgageTool.hasDraft() : this.roadTool.hasDraft(),
+      mode: farmFieldEnabled
+        ? 'farm-fields'
+        : burgageEnabled
         ? 'residences'
         : this.roadTool.isEnabled()
           ? 'road'
           : buildingMode === 'off'
             ? 'idle'
             : buildingMode,
-      statusDetail: burgageEnabled ? this.burgageTool.getStatusDetail() : null,
+      statusDetail: farmFieldEnabled ? this.farmFieldTool.getStatusDetail() : burgageEnabled ? this.burgageTool.getStatusDetail() : null,
     };
     this.toolbar.setStats(stats);
     this.updateBuildButtonPosition();
@@ -405,28 +420,35 @@ export class App {
   private syncBuildInteractionPerf(): void {
     const roadDraft = Boolean(this.roadTool?.isEnabled() && this.roadTool.hasDraft());
     const burgageDraft = Boolean(this.burgageTool?.isEnabled() && this.burgageTool.hasDraft());
+    const farmFieldDraft = Boolean(this.farmFieldTool?.isEnabled() && this.farmFieldTool.hasDraft());
     const buildingActive = Boolean(this.buildingTool?.isEnabled());
-    this.sceneManager?.setBuildInteractionActive(roadDraft || burgageDraft || buildingActive);
+    this.sceneManager?.setBuildInteractionActive(roadDraft || burgageDraft || farmFieldDraft || buildingActive);
     this.sceneManager?.setRoadDraftActive(roadDraft);
   }
 
   private updateBuildButtonPosition(): void {
     const roadTool = this.roadTool;
     const burgageTool = this.burgageTool;
-    if (!this.toolbar || !roadTool || !burgageTool) return;
+    const farmFieldTool = this.farmFieldTool;
+    if (!this.toolbar || !roadTool || !burgageTool || !farmFieldTool) return;
+    const farmFieldEnabled = farmFieldTool.isEnabled();
     const burgageEnabled = burgageTool.isEnabled();
     const layoutHudState = burgageEnabled ? burgageTool.getLayoutHudState() : null;
     const layoutHudPosition = layoutHudState ? burgageTool.getLayoutHudPosition() : null;
     this.toolbar.setBurgageLayoutHud(layoutHudPosition, layoutHudState);
 
-    const visible = burgageEnabled
+    const visible = farmFieldEnabled
+      ? farmFieldTool.isDraftBuildable()
+      : burgageEnabled
       ? burgageTool.isDraftBuildable()
       : roadTool.isDraftBuildable();
     if (!visible) {
       this.toolbar.setBuildButtonPosition(null, false);
       return;
     }
-    const position = burgageEnabled
+    const position = farmFieldEnabled
+      ? farmFieldTool.getBuildButtonPosition()
+      : burgageEnabled
       ? burgageTool.getBuildButtonPosition()
       : roadTool.getBuildButtonPosition();
     this.toolbar.setBuildButtonPosition(position, true);

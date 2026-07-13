@@ -1,7 +1,7 @@
 import type { DbConnection } from '../generated/index.ts';
 import { getConnection } from '../network/spacetimedbClient.ts';
 import type { BackyardGardenKind } from '../residences/backyardGarden.ts';
-import type { BuildingKind, BurgageFrontageEdge } from '../resources/types.ts';
+import type { BuildingKind, BurgageFrontageEdge, FarmCrop } from '../resources/types.ts';
 import type { WorldLayout } from '../resources/WorldLayout.ts';
 import type { WorldLayoutRegistry } from '../resources/WorldLayoutRegistry.ts';
 import { computeWorldBootstrapDataFromLayout } from '../world/worldBootstrapData.ts';
@@ -9,6 +9,7 @@ import { settingsToConfigurePayload } from '../world/worldConfigAuthority.ts';
 import type { WorldGenerationSettings } from '../world/worldGenerationSettings.ts';
 import {
   parseBuildingServerId,
+  parseFarmFieldServerId,
   parseResidenceServerId,
   parseZoneServerId,
 } from './spacetimeIds.ts';
@@ -99,6 +100,51 @@ export async function upgradeResidence(residenceId: string): Promise<void> {
 
 export async function placeBuilding(kind: BuildingKind, x: number, z: number): Promise<void> {
   await callReducer('placeBuilding', 'place_building', { kind, x, z });
+}
+
+const cropId = (crop: FarmCrop): number => crop === 'oats' ? 1 : crop === 'fallow' ? 2 : 0;
+
+export async function placeFarmField(input: {
+  farmsteadId: string;
+  corners: Array<{ x: number; z: number }>;
+  crop: FarmCrop;
+  averageSlopeDegrees: number;
+}): Promise<void> {
+  const farmsteadId = parseBuildingServerId(input.farmsteadId);
+  if (farmsteadId === null || input.corners.length !== 4) {
+    throw new Error('Invalid farm field placement.');
+  }
+  const [a, b, c, d] = input.corners;
+  await callReducer('placeFarmField', 'place_farm_field', {
+    farmsteadId,
+    cornerAx: a.x, cornerAz: a.z,
+    cornerBx: b.x, cornerBz: b.z,
+    cornerCx: c.x, cornerCz: c.z,
+    cornerDx: d.x, cornerDz: d.z,
+    crop: cropId(input.crop),
+    averageSlopeDegrees: input.averageSlopeDegrees,
+  });
+}
+
+export async function setFarmFieldCrop(fieldId: string, crop: FarmCrop): Promise<void> {
+  const serverId = parseFarmFieldServerId(fieldId);
+  if (serverId === null) throw new Error('Invalid farm field id.');
+  await callReducer('setFarmFieldCrop', 'set_farm_field_crop', { fieldId: serverId, crop: cropId(crop) });
+}
+
+export async function setFarmFieldPriority(fieldId: string, priority: number): Promise<void> {
+  const serverId = parseFarmFieldServerId(fieldId);
+  if (serverId === null) throw new Error('Invalid farm field id.');
+  await callReducer('setFarmFieldPriority', 'set_farm_field_priority', {
+    fieldId: serverId,
+    priority: Math.max(0, Math.min(3, Math.floor(priority))),
+  });
+}
+
+export async function demolishFarmField(fieldId: string): Promise<void> {
+  const serverId = parseFarmFieldServerId(fieldId);
+  if (serverId === null) throw new Error('Invalid farm field id.');
+  await callReducer('demolishFarmField', 'demolish_farm_field', { fieldId: serverId });
 }
 
 export async function setEconomicActivityTaxRate(taxRate: number): Promise<void> {

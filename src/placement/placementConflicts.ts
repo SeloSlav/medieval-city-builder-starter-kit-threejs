@@ -15,7 +15,7 @@ export function burgageZonePolygon(zone: BurgageZoneState): Point2[] {
   return [zone.cornerA, zone.cornerB, zone.cornerC, zone.cornerD];
 }
 
-function buildingFootprintPolygon(x: number, z: number, kind: BuildingKind): Point2[] {
+export function buildingFootprintPolygon(x: number, z: number, kind: BuildingKind): Point2[] {
   const pickRadius = getBuildingDefinition(kind).pickRadius * BUILDING_FOOTPRINT_SCALE;
   return [
     { x: x - pickRadius, z: z - pickRadius },

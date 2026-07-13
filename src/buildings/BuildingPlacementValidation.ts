@@ -1,4 +1,4 @@
-import type { BuildingKind, BuildingState, BurgageZoneState, ForagingNodeState, ResourceNodeState } from '../resources/types.ts';
+import type { BuildingKind, BuildingState, BurgageZoneState, FarmFieldState, ForagingNodeState, ResourceNodeState } from '../resources/types.ts';
 import type { ResourceTotals } from '../resources/resourceTotals.ts';
 import { canAffordBuilding } from '../resources/buildingEconomy.ts';
 import { buildingRequiresRoad } from '../resources/buildingPlacementPolicy.ts';
@@ -6,7 +6,8 @@ import { getBuildingDefinition } from '../resources/buildings.ts';
 import { MONASTERY_MIN_FOOTPRINT_SLOPE } from '../generated/gameBalance.ts';
 import { sampleBuildingFootprintHeights } from './BuildingTerrainLayout.ts';
 import { sampleBuildingFootprintPoints } from './BuildingTerrainLayout.ts';
-import { buildingOverlapsResidenceZone } from '../placement/placementConflicts.ts';
+import { buildingFootprintPolygon, buildingOverlapsResidenceZone } from '../placement/placementConflicts.ts';
+import { convexPolygonsOverlap2 } from '../utils/polygonGeometry.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { hasRoadAccess, isOnRoadSurface } from '../roads/roadConnectivity.ts';
 
@@ -18,6 +19,7 @@ export type BuildingPlacementFailureReason =
   | 'too_close'
   | 'within_work_radius'
   | 'within_residence_zone'
+  | 'within_farm_field'
   | 'on_quarry_pit'
   | 'no_quarry_in_range'
   | 'no_game_in_range'
@@ -36,6 +38,7 @@ const MAX_FOOTPRINT_HEIGHT_DELTA = 9.5;
 type BuildingPlacementContext = {
   buildings: Iterable<BuildingState>;
   burgageZones: Iterable<BurgageZoneState>;
+  farmFields?: Iterable<FarmFieldState>;
   quarries: Iterable<ResourceNodeState>;
   foragingNodes: Iterable<ForagingNodeState>;
   stockpile: Pick<ResourceTotals, 'timber' | 'stone'>;
@@ -82,6 +85,13 @@ export function validateBuildingPlacement(
 
   if (buildingOverlapsResidenceZone(kind, x, z, context.burgageZones)) {
     return { ok: false, reason: 'within_residence_zone' };
+  }
+
+  const footprint = buildingFootprintPolygon(x, z, kind);
+  for (const field of context.farmFields ?? []) {
+    if (convexPolygonsOverlap2(footprint, field.corners)) {
+      return { ok: false, reason: 'within_farm_field' };
+    }
   }
 
   if (isWithinSameKindWorkRadius(kind, x, z, context.buildings)) {

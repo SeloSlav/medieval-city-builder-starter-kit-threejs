@@ -15,6 +15,7 @@ export const TOAST_MESSAGES = {
   'building.placement.too_close': 'Too close to another building',
   'building.placement.within_work_radius': 'Another building of the same type already covers this area',
   'building.placement.within_residence_zone': 'Cannot build inside a residence plot',
+  'building.placement.within_farm_field': 'Cannot build inside cultivated farmland',
   'building.placement.on_quarry_pit': 'Cannot build on a quarry pit',
   'building.placement.no_quarry_in_range': 'No quarry stone within work range',
   'building.placement.no_game_in_range': 'No game within work range',
@@ -31,6 +32,7 @@ export const TOAST_MESSAGES = {
   'burgage.placement.no_road_frontage': 'Frontage must face a road',
   'burgage.placement.overlaps_existing': 'Overlaps an existing residence plot',
   'burgage.placement.overlaps_building': 'Overlaps an existing building',
+  'burgage.placement.overlaps_farm_field': 'Overlaps cultivated farmland',
   'burgage.placement.on_quarry_pit': 'Cannot place residences on a quarry pit',
   'burgage.placement.insufficient_resources': 'Not enough timber or stone',
   'burgage.placement.no_fit': 'Too many plots for this frontage — press − to reduce plot count',
@@ -79,6 +81,8 @@ export function burgagePlacementReasonToToastId(reason: BurgagePlacementFailureR
       return 'burgage.placement.overlaps_existing';
     case 'overlaps_building':
       return 'burgage.placement.overlaps_building';
+    case 'overlaps_farm_field':
+      return 'burgage.placement.overlaps_farm_field';
     case 'on_quarry_pit':
       return 'burgage.placement.on_quarry_pit';
     case 'insufficient_resources':
@@ -108,6 +112,8 @@ export function buildingPlacementReasonToToastId(reason: BuildingPlacementFailur
       return 'building.placement.within_work_radius';
     case 'within_residence_zone':
       return 'building.placement.within_residence_zone';
+    case 'within_farm_field':
+      return 'building.placement.within_farm_field';
     case 'on_quarry_pit':
       return 'building.placement.on_quarry_pit';
     case 'no_quarry_in_range':

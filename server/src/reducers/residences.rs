@@ -22,7 +22,7 @@ use crate::simulation::{
     cancel_trips_for_residence, clear_backyard_garden_for_residence, clear_residence_needs,
     ensure_residence_needs,
 };
-use crate::tables::{BurgageZone, Residence};
+use crate::tables::{farm_field, BurgageZone, Residence};
 use crate::balance_generated::{
     RESIDENCE_TIER2_CAPACITY, RESIDENCE_TIER2_GOLD_COST,
     RESIDENCE_TIER2_STONE_COST, RESIDENCE_TIER2_TIMBER_COST, RESIDENCE_TIER3_CAPACITY,
@@ -106,6 +106,18 @@ pub fn place_burgage_zone(
 
     if burgage_zone_overlaps_buildings(ctx, &corners) {
         return Err("Residence plot overlaps an existing building.".to_string());
+    }
+
+    for field in ctx.db.farm_field().iter() {
+        let field_polygon = [
+            crate::burgage::Point2 { x: field.corner_ax, z: field.corner_az },
+            crate::burgage::Point2 { x: field.corner_bx, z: field.corner_bz },
+            crate::burgage::Point2 { x: field.corner_cx, z: field.corner_cz },
+            crate::burgage::Point2 { x: field.corner_dx, z: field.corner_dz },
+        ];
+        if convex_zones_overlap(&candidate_polygon, &field_polygon) {
+            return Err("Residence plot overlaps cultivated farmland.".to_string());
+        }
     }
 
     let zone_depth = measure_zone_depth(&corners, frontage_edge);

@@ -8,7 +8,7 @@ import {
   type PopulationStats,
   type ResourceTotals,
 } from './resourceTotals.ts';
-import type { GameState, InspectableTarget } from './types.ts';
+import type { FarmCrop, GameState, InspectableTarget } from './types.ts';
 import type { WorldQueries } from './WorldQueries.ts';
 import { renderInspectableTarget } from './inspector/renderInspectableTarget.ts';
 import { handleSupplementalPanelClick } from './inspector/supplementalPanel.ts';
@@ -37,6 +37,9 @@ type ResourceInspectorOptions = {
   onAssignBuildingLabor?: (buildingId: string, labor: number) => void | Promise<void>;
   onMarketplaceTrade?: (buildingId: string, tradeId: string) => void | Promise<void>;
   onCollectChapelCoffer?: (buildingId: string) => void | Promise<void>;
+  onDemolishFarmField?: (fieldId: string) => void | Promise<void>;
+  onSetFarmFieldCrop?: (fieldId: string, crop: FarmCrop) => void | Promise<void>;
+  onSetFarmFieldPriority?: (fieldId: string, priority: number) => void | Promise<void>;
   onSelectionChange?: (target: InspectableTarget | null) => void;
   isBlocked: () => boolean;
 };
@@ -177,11 +180,27 @@ export class ResourceInspector {
     }
     if (this.selectedTarget.kind === 'backyard' && this.selectedTarget.garden) {
       void this.options.onDemolishBackyardGarden?.(this.selectedTarget.residence.id);
+      return;
+    }
+    if (this.selectedTarget.kind === 'farm-field') {
+      void this.options.onDemolishFarmField?.(this.selectedTarget.field.id);
     }
   };
 
   private readonly onPanelClick = (event: MouseEvent): void => {
     event.stopPropagation();
+    if (this.selectedTarget?.kind === 'farm-field') {
+      const crop = (event.target as HTMLElement).closest<HTMLElement>('[data-field-crop]')?.dataset.fieldCrop;
+      if (crop === 'rye' || crop === 'oats' || crop === 'fallow') {
+        void this.options.onSetFarmFieldCrop?.(this.selectedTarget.field.id, crop);
+        return;
+      }
+      const priorityValue = (event.target as HTMLElement).closest<HTMLElement>('[data-field-priority]')?.dataset.fieldPriority;
+      if (priorityValue != null) {
+        void this.options.onSetFarmFieldPriority?.(this.selectedTarget.field.id, Number(priorityValue));
+        return;
+      }
+    }
     handleSupplementalPanelClick(this.selectedTarget, event.target as HTMLElement, {
       onPlaceBackyardGarden: this.options.onPlaceBackyardGarden,
       onMarketplaceTrade: this.options.onMarketplaceTrade,
@@ -285,6 +304,11 @@ export class ResourceInspector {
       this.renderTarget(latest);
       return;
     }
+    if (this.selectedTarget.kind === 'farm-field' && latest.kind === 'farm-field' && latest.field.id === this.selectedTarget.field.id) {
+      this.selectedTarget = latest;
+      this.renderTarget(latest);
+      return;
+    }
     this.clearSelection(false);
   }
 
@@ -342,6 +366,11 @@ export class ResourceInspector {
       this.selectedX = position?.x ?? target.residence.x;
       this.selectedZ = position?.z ?? target.residence.z;
       this.selectedRadius = 3.8;
+    } else if (target.kind === 'farm-field') {
+      const center = target.field.corners.reduce((sum, point) => ({ x: sum.x + point.x / 4, z: sum.z + point.z / 4 }), { x: 0, z: 0 });
+      this.selectedX = center.x;
+      this.selectedZ = center.z;
+      this.selectedRadius = Math.max(3, Math.sqrt(target.field.area) * 0.18);
     } else {
       this.selectedX = target.x;
       this.selectedZ = target.z;

@@ -3,10 +3,12 @@ import type { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import type { BackyardGardenMarkers } from '../residences/BackyardGardenMarkers.ts';
 import type { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
+import type { FarmFieldMarkers } from '../farming/FarmFieldMarkers.ts';
 import type { GameState } from '../resources/types.ts';
 
 export type SettlementWorldSyncTargets = {
   residenceMarkers: ResidenceMarkers | null;
+  farmFieldMarkers: FarmFieldMarkers | null;
   backyardGardenMarkers: BackyardGardenMarkers | null;
   deliveryAgents: DeliveryAgentRenderer | null;
   villagers: VillagerRenderer | null;
@@ -20,6 +22,7 @@ export function syncSettlementWorld(
 ): void {
   const { getHeightAt } = targets;
   targets.residenceMarkers?.syncResidences(state.residences.values(), getHeightAt);
+  targets.farmFieldMarkers?.syncFields(state.farmFields.values());
   targets.backyardGardenMarkers?.syncGardens({
     residences: state.residences.values(),
     zones: state.burgageZones.values(),
@@ -46,6 +49,7 @@ export function disposeSettlementWorld(
   targets: SettlementWorldSyncTargets,
 ): void {
   targets.residenceMarkers?.dispose();
+  targets.farmFieldMarkers?.dispose();
   targets.backyardGardenMarkers?.dispose();
   targets.deliveryAgents?.dispose();
   targets.villagers?.dispose();

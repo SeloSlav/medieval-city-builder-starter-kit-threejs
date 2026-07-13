@@ -1,6 +1,7 @@
 import type { ToastManager } from '../ui/ToastManager.ts';
 import type { SpacetimeGameStore } from '../data/spacetimeGameStore.ts';
 import type { BackyardGardenKind } from '../residences/backyardGarden.ts';
+import type { FarmCrop } from '../resources/types.ts';
 
 export type InspectorSpacetimeActions = {
   onDemolishBuilding: (buildingId: string) => Promise<void>;
@@ -12,6 +13,9 @@ export type InspectorSpacetimeActions = {
   onAssignBuildingLabor: (buildingId: string, labor: number) => Promise<void>;
   onMarketplaceTrade: (buildingId: string, tradeId: string) => Promise<void>;
   onCollectChapelCoffer: (buildingId: string) => Promise<void>;
+  onDemolishFarmField: (fieldId: string) => Promise<void>;
+  onSetFarmFieldCrop: (fieldId: string, crop: FarmCrop) => Promise<void>;
+  onSetFarmFieldPriority: (fieldId: string, priority: number) => Promise<void>;
 };
 
 export function createInspectorSpacetimeActions(
@@ -97,6 +101,21 @@ export function createInspectorSpacetimeActions(
         () => store.collectChapelCoffer(buildingId),
         'Could not collect chapel coffer.',
       );
+    },
+    onDemolishFarmField: async (fieldId) => {
+      const store = requireReady();
+      if (!store) return;
+      await runReducer(() => store.demolishFarmField(fieldId), 'Could not remove field.');
+    },
+    onSetFarmFieldCrop: async (fieldId, crop) => {
+      const store = requireReady();
+      if (!store) return;
+      await runReducer(() => store.setFarmFieldCrop(fieldId, crop), 'Could not change field crop.');
+    },
+    onSetFarmFieldPriority: async (fieldId, priority) => {
+      const store = requireReady();
+      if (!store) return;
+      await runReducer(() => store.setFarmFieldPriority(fieldId, priority), 'Could not change field priority.');
     },
   };
 }

@@ -4,8 +4,8 @@ import { buildingDemolishHint, buildingLaborView, buildingRoadAccessRow, buildin
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
 
 const PROCESS: Record<string, string> = {
-  grain_field: 'Rye and oats → grain', threshing_barn: 'Collects field grain',
-  watermill: 'Grain + water → flour', granary: 'Flour → staple food',
+  grain_field: 'Legacy fixed field', threshing_barn: 'Farmstead crew works nearby drawn fields',
+  watermill: 'Grain + river power → flour', granary: 'Flour + well water + firewood → staple food',
   brewery: 'Grain + water → ale', smokehouse: 'Fresh food + firewood → preserved food',
   apiary: 'Forest forage → honey + food', vineyard: 'Terraced vines → wine + food',
   monastery: 'Tithes + alms → charity, feasts, pilgrimages', carpenter: 'Timber → construction and cartwright support',

@@ -360,6 +360,7 @@ export class BuildingTool {
     return validateBuildingPlacement(kind, x, z, {
       buildings: state.buildings.values(),
       burgageZones: state.burgageZones.values(),
+      farmFields: state.farmFields.values(),
       quarries: state.quarries.values(),
       foragingNodes: state.foragingNodes.values(),
       stockpile: totals,

@@ -79,6 +79,33 @@ export type BuildingState = {
   assignedLabor: number;
 };
 
+export const FARM_CROPS = ['rye', 'oats', 'fallow'] as const;
+export type FarmCrop = (typeof FARM_CROPS)[number];
+export const FARM_FIELD_STAGES = ['ploughing', 'sowing', 'growing', 'harvesting'] as const;
+export type FarmFieldStage = (typeof FARM_FIELD_STAGES)[number];
+
+export type FarmFieldState = {
+  id: string;
+  farmsteadId: string;
+  corners: [
+    { x: number; z: number },
+    { x: number; z: number },
+    { x: number; z: number },
+    { x: number; z: number },
+  ];
+  area: number;
+  averageSlopeDegrees: number;
+  moisture: number;
+  fertility: number;
+  crop: FarmCrop;
+  nextCrop: FarmCrop;
+  stage: FarmFieldStage;
+  stageProgress: number;
+  priority: number;
+  harvestCount: number;
+  lastYield: number;
+};
+
 export type BurgageFrontageEdge = 0 | 1 | 2 | 3;
 
 export type BurgageZoneState = {
@@ -123,6 +150,7 @@ export type GameState = {
   foragingNodes: Map<string, ForagingNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
+  farmFields: Map<string, FarmFieldState>;
   burgageZones: Map<string, BurgageZoneState>;
   residences: Map<string, ResidenceState>;
   backyardGardens: Map<string, BackyardGardenState>;
@@ -147,6 +175,11 @@ export type InspectableTarget =
       matureTrees: number;
       stumpTrees: number;
       growingTrees: number;
+    }
+  | {
+      kind: 'farm-field';
+      field: FarmFieldState;
+      farmstead: BuildingState | null;
     }
   | {
       kind: 'river';

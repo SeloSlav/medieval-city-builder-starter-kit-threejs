@@ -145,6 +145,7 @@ export class BuildToolbar {
       onBuildRoad: () => void;
       onToggleBuilding: (kind: BuildingKind) => void;
       onToggleResidences: () => void;
+      onToggleFarmFields: () => void;
       onOpenCityAdministration: () => void;
       onSetWaterOverlay?: (active: boolean) => void;
       onBurgagePlotDecrease?: () => void;
@@ -343,6 +344,7 @@ export class BuildToolbar {
     this.toolbarHandlers = {
       onToggleBuilding: handlers.onToggleBuilding,
       onToggleResidences: handlers.onToggleResidences,
+      onToggleFarmFields: handlers.onToggleFarmFields,
       onOpenRoads: handlers.onOpenRoads,
       onSetWaterOverlay: handlers.onSetWaterOverlay,
     };

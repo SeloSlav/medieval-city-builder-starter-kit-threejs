@@ -1,6 +1,7 @@
 pub mod backyards;
 pub mod bootstrap;
 pub mod buildings;
+pub mod farm_fields;
 pub mod marketplace_trade;
 pub mod residences;
 pub mod roads;

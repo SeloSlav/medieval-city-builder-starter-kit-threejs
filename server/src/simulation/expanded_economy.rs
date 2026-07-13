@@ -3,7 +3,9 @@ use spacetimedb::ReducerContext;
 use crate::balance_generated::{
     APIARY_FOOD_PER_CYCLE, APIARY_HONEY_PER_CYCLE, BREWERY_ALE_PER_CYCLE,
     BREWERY_GRAIN_PER_CYCLE, BREWERY_WATER_PER_CYCLE, FERRY_GOLD_PER_DAY,
-    GRAIN_PER_FIELD_CYCLE, GRAIN_TRANSFER_PER_TRIP, GRANARY_FLOUR_PER_CYCLE,
+    FARM_GROWTH_SECONDS, FARM_WORK_METERS_PER_WORKER_PER_SEC,
+    GRAIN_PER_FIELD_CYCLE, GRAIN_TRANSFER_PER_TRIP, GRANARY_FIREWOOD_PER_CYCLE,
+    GRANARY_FLOUR_PER_CYCLE, GRANARY_WATER_PER_CYCLE,
     GRANARY_FOOD_PER_CYCLE, MONASTERY_CHARITY_FOOD_PER_DELIVERY, MONASTERY_COVERAGE_RADIUS,
     MONASTERY_FOOD_PER_CYCLE, MONASTERY_GRAIN_PER_CYCLE,
     MONASTERY_PILGRIMAGE_GOLD_PER_DAY, MONASTERY_UNLINKED_PRODUCTIVITY,
@@ -11,15 +13,20 @@ use crate::balance_generated::{
     SPECIALTY_EXPORT_GOLD_PER_ALE, SPECIALTY_EXPORT_GOLD_PER_HONEY,
     SPECIALTY_EXPORT_GOLD_PER_WINE, TICK_DT, TIMBER_DELIVERY_SPEED_MPS,
     TIMBER_DELIVERY_UNLOAD_SEC, VINEYARD_FOOD_PER_CYCLE, VINEYARD_WINE_PER_CYCLE,
-    WATERMILL_FLOUR_PER_CYCLE, WATERMILL_GRAIN_PER_CYCLE, WATERMILL_WATER_PER_CYCLE,
+    WATERMILL_FLOUR_PER_CYCLE, WATERMILL_GRAIN_PER_CYCLE,
     CALENDAR_SECONDS_PER_DAY, FOOD_DELIVERY_SPEED_MPS, FOOD_DELIVERY_UNLOAD_SEC,
 };
 use crate::building_defs::building_def;
+use crate::burgage::{Point2, ZoneCorners};
 use crate::db::*;
 use crate::economy::{
     building_commodity_cap, building_commodity_room, building_commodity_stock,
     credit_treasury_gold, deposit_building_commodity, withdraw_building_commodity,
     CommodityKind,
+};
+use crate::farming::{
+    expected_grain_yield, fertility_after_harvest, shape_efficiency, work_required,
+    CROP_FALLOW, STAGE_GROWING, STAGE_HARVESTING, STAGE_PLOUGHING, STAGE_SOWING,
 };
 use crate::simulation::delivery_trips::{
     building_has_active_trip, building_has_inbound_supply_trip,
@@ -31,7 +38,7 @@ use crate::simulation::labor_and_logistics_paused;
 use crate::simulation::residence_needs::{apply_need_delivery, load_needs, need_stock, ResidenceNeedKind};
 use crate::simulation::tick_context::SimTickContext;
 use crate::simulation::water_logistics::ensure_building_water;
-use crate::tables::{Building, Residence};
+use crate::tables::{farm_field, Building, FarmField, Residence};
 
 pub fn step_grain_field(
     ctx: &ReducerContext,
@@ -62,6 +69,9 @@ pub fn step_threshing_barn(
     clock: &GameClock,
     mut building: Building,
 ) {
+    if !labor_and_logistics_paused(ctx, building.owner, clock) {
+        step_farmstead_fields(ctx, &mut building);
+    }
     if !labor_and_logistics_paused(ctx, building.owner, clock) && building.assigned_labor > 0 {
         dispatch_to_building(
             ctx,
@@ -81,15 +91,12 @@ pub fn step_watermill(
     clock: &GameClock,
     building: Building,
 ) {
-    let mut mill = ensure_water_for_process(ctx, tick, building, WATERMILL_WATER_PER_CYCLE);
+    let mut mill = building;
     mill = step_processor(
         ctx,
         clock,
         mill,
-        &[
-            (CommodityKind::Grain, WATERMILL_GRAIN_PER_CYCLE),
-            (CommodityKind::Water, WATERMILL_WATER_PER_CYCLE),
-        ],
+        &[(CommodityKind::Grain, WATERMILL_GRAIN_PER_CYCLE)],
         &[(CommodityKind::Flour, WATERMILL_FLOUR_PER_CYCLE)],
     );
     dispatch_to_building(
@@ -109,16 +116,142 @@ pub fn step_granary(
     clock: &GameClock,
     building: Building,
 ) {
-    let mut granary = step_processor(
+    let mut granary = ensure_water_for_process(ctx, tick, building, GRANARY_WATER_PER_CYCLE);
+    request_connected_commodity(
+        ctx,
+        tick,
+        clock,
+        &granary,
+        CommodityKind::Firewood,
+        &["woodcutters_lodge"],
+        GRANARY_FIREWOOD_PER_CYCLE * 3.0,
+    );
+    granary = step_processor(
         ctx,
         clock,
-        building,
-        &[(CommodityKind::Flour, GRANARY_FLOUR_PER_CYCLE)],
+        granary,
+        &[
+            (CommodityKind::Flour, GRANARY_FLOUR_PER_CYCLE),
+            (CommodityKind::Water, GRANARY_WATER_PER_CYCLE),
+            (CommodityKind::Firewood, GRANARY_FIREWOOD_PER_CYCLE),
+        ],
         &[(CommodityKind::Food, GRANARY_FOOD_PER_CYCLE)],
     );
     dispatch_to_building(ctx, tick, clock, &mut granary, CommodityKind::Food, &["smokehouse"]);
     dispatch_need(ctx, tick, clock, &mut granary, ResidenceNeedKind::Food, 4.0);
     ctx.db.building().id().update(granary);
+}
+
+fn step_farmstead_fields(ctx: &ReducerContext, farmstead: &mut Building) {
+    let mut fields: Vec<FarmField> = ctx
+        .db
+        .farm_field()
+        .farmstead_id()
+        .filter(&farmstead.id)
+        .collect();
+
+    // Growth continues without assigned farm labor; only field work consumes the crew budget.
+    for field in &mut fields {
+        if field.stage != STAGE_GROWING {
+            continue;
+        }
+        let crop_growth_multiplier = if field.crop == CROP_FALLOW { 0.72 } else { 1.0 };
+        field.stage_progress = (field.stage_progress
+            + TICK_DT * crop_growth_multiplier / FARM_GROWTH_SECONDS.max(1.0))
+            .min(1.0);
+        if field.stage_progress >= 1.0 - 1e-9 {
+            if field.crop == CROP_FALLOW {
+                finish_field_cycle(field, 0.0);
+            } else {
+                field.stage = STAGE_HARVESTING;
+                field.stage_progress = 0.0;
+            }
+        }
+    }
+
+    let mut work_budget = farmstead.assigned_labor as f64
+        * FARM_WORK_METERS_PER_WORKER_PER_SEC
+        * TICK_DT;
+    fields.sort_by(|a, b| {
+        b.priority
+            .cmp(&a.priority)
+            .then_with(|| stage_urgency(b.stage).cmp(&stage_urgency(a.stage)))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    for field in &mut fields {
+        if work_budget <= 1e-9 || field.stage == STAGE_GROWING || field.priority == 0 {
+            continue;
+        }
+        let corners = field_corners(field);
+        let shape = shape_efficiency(&corners);
+        let required = work_required(field.stage, field.area, shape).max(1e-6);
+        let remaining = required * (1.0_f64 - field.stage_progress).max(0.0_f64);
+        let spent = work_budget.min(remaining);
+        field.stage_progress = (field.stage_progress + spent / required).min(1.0);
+        work_budget -= spent;
+        if field.stage_progress < 1.0 - 1e-9 {
+            continue;
+        }
+        match field.stage {
+            STAGE_PLOUGHING => {
+                field.stage = if field.crop == CROP_FALLOW { STAGE_GROWING } else { STAGE_SOWING };
+                field.stage_progress = 0.0;
+            }
+            STAGE_SOWING => {
+                field.stage = STAGE_GROWING;
+                field.stage_progress = 0.0;
+            }
+            STAGE_HARVESTING => {
+                let expected = expected_grain_yield(
+                    field.area,
+                    field.crop,
+                    field.moisture,
+                    field.fertility,
+                    field.average_slope_degrees,
+                    shape,
+                );
+                if building_commodity_room(farmstead, CommodityKind::Grain) + 1e-6 < expected {
+                    field.stage_progress = 0.999;
+                    continue;
+                }
+                let deposited = deposit_building_commodity(farmstead, CommodityKind::Grain, expected);
+                finish_field_cycle(field, deposited);
+            }
+            _ => {}
+        }
+    }
+
+    for field in fields {
+        ctx.db.farm_field().id().update(field);
+    }
+}
+
+fn finish_field_cycle(field: &mut FarmField, harvested: f64) {
+    field.last_yield = harvested;
+    field.harvest_count = field.harvest_count.saturating_add(1);
+    field.fertility = fertility_after_harvest(field.crop, field.fertility);
+    field.crop = field.next_crop;
+    field.stage = STAGE_PLOUGHING;
+    field.stage_progress = 0.0;
+}
+
+fn field_corners(field: &FarmField) -> ZoneCorners {
+    ZoneCorners {
+        a: Point2 { x: field.corner_ax, z: field.corner_az },
+        b: Point2 { x: field.corner_bx, z: field.corner_bz },
+        c: Point2 { x: field.corner_cx, z: field.corner_cz },
+        d: Point2 { x: field.corner_dx, z: field.corner_dz },
+    }
+}
+
+fn stage_urgency(stage: u8) -> u8 {
+    match stage {
+        STAGE_HARVESTING => 3,
+        STAGE_SOWING => 2,
+        STAGE_PLOUGHING => 1,
+        _ => 0,
+    }
 }
 
 pub fn step_brewery(
@@ -319,7 +452,7 @@ fn step_simple_producer(
     }
     let labor = building.assigned_labor.max(1) as f64;
     for (kind, amount) in outputs {
-        deposit_building_commodity(&mut building, *kind, amount * labor);
+        deposit_building_commodity(&mut building, *kind, *amount);
     }
     reset_cycle(&mut building, labor);
     building
@@ -336,7 +469,7 @@ fn step_processor(
         return building;
     }
     let labor = building.assigned_labor.max(1) as f64;
-    process_batch(&mut building, inputs, outputs, labor);
+    process_batch(&mut building, inputs, outputs, 1.0);
     reset_cycle(&mut building, labor);
     building
 }

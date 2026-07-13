@@ -2,7 +2,7 @@ use spacetimedb::{reducer, Identity, ReducerContext};
 
 use crate::db::*;
 use crate::tables::{
-    BackyardGarden, Building, BurgageZone, DeliveryTrip, ResidenceNeed,
+    farm_field, BackyardGarden, Building, BurgageZone, DeliveryTrip, FarmField, ResidenceNeed,
     WorldConfig,
 };
 use crate::world_entities::clear_global_world_entities;
@@ -17,6 +17,15 @@ pub fn reset_world(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 fn clear_owner_settlement(ctx: &ReducerContext, owner: Identity) {
+    for field in ctx
+        .db
+        .farm_field()
+        .iter()
+        .filter(|field| field.owner == owner)
+        .collect::<Vec<FarmField>>()
+    {
+        ctx.db.farm_field().id().delete(field.id);
+    }
     for trip in ctx.db.delivery_trip().iter().collect::<Vec<DeliveryTrip>>() {
         if trip.owner != owner {
             continue;

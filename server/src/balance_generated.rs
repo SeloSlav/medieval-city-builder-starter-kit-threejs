@@ -118,13 +118,15 @@ pub const WELL_SURGE_AMOUNT_MIN: f64 = 10.0;
 pub const WELL_SURGE_AMOUNT_MAX: f64 = 26.0;
 pub const WELL_SURGE_COOLDOWN_SEC: f64 = 42.0;
 pub const WELL_WATER_PER_DELIVERY: f64 = 3.0;
-pub const MILL_WATER_PER_HARVEST: f64 = 4.0;
+pub const MILL_WATER_PER_HARVEST: f64 = 0.0;
 pub const GRAIN_PER_FIELD_CYCLE: f64 = 4.0;
 pub const GRAIN_TRANSFER_PER_TRIP: f64 = 6.0;
 pub const WATERMILL_GRAIN_PER_CYCLE: f64 = 3.0;
-pub const WATERMILL_WATER_PER_CYCLE: f64 = 1.0;
+pub const WATERMILL_WATER_PER_CYCLE: f64 = 0.0;
 pub const WATERMILL_FLOUR_PER_CYCLE: f64 = 4.0;
 pub const GRANARY_FLOUR_PER_CYCLE: f64 = 3.0;
+pub const GRANARY_WATER_PER_CYCLE: f64 = 2.0;
+pub const GRANARY_FIREWOOD_PER_CYCLE: f64 = 1.0;
 pub const GRANARY_FOOD_PER_CYCLE: f64 = 4.0;
 pub const BREWERY_GRAIN_PER_CYCLE: f64 = 3.0;
 pub const BREWERY_WATER_PER_CYCLE: f64 = 2.0;
@@ -149,6 +151,26 @@ pub const SPECIALTY_EXPORT_GOLD_PER_WINE: f64 = 1.6;
 pub const FERRY_GOLD_PER_DAY: f64 = 2.25;
 pub const CARPENTER_DELIVERY_SPEED_MULTIPLIER: f64 = 1.18;
 pub const CARPENTER_TIMBER_COST_MULTIPLIER: f64 = 0.9;
+
+pub const FARM_MIN_FIELD_AREA: f64 = 48.0;
+pub const FARM_MAX_FIELD_AREA: f64 = 1600.0;
+pub const FARM_MIN_FIELD_EDGE: f64 = 6.0;
+pub const FARM_WORK_METERS_PER_WORKER_PER_SEC: f64 = 20.0;
+pub const FARM_PLOUGH_WORK_PER_SQUARE_METER: f64 = 1.0;
+pub const FARM_SOW_WORK_PER_SQUARE_METER: f64 = 0.55;
+pub const FARM_HARVEST_WORK_PER_SQUARE_METER: f64 = 0.8;
+pub const FARM_GROWTH_SECONDS: f64 = 120.0;
+pub const FARM_BASE_GRAIN_PER_SQUARE_METER: f64 = 0.08;
+pub const FARM_RYE_MOISTURE_IDEAL: f64 = 0.38;
+pub const FARM_RYE_MOISTURE_TOLERANCE: f64 = 0.52;
+pub const FARM_OATS_MOISTURE_IDEAL: f64 = 0.58;
+pub const FARM_OATS_MOISTURE_TOLERANCE: f64 = 0.46;
+pub const FARM_RYE_FERTILITY_DRAIN: f64 = 0.08;
+pub const FARM_OATS_FERTILITY_DRAIN: f64 = 0.06;
+pub const FARM_FALLOW_FERTILITY_RESTORE: f64 = 0.18;
+pub const FARM_SLOPE_PENALTY_PER_DEGREE: f64 = 0.025;
+pub const FARM_MAX_ACCEPTED_SLOPE_DEGREES: f64 = 18.0;
+pub const FARM_FIELD_SALVAGE_FRACTION: f64 = 0.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildingSimKind {
@@ -519,7 +541,7 @@ const THRESHING_BARN: BuildingDef = BuildingDef {
     storage_honey: 0.0,
     storage_wine: 0.0,
     accepts_labor: true,
-    max_labor: 3,
+    max_labor: 6,
     work_radius: 150.0,
     action_interval: 6.0,
     pick_radius: 9.0,
@@ -628,9 +650,9 @@ const GRANARY: BuildingDef = BuildingDef {
     cost_timber: 50.0,
     cost_stone: 28.0,
     storage_timber: 0.0,
-    storage_firewood: 0.0,
+    storage_firewood: 60.0,
     storage_stone: 0.0,
-    storage_water: 0.0,
+    storage_water: 120.0,
     storage_food: 340.0,
     storage_grain: 420.0,
     storage_flour: 260.0,

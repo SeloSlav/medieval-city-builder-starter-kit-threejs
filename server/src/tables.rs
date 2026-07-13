@@ -162,6 +162,57 @@ pub struct Building {
     pub gold: f64,
 }
 
+/// A player-drawn arable parcel worked by a nearby farmstead (`threshing_barn`).
+/// Corners are stored clockwise and describe an oriented rectangle authored by the field tool.
+#[spacetimedb::table(
+    accessor = farm_field,
+    public,
+    index(accessor = owner, btree(columns = [owner])),
+    index(accessor = farmstead_id, btree(columns = [farmstead_id]))
+)]
+#[derive(Clone)]
+pub struct FarmField {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    pub owner: Identity,
+    pub farmstead_id: u64,
+    pub corner_ax: f64,
+    pub corner_az: f64,
+    pub corner_bx: f64,
+    pub corner_bz: f64,
+    pub corner_cx: f64,
+    pub corner_cz: f64,
+    pub corner_dx: f64,
+    pub corner_dz: f64,
+    /// Square meters measured from the authoritative polygon.
+    pub area: f64,
+    /// Average terrain slope supplied by the deterministic client terrain sampler.
+    pub average_slope_degrees: f64,
+    /// Groundwater/valley moisture sampled authoritatively from the shared hydrology grid.
+    pub moisture: f64,
+    /// Persistent soil fertility, depleted by cereals and restored by fallow.
+    pub fertility: f64,
+    /// 0 = rye, 1 = oats, 2 = fallow.
+    pub crop: u8,
+    /// Crop scheduled for the next cycle; may be changed while the current crop grows.
+    #[default(0u8)]
+    pub next_crop: u8,
+    /// 0 = ploughing, 1 = sowing, 2 = growing, 3 = harvesting.
+    pub stage: u8,
+    /// Normalized progress through the current stage.
+    pub stage_progress: f64,
+    /// 0-3; higher values are worked first by the farmstead.
+    #[default(1)]
+    pub priority: u8,
+    /// Finished harvest cycles, useful for UI and deterministic tests.
+    #[default(0u32)]
+    pub harvest_count: u32,
+    /// Grain from the latest completed harvest.
+    #[default(0.0)]
+    pub last_yield: f64,
+}
+
 #[spacetimedb::table(accessor = road_network_state, public)]
 pub struct RoadNetworkState {
     #[primary_key]

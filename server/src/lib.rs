@@ -6,6 +6,7 @@ mod building_defs;
 mod burgage;
 mod constants;
 mod economy;
+mod farming;
 mod hydrology;
 mod hydrology_grid_generated;
 mod placement_validation;

@@ -116,13 +116,15 @@ export const WELL_SURGE_AMOUNT_MIN = 10;
 export const WELL_SURGE_AMOUNT_MAX = 26;
 export const WELL_SURGE_COOLDOWN_SEC = 42;
 export const WELL_WATER_PER_DELIVERY = 3;
-export const MILL_WATER_PER_HARVEST = 4;
+export const MILL_WATER_PER_HARVEST = 0;
 export const GRAIN_PER_FIELD_CYCLE = 4;
 export const GRAIN_TRANSFER_PER_TRIP = 6;
 export const WATERMILL_GRAIN_PER_CYCLE = 3;
-export const WATERMILL_WATER_PER_CYCLE = 1;
+export const WATERMILL_WATER_PER_CYCLE = 0;
 export const WATERMILL_FLOUR_PER_CYCLE = 4;
 export const GRANARY_FLOUR_PER_CYCLE = 3;
+export const GRANARY_WATER_PER_CYCLE = 2;
+export const GRANARY_FIREWOOD_PER_CYCLE = 1;
 export const GRANARY_FOOD_PER_CYCLE = 4;
 export const BREWERY_GRAIN_PER_CYCLE = 3;
 export const BREWERY_WATER_PER_CYCLE = 2;
@@ -147,6 +149,26 @@ export const SPECIALTY_EXPORT_GOLD_PER_WINE = 1.6;
 export const FERRY_GOLD_PER_DAY = 2.25;
 export const CARPENTER_DELIVERY_SPEED_MULTIPLIER = 1.18;
 export const CARPENTER_TIMBER_COST_MULTIPLIER = 0.9;
+
+export const FARM_MIN_FIELD_AREA = 48;
+export const FARM_MAX_FIELD_AREA = 1600;
+export const FARM_MIN_FIELD_EDGE = 6;
+export const FARM_WORK_METERS_PER_WORKER_PER_SEC = 20;
+export const FARM_PLOUGH_WORK_PER_SQUARE_METER = 1;
+export const FARM_SOW_WORK_PER_SQUARE_METER = 0.55;
+export const FARM_HARVEST_WORK_PER_SQUARE_METER = 0.8;
+export const FARM_GROWTH_SECONDS = 120;
+export const FARM_BASE_GRAIN_PER_SQUARE_METER = 0.08;
+export const FARM_RYE_MOISTURE_IDEAL = 0.38;
+export const FARM_RYE_MOISTURE_TOLERANCE = 0.52;
+export const FARM_OATS_MOISTURE_IDEAL = 0.58;
+export const FARM_OATS_MOISTURE_TOLERANCE = 0.46;
+export const FARM_RYE_FERTILITY_DRAIN = 0.08;
+export const FARM_OATS_FERTILITY_DRAIN = 0.06;
+export const FARM_FALLOW_FERTILITY_RESTORE = 0.18;
+export const FARM_SLOPE_PENALTY_PER_DEGREE = 0.025;
+export const FARM_MAX_ACCEPTED_SLOPE_DEGREES = 18;
+export const FARM_FIELD_SALVAGE_FRACTION = 0;
 
 export type BuildingResourceCost = {
   timber: number;
@@ -325,12 +347,12 @@ export const BUILDING_DEFINITIONS = {
   },
   threshing_barn: {
     kind: 'threshing_barn',
-    label: "Threshing barn",
+    label: "Farmstead and threshing barn",
     workRadius: 150,
     pickRadius: 9,
     harvestInterval: 6,
     regrowRatePerSecond: 0,
-    maxLabor: 3,
+    maxLabor: 6,
     acceptsLabor: true,
     requiresRoad: true,
     facesRoad: true,
@@ -503,7 +525,7 @@ export const BUILDING_STORAGE_CAPS = {
   monastery: { timber: 0, firewood: 0, stone: 0, food: 180, grain: 180, ale: 120, preservedFood: 80 },
   brewery: { timber: 0, firewood: 0, stone: 0, water: 100, grain: 140, ale: 200 },
   smokehouse: { timber: 0, firewood: 40, stone: 0, food: 120, preservedFood: 180 },
-  granary: { timber: 0, firewood: 0, stone: 0, food: 340, grain: 420, flour: 260, preservedFood: 180 },
+  granary: { timber: 0, firewood: 60, stone: 0, water: 120, food: 340, grain: 420, flour: 260, preservedFood: 180 },
   apiary: { timber: 0, firewood: 0, stone: 0, food: 40, honey: 140 },
   watermill: { timber: 0, firewood: 0, stone: 0, water: 80, grain: 180, flour: 260 },
   carpenter: { timber: 140, firewood: 0, stone: 0 },

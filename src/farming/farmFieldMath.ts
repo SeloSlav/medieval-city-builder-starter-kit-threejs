@@ -1,0 +1,103 @@
+import {
+  FARM_BASE_GRAIN_PER_SQUARE_METER,
+  FARM_OATS_MOISTURE_IDEAL,
+  FARM_OATS_MOISTURE_TOLERANCE,
+  FARM_RYE_MOISTURE_IDEAL,
+  FARM_RYE_MOISTURE_TOLERANCE,
+  FARM_SLOPE_PENALTY_PER_DEGREE,
+} from '../generated/gameBalance.ts';
+import type { FarmCrop, FarmFieldState } from '../resources/types.ts';
+import type { Point2 } from '../utils/polygonGeometry.ts';
+
+export type FarmFieldCorners = [Point2, Point2, Point2, Point2];
+
+export function rectangleFromBaseline(a: Point2, b: Point2, depthPoint: Point2): FarmFieldCorners | null {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const length = Math.hypot(dx, dz);
+  if (length <= 1e-6) return null;
+  const nx = -dz / length;
+  const nz = dx / length;
+  const depth = (depthPoint.x - a.x) * nx + (depthPoint.z - a.z) * nz;
+  return [
+    { x: a.x, z: a.z },
+    { x: b.x, z: b.z },
+    { x: b.x + nx * depth, z: b.z + nz * depth },
+    { x: a.x + nx * depth, z: a.z + nz * depth },
+  ];
+}
+
+export function fieldCentroid(corners: readonly Point2[]): Point2 {
+  return {
+    x: corners.reduce((sum, point) => sum + point.x, 0) / corners.length,
+    z: corners.reduce((sum, point) => sum + point.z, 0) / corners.length,
+  };
+}
+
+export function fieldEdgeLengths(corners: FarmFieldCorners): [number, number, number, number] {
+  return corners.map((point, index) => {
+    const next = corners[(index + 1) % 4];
+    return Math.hypot(next.x - point.x, next.z - point.z);
+  }) as [number, number, number, number];
+}
+
+export function fieldArea(corners: FarmFieldCorners): number {
+  const edges = fieldEdgeLengths(corners);
+  return edges[0] * edges[1];
+}
+
+export function fieldShapeEfficiency(corners: FarmFieldCorners): number {
+  const [width, depth] = fieldEdgeLengths(corners);
+  const aspect = Math.max(width, depth) / Math.max(1e-6, Math.min(width, depth));
+  return Math.max(0.72, Math.min(1, 1 - Math.max(0, aspect - 1) * 0.035));
+}
+
+export function moistureSuitability(crop: FarmCrop, moisture: number): number {
+  if (crop === 'fallow') return 1;
+  const ideal = crop === 'oats' ? FARM_OATS_MOISTURE_IDEAL : FARM_RYE_MOISTURE_IDEAL;
+  const tolerance = crop === 'oats' ? FARM_OATS_MOISTURE_TOLERANCE : FARM_RYE_MOISTURE_TOLERANCE;
+  const base = 1 - Math.abs(Math.max(0, Math.min(1, moisture)) - ideal) / Math.max(1e-6, tolerance);
+  return Math.max(0.25, Math.min(1, 0.25 + Math.max(0, Math.min(1, base)) * 0.75));
+}
+
+export function expectedFieldYield(field: Pick<FarmFieldState, 'area' | 'crop' | 'moisture' | 'fertility' | 'averageSlopeDegrees' | 'corners'>): number {
+  if (field.crop === 'fallow') return 0;
+  const slope = Math.max(0.35, Math.min(1, 1 - field.averageSlopeDegrees * FARM_SLOPE_PENALTY_PER_DEGREE));
+  return field.area
+    * FARM_BASE_GRAIN_PER_SQUARE_METER
+    * moistureSuitability(field.crop, field.moisture)
+    * Math.max(0.2, Math.min(1, field.fertility))
+    * slope
+    * fieldShapeEfficiency(field.corners);
+}
+
+export function sampleAverageSlopeDegrees(
+  corners: FarmFieldCorners,
+  getHeightAt: (x: number, z: number) => number,
+): number {
+  const samples = 4;
+  const slopes: number[] = [];
+  for (let zIndex = 0; zIndex <= samples; zIndex++) {
+    for (let xIndex = 0; xIndex <= samples; xIndex++) {
+      const u = xIndex / samples;
+      const v = zIndex / samples;
+      const point = bilinearPoint(corners, u, v);
+      const hx = getHeightAt(point.x + 0.5, point.z) - getHeightAt(point.x - 0.5, point.z);
+      const hz = getHeightAt(point.x, point.z + 0.5) - getHeightAt(point.x, point.z - 0.5);
+      slopes.push(Math.atan(Math.hypot(hx, hz)) * 180 / Math.PI);
+    }
+  }
+  return slopes.reduce((sum, value) => sum + value, 0) / Math.max(1, slopes.length);
+}
+
+export function bilinearPoint(corners: FarmFieldCorners, u: number, v: number): Point2 {
+  const topX = corners[0].x + (corners[1].x - corners[0].x) * u;
+  const topZ = corners[0].z + (corners[1].z - corners[0].z) * u;
+  const bottomX = corners[3].x + (corners[2].x - corners[3].x) * u;
+  const bottomZ = corners[3].z + (corners[2].z - corners[3].z) * u;
+  return { x: topX + (bottomX - topX) * v, z: topZ + (bottomZ - topZ) * v };
+}
+
+export function cropLabel(crop: FarmCrop): string {
+  return crop === 'rye' ? 'Rye' : crop === 'oats' ? 'Oats' : 'Fallow';
+}

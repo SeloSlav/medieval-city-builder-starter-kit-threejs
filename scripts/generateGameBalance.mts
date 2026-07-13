@@ -210,6 +210,8 @@ export type GameBalance = {
     watermillWaterPerCycle: number;
     watermillFlourPerCycle: number;
     granaryFlourPerCycle: number;
+    granaryWaterPerCycle: number;
+    granaryFirewoodPerCycle: number;
     granaryFoodPerCycle: number;
     breweryGrainPerCycle: number;
     breweryWaterPerCycle: number;
@@ -234,6 +236,27 @@ export type GameBalance = {
     ferryGoldPerDay: number;
     carpenterDeliverySpeedMultiplier: number;
     carpenterTimberCostMultiplier: number;
+  };
+  farming: {
+    minFieldArea: number;
+    maxFieldArea: number;
+    minFieldEdge: number;
+    workMetersPerWorkerPerSec: number;
+    ploughWorkPerSquareMeter: number;
+    sowWorkPerSquareMeter: number;
+    harvestWorkPerSquareMeter: number;
+    growthSeconds: number;
+    baseGrainPerSquareMeter: number;
+    ryeMoistureIdeal: number;
+    ryeMoistureTolerance: number;
+    oatsMoistureIdeal: number;
+    oatsMoistureTolerance: number;
+    ryeFertilityDrain: number;
+    oatsFertilityDrain: number;
+    fallowFertilityRestore: number;
+    slopePenaltyPerDegree: number;
+    maxAcceptedSlopeDegrees: number;
+    fieldSalvageFraction: number;
   };
   buildings: Record<string, BuildingBalance>;
   backyardGardens: Record<string, BackyardGardenBalance>;
@@ -407,6 +430,8 @@ function generateRust(): string {
     `pub const WATERMILL_WATER_PER_CYCLE: f64 = ${rustF64(b.production.watermillWaterPerCycle)};`,
     `pub const WATERMILL_FLOUR_PER_CYCLE: f64 = ${rustF64(b.production.watermillFlourPerCycle)};`,
     `pub const GRANARY_FLOUR_PER_CYCLE: f64 = ${rustF64(b.production.granaryFlourPerCycle)};`,
+    `pub const GRANARY_WATER_PER_CYCLE: f64 = ${rustF64(b.production.granaryWaterPerCycle)};`,
+    `pub const GRANARY_FIREWOOD_PER_CYCLE: f64 = ${rustF64(b.production.granaryFirewoodPerCycle)};`,
     `pub const GRANARY_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.granaryFoodPerCycle)};`,
     `pub const BREWERY_GRAIN_PER_CYCLE: f64 = ${rustF64(b.production.breweryGrainPerCycle)};`,
     `pub const BREWERY_WATER_PER_CYCLE: f64 = ${rustF64(b.production.breweryWaterPerCycle)};`,
@@ -431,6 +456,26 @@ function generateRust(): string {
     `pub const FERRY_GOLD_PER_DAY: f64 = ${rustF64(b.production.ferryGoldPerDay)};`,
     `pub const CARPENTER_DELIVERY_SPEED_MULTIPLIER: f64 = ${rustF64(b.production.carpenterDeliverySpeedMultiplier)};`,
     `pub const CARPENTER_TIMBER_COST_MULTIPLIER: f64 = ${rustF64(b.production.carpenterTimberCostMultiplier)};`,
+    '',
+    `pub const FARM_MIN_FIELD_AREA: f64 = ${rustF64(b.farming.minFieldArea)};`,
+    `pub const FARM_MAX_FIELD_AREA: f64 = ${rustF64(b.farming.maxFieldArea)};`,
+    `pub const FARM_MIN_FIELD_EDGE: f64 = ${rustF64(b.farming.minFieldEdge)};`,
+    `pub const FARM_WORK_METERS_PER_WORKER_PER_SEC: f64 = ${rustF64(b.farming.workMetersPerWorkerPerSec)};`,
+    `pub const FARM_PLOUGH_WORK_PER_SQUARE_METER: f64 = ${rustF64(b.farming.ploughWorkPerSquareMeter)};`,
+    `pub const FARM_SOW_WORK_PER_SQUARE_METER: f64 = ${rustF64(b.farming.sowWorkPerSquareMeter)};`,
+    `pub const FARM_HARVEST_WORK_PER_SQUARE_METER: f64 = ${rustF64(b.farming.harvestWorkPerSquareMeter)};`,
+    `pub const FARM_GROWTH_SECONDS: f64 = ${rustF64(b.farming.growthSeconds)};`,
+    `pub const FARM_BASE_GRAIN_PER_SQUARE_METER: f64 = ${rustF64(b.farming.baseGrainPerSquareMeter)};`,
+    `pub const FARM_RYE_MOISTURE_IDEAL: f64 = ${rustF64(b.farming.ryeMoistureIdeal)};`,
+    `pub const FARM_RYE_MOISTURE_TOLERANCE: f64 = ${rustF64(b.farming.ryeMoistureTolerance)};`,
+    `pub const FARM_OATS_MOISTURE_IDEAL: f64 = ${rustF64(b.farming.oatsMoistureIdeal)};`,
+    `pub const FARM_OATS_MOISTURE_TOLERANCE: f64 = ${rustF64(b.farming.oatsMoistureTolerance)};`,
+    `pub const FARM_RYE_FERTILITY_DRAIN: f64 = ${rustF64(b.farming.ryeFertilityDrain)};`,
+    `pub const FARM_OATS_FERTILITY_DRAIN: f64 = ${rustF64(b.farming.oatsFertilityDrain)};`,
+    `pub const FARM_FALLOW_FERTILITY_RESTORE: f64 = ${rustF64(b.farming.fallowFertilityRestore)};`,
+    `pub const FARM_SLOPE_PENALTY_PER_DEGREE: f64 = ${rustF64(b.farming.slopePenaltyPerDegree)};`,
+    `pub const FARM_MAX_ACCEPTED_SLOPE_DEGREES: f64 = ${rustF64(b.farming.maxAcceptedSlopeDegrees)};`,
+    `pub const FARM_FIELD_SALVAGE_FRACTION: f64 = ${rustF64(b.farming.fieldSalvageFraction)};`,
     '',
   ];
 
@@ -744,6 +789,8 @@ function generateTypeScript(): string {
     `export const WATERMILL_WATER_PER_CYCLE = ${b.production.watermillWaterPerCycle};`,
     `export const WATERMILL_FLOUR_PER_CYCLE = ${b.production.watermillFlourPerCycle};`,
     `export const GRANARY_FLOUR_PER_CYCLE = ${b.production.granaryFlourPerCycle};`,
+    `export const GRANARY_WATER_PER_CYCLE = ${b.production.granaryWaterPerCycle};`,
+    `export const GRANARY_FIREWOOD_PER_CYCLE = ${b.production.granaryFirewoodPerCycle};`,
     `export const GRANARY_FOOD_PER_CYCLE = ${b.production.granaryFoodPerCycle};`,
     `export const BREWERY_GRAIN_PER_CYCLE = ${b.production.breweryGrainPerCycle};`,
     `export const BREWERY_WATER_PER_CYCLE = ${b.production.breweryWaterPerCycle};`,
@@ -768,6 +815,26 @@ function generateTypeScript(): string {
     `export const FERRY_GOLD_PER_DAY = ${b.production.ferryGoldPerDay};`,
     `export const CARPENTER_DELIVERY_SPEED_MULTIPLIER = ${b.production.carpenterDeliverySpeedMultiplier};`,
     `export const CARPENTER_TIMBER_COST_MULTIPLIER = ${b.production.carpenterTimberCostMultiplier};`,
+    '',
+    `export const FARM_MIN_FIELD_AREA = ${b.farming.minFieldArea};`,
+    `export const FARM_MAX_FIELD_AREA = ${b.farming.maxFieldArea};`,
+    `export const FARM_MIN_FIELD_EDGE = ${b.farming.minFieldEdge};`,
+    `export const FARM_WORK_METERS_PER_WORKER_PER_SEC = ${b.farming.workMetersPerWorkerPerSec};`,
+    `export const FARM_PLOUGH_WORK_PER_SQUARE_METER = ${b.farming.ploughWorkPerSquareMeter};`,
+    `export const FARM_SOW_WORK_PER_SQUARE_METER = ${b.farming.sowWorkPerSquareMeter};`,
+    `export const FARM_HARVEST_WORK_PER_SQUARE_METER = ${b.farming.harvestWorkPerSquareMeter};`,
+    `export const FARM_GROWTH_SECONDS = ${b.farming.growthSeconds};`,
+    `export const FARM_BASE_GRAIN_PER_SQUARE_METER = ${b.farming.baseGrainPerSquareMeter};`,
+    `export const FARM_RYE_MOISTURE_IDEAL = ${b.farming.ryeMoistureIdeal};`,
+    `export const FARM_RYE_MOISTURE_TOLERANCE = ${b.farming.ryeMoistureTolerance};`,
+    `export const FARM_OATS_MOISTURE_IDEAL = ${b.farming.oatsMoistureIdeal};`,
+    `export const FARM_OATS_MOISTURE_TOLERANCE = ${b.farming.oatsMoistureTolerance};`,
+    `export const FARM_RYE_FERTILITY_DRAIN = ${b.farming.ryeFertilityDrain};`,
+    `export const FARM_OATS_FERTILITY_DRAIN = ${b.farming.oatsFertilityDrain};`,
+    `export const FARM_FALLOW_FERTILITY_RESTORE = ${b.farming.fallowFertilityRestore};`,
+    `export const FARM_SLOPE_PENALTY_PER_DEGREE = ${b.farming.slopePenaltyPerDegree};`,
+    `export const FARM_MAX_ACCEPTED_SLOPE_DEGREES = ${b.farming.maxAcceptedSlopeDegrees};`,
+    `export const FARM_FIELD_SALVAGE_FRACTION = ${b.farming.fieldSalvageFraction};`,
     '',
     'export type BuildingResourceCost = {',
     '  timber: number;',

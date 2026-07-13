@@ -3,6 +3,8 @@ import { CameraController } from '../camera/CameraController.ts';
 import { FirstPersonController } from '../camera/FirstPersonController.ts';
 import { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
 import { BuildingTool } from '../buildings/BuildingTool.ts';
+import { FarmFieldMarkers } from '../farming/FarmFieldMarkers.ts';
+import { FarmFieldTool, type FarmFieldPlacementFailureReason } from '../farming/FarmFieldTool.ts';
 import { BurgageTool } from '../residences/BurgageTool.ts';
 import { MAX_ZONE_DEPTH, MIN_ZONE_DEPTH } from '../residences/burgageLayout.ts';
 import { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
@@ -13,6 +15,7 @@ import { InputManager } from '../input/InputManager.ts';
 import {
   isBurgagePlacementBlocked,
   isBuildingPlacementBlocked,
+  isFarmFieldPlacementBlocked,
   isRoadPlacementBlocked,
   isWorldInspectionBlocked,
   type PlacementInteractionGate,
@@ -86,12 +89,14 @@ export type BootstrappedSession = {
   roadSelection: RoadSelection;
   buildingTool: BuildingTool;
   burgageTool: BurgageTool;
+  farmFieldTool: FarmFieldTool;
   buildingMarkers: BuildingMarkers;
   deliveryAgents: DeliveryAgentRenderer;
   villagers: VillagerRenderer;
   residenceMarkers: ResidenceMarkers;
   backyardGardenMarkers: BackyardGardenMarkers;
   burgageFencing: BurgageFencing;
+  farmFieldMarkers: FarmFieldMarkers;
   toolbar: BuildToolbar;
   toastManager: ToastManager;
   disposeTooltips: () => void;
@@ -164,6 +169,7 @@ export async function bootstrapAppSession(
   let roadTool: RoadTool;
   let buildingTool: BuildingTool;
   let burgageTool: BurgageTool;
+  let farmFieldTool: FarmFieldTool;
   let toolbar: BuildToolbar;
   let toastManager: ToastManager;
 
@@ -208,6 +214,7 @@ export async function bootstrapAppSession(
     isRoadToolEnabled: () => false,
     isBuildingToolEnabled: () => false,
     isBurgageToolEnabled: () => false,
+    isFarmFieldToolEnabled: () => false,
     isFirstPersonActive: () => false,
     isMenuOpen: () => false,
   };
@@ -221,13 +228,15 @@ export async function bootstrapAppSession(
     getCursorOverride: () => {
       if (firstPersonController?.isActive()) return 'default';
       return burgageTool?.getCursor()
+        ?? farmFieldTool?.getCursor()
         ?? roadTool?.getCursor()
         ?? null;
     },
     shouldIgnoreInput: (event) =>
       (roadTool?.shouldBlockCameraInput(event) ?? false)
       || (buildingTool?.shouldBlockCameraInput(event) ?? false)
-      || (burgageTool?.shouldBlockCameraInput(event) ?? false),
+      || (burgageTool?.shouldBlockCameraInput(event) ?? false)
+      || (farmFieldTool?.shouldBlockCameraInput(event) ?? false),
   });
 
   const roadSelection = new RoadSelection({
@@ -247,6 +256,7 @@ export async function bootstrapAppSession(
     if (roadTool.isEnabled()) {
       buildingTool.setMode('off');
       burgageTool.setEnabled(false);
+      farmFieldTool.setEnabled(false);
     }
     bridge.syncToolbar();
   };
@@ -385,16 +395,64 @@ export async function bootstrapAppSession(
   });
   burgageTool.attachTo(sceneManager.previewGroup);
 
+  const fieldFailureMessage = (reason: FarmFieldPlacementFailureReason): string => {
+    switch (reason) {
+      case 'too_small': return 'Draw a larger field.';
+      case 'too_large': return 'Draw a smaller field.';
+      case 'edge_too_short': return 'Each field edge must be at least 6 metres.';
+      case 'too_steep': return 'This ground is too steep to cultivate.';
+      case 'no_farmstead': return 'Place a farmstead first, then draw inside its working radius.';
+      case 'water': return 'Fields cannot cover open water.';
+      case 'quarry': return 'Fields cannot cover a quarry pit.';
+      case 'building': return 'Field overlaps a building.';
+      case 'residence': return 'Field overlaps a residence plot.';
+      case 'field': return 'Field overlaps existing farmland.';
+      case 'trees': return 'Clear standing trees before cultivating this field.';
+    }
+  };
+
+  farmFieldTool = new FarmFieldTool({
+    domElement: sceneManager.renderer.domElement,
+    camera: sceneManager.camera,
+    terrainProjector: sceneManager.terrainProjector,
+    getState: () => liveContext.gameState,
+    getTreeRegistry: () => liveContext.treeRegistry,
+    getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
+    isWaterAt: (x, z) => sceneManager.riverField.isRenderedWetAt(x, z),
+    isQuarryPitAt: (x, z) => sceneManager.worldLayout.quarryLayout.isBlockedForProps(x, z),
+    onCommit: async (input) => {
+      requireSessionReady();
+      await spacetimeStore.placeFarmField(input);
+    },
+    onModeChanged: () => bridge.syncToolbar(),
+    onPlacementRejected: (reason) => toastManager?.show(fieldFailureMessage(reason), { variant: 'error' }),
+    onPlacementFailed: (message) => toastManager?.show(message, { variant: 'error' }),
+    onCropChanged: (crop, recommendation) => toastManager?.show(
+      `${crop[0].toUpperCase()}${crop.slice(1)} selected · ${recommendation}.`,
+      { variant: 'info', durationMs: 2400 },
+    ),
+    isBlocked: () => isFarmFieldPlacementBlocked(placementGate),
+  });
+  farmFieldTool.attachTo(sceneManager.previewGroup);
+
   const residenceMarkers = new ResidenceMarkers(sceneManager.selectionGroup);
   const backyardGardenMarkers = new BackyardGardenMarkers(sceneManager.selectionGroup, {
     maxAnisotropy: sceneManager.textureAnisotropy,
     useSeedThree: sceneManager.rendererBackend === 'webgpu',
   });
   const burgageFencing = new BurgageFencing(sceneManager.selectionGroup);
+  const farmFieldMarkers = new FarmFieldMarkers(
+    sceneManager.selectionGroup,
+    (x, z) => sceneManager.terrain.getHeightAt(x, z),
+  );
 
   toolbar = new BuildToolbar(uiRoot, {
     onOpenRoads: toggleRoadTool,
     onBuildRoad: () => {
+      if (farmFieldTool.isEnabled()) {
+        farmFieldTool.commitDraft();
+        return;
+      }
       if (burgageTool.isEnabled()) {
         burgageTool.commitDraft();
         return;
@@ -410,6 +468,7 @@ export async function bootstrapAppSession(
       if (buildingTool.isEnabled()) {
         roadTool.setEnabled(false);
         burgageTool.setEnabled(false);
+        farmFieldTool.setEnabled(false);
       }
       bridge.syncToolbar();
     },
@@ -423,9 +482,27 @@ export async function bootstrapAppSession(
       if (burgageTool.isEnabled()) {
         roadTool.setEnabled(false);
         buildingTool.setMode('off');
+        farmFieldTool.setEnabled(false);
         toastManager?.show(
           'Draw the rectangle along the road, then use the on-screen plot controls to choose how many homes fit.',
           { variant: 'info', durationMs: 6500 },
+        );
+      }
+      bridge.syncToolbar();
+    },
+    onToggleFarmFields: () => {
+      if (!sessionGate.isReady()) {
+        toastManager?.show('SpacetimeDB is not connected.', { variant: 'error' });
+        return;
+      }
+      farmFieldTool.setEnabled(!farmFieldTool.isEnabled());
+      if (farmFieldTool.isEnabled()) {
+        roadTool.setEnabled(false);
+        buildingTool.setMode('off');
+        burgageTool.setEnabled(false);
+        toastManager?.show(
+          'Draw a baseline, set field depth, then choose rye, oats, or fallow with C.',
+          { variant: 'info', durationMs: 6000 },
         );
       }
       bridge.syncToolbar();
@@ -460,7 +537,8 @@ export async function bootstrapAppSession(
       !firstPersonController.isActive()
       && !roadTool.isEnabled()
       && !buildingTool.isEnabled()
-      && !burgageTool.isEnabled(),
+      && !burgageTool.isEnabled()
+      && !farmFieldTool.isEnabled(),
     onNewWorld: () => {
       void beginNewWorld(() => sessionGate.isReady());
     },
@@ -562,6 +640,7 @@ export async function bootstrapAppSession(
         if (roadTool.isEnabled()) roadTool.setEnabled(false);
         if (buildingTool.isEnabled()) buildingTool.setMode('off');
         if (burgageTool.isEnabled()) burgageTool.setEnabled(false);
+        if (farmFieldTool.isEnabled()) farmFieldTool.setEnabled(false);
         return;
       }
       const pos = firstPersonController.getPosition();
@@ -572,6 +651,7 @@ export async function bootstrapAppSession(
   placementGate.isRoadToolEnabled = () => roadTool.isEnabled();
   placementGate.isBuildingToolEnabled = () => buildingTool.isEnabled();
   placementGate.isBurgageToolEnabled = () => burgageTool.isEnabled();
+  placementGate.isFarmFieldToolEnabled = () => farmFieldTool.isEnabled();
   placementGate.isFirstPersonActive = () => firstPersonController.isActive();
   placementGate.isMenuOpen = () => toolbar.isGameMenuOpen();
 
@@ -609,12 +689,14 @@ export async function bootstrapAppSession(
     roadSelection,
     buildingTool,
     burgageTool,
+    farmFieldTool,
     buildingMarkers,
     deliveryAgents,
     villagers,
     residenceMarkers,
     backyardGardenMarkers,
     burgageFencing,
+    farmFieldMarkers,
     toolbar,
     toastManager,
     disposeTooltips,

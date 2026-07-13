@@ -19,6 +19,7 @@ import {
 } from '../network/spacetimedbClient.ts';
 import type { RoadNetworkSnapshot } from '../roads/RoadNetwork.ts';
 import type { BackyardGardenKind } from '../residences/backyardGarden.ts';
+import type { FarmCrop } from '../resources/types.ts';
 import { ECONOMIC_ACTIVITY_TAX_RATE_DEFAULT } from '../economy/villageEconomy.ts';
 import { DEFAULT_PARISH_POLICY, type ParishPolicyState } from '../economy/chapelParish.ts';
 import { DEFAULT_MONASTERY_POLICY, type MonasteryPolicyState } from '../economy/monasteryPolicy.ts';
@@ -35,6 +36,7 @@ import type {
   GameState,
   ResourceNodeState,
   ForagingNodeState,
+  FarmFieldState,
   ResidenceState,
   ResourceStockpile,
   TreeEntityState,
@@ -68,6 +70,7 @@ export type SpacetimeGameSnapshot = {
   foragingNodes: Map<string, ForagingNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
+  farmFields: Map<string, FarmFieldState>;
   burgageZones: Map<string, BurgageZoneState>;
   residences: Map<string, ResidenceState>;
   backyardGardens: Map<string, BackyardGardenState>;
@@ -93,6 +96,7 @@ function createEmptyTableState(): GameTableSyncState {
     foragingNodes: new Map(),
     trees: new Map(),
     buildings: new Map(),
+    farmFields: new Map(),
     burgageZones: new Map(),
     residences: new Map(),
     backyardGardens: new Map(),
@@ -144,6 +148,7 @@ export class SpacetimeGameStore {
       foragingNodes: new Map(state.foragingNodes),
       trees: new Map(state.trees),
       buildings: new Map(state.buildings),
+      farmFields: new Map(state.farmFields),
       burgageZones: new Map(state.burgageZones),
       residences: new Map(state.residences),
       backyardGardens: new Map(state.backyardGardens),
@@ -211,6 +216,7 @@ export class SpacetimeGameStore {
       foragingNodes: new Map(state.foragingNodes),
       trees: new Map(state.trees),
       buildings: new Map(state.buildings),
+      farmFields: new Map(state.farmFields),
       burgageZones: new Map(state.burgageZones),
       residences: new Map(state.residences),
       backyardGardens: new Map(state.backyardGardens),
@@ -249,6 +255,27 @@ export class SpacetimeGameStore {
 
   placeBuilding(kind: BuildingKind, x: number, z: number): Promise<void> {
     return spacetimeReducers.placeBuilding(kind, x, z);
+  }
+
+  placeFarmField(input: {
+    farmsteadId: string;
+    corners: Array<{ x: number; z: number }>;
+    crop: FarmCrop;
+    averageSlopeDegrees: number;
+  }): Promise<void> {
+    return spacetimeReducers.placeFarmField(input);
+  }
+
+  setFarmFieldCrop(fieldId: string, crop: FarmCrop): Promise<void> {
+    return spacetimeReducers.setFarmFieldCrop(fieldId, crop);
+  }
+
+  setFarmFieldPriority(fieldId: string, priority: number): Promise<void> {
+    return spacetimeReducers.setFarmFieldPriority(fieldId, priority);
+  }
+
+  demolishFarmField(fieldId: string): Promise<void> {
+    return spacetimeReducers.demolishFarmField(fieldId);
   }
 
   setEconomicActivityTaxRate(taxRate: number): Promise<void> {
@@ -376,6 +403,7 @@ export class SpacetimeGameStore {
       connection.subscriptionBuilder().subscribe('SELECT * FROM foraging_node');
       connection.subscriptionBuilder().subscribe('SELECT * FROM tree_entity');
       connection.subscriptionBuilder().subscribe('SELECT * FROM building');
+      connection.subscriptionBuilder().subscribe('SELECT * FROM farm_field');
       connection.subscriptionBuilder().subscribe('SELECT * FROM burgage_zone');
       connection.subscriptionBuilder().subscribe('SELECT * FROM residence');
       connection.subscriptionBuilder().subscribe('SELECT * FROM backyard_garden');

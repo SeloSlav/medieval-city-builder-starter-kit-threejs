@@ -13,7 +13,8 @@ import {
 } from './buildingCommon.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
 import { formatTripDestinationLabel, formatTripPhaseLabel } from '../../logistics/deliveryTrips.ts';
-import { hydrologyGradeLabel, sampleHydrologyScore, wellCapacityFromHydrology } from '../../hydrology/sampleHydrology.ts';
+import { hydrologyGradeLabel, wellCapacityFromHydrology } from '../../hydrology/sampleHydrology.ts';
+import { sampleAuthoritativeHydrologyScore } from '../../hydrology/sampleAuthoritativeHydrology.ts';
 import {
   formatDeliveryRoadDistance,
   formatDeliveryTripDuration,
@@ -42,7 +43,7 @@ export function renderWellInspector(
   const { building } = target;
   const label = context.worldQueries.getBuildingLabel(building.kind);
   const cost = getBuildingCost(building.kind);
-  const hydrology = sampleHydrologyScore(context.worldQueries.getRiverField(), building.x, building.z);
+  const hydrology = sampleAuthoritativeHydrologyScore(building.x, building.z);
   const capacity = building.waterCapacity > 0
     ? building.waterCapacity
     : wellCapacityFromHydrology(BUILDING_STORAGE_CAPS.well.water ?? 100, hydrology);
@@ -50,6 +51,7 @@ export function renderWellInspector(
   const crew = wellLaborSplit(building.assignedLabor);
   const refillPerSec = WELL_BASE_REFILL_PER_SEC * hydrology * Math.max(crew.processing, lodgeLaborAlternates(building.assignedLabor) ? 1 : 0);
   const claimedResidences = context.worldQueries.getClaimedResidencesForWell(building);
+  const industrialConsumers = context.worldQueries.getRoadConnectedWaterConsumers(building);
   const nextDeliveryTarget = context.worldQueries.getNextWaterDeliveryTargetForWell(building);
   const nextTargetLabel = formatNextWaterTargetLabel(nextDeliveryTarget);
   const roadAccess = context.worldQueries.getRoadAccessLabel(building.x, building.z);
@@ -109,6 +111,8 @@ export function renderWellInspector(
       <li><span>Refill rate</span><span>${refillPerSec.toFixed(2)} / sec</span></li>
       ${buildingWorkRadiusRow(building.kind)}
       <li><span>Road-linked homes</span><span>${claimedResidences.length === 0 ? 'None in range' : `${claimedResidences.length} claimed`}</span></li>
+      <li><span>Workshop demand</span><span>${industrialConsumers.length === 0 ? 'None' : `${industrialConsumers.filter((item) => item.kind === 'brewery').length} brewhouse · ${industrialConsumers.filter((item) => item.kind === 'granary').length} granary`}</span></li>
+      <li><span>Supplies</span><span>Homes, brewhouses, and granary bakeries</span></li>
       ${deliveryRow}
     `,
     demolish: {

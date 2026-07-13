@@ -18,6 +18,15 @@ export function gardenClientId(serverId: bigint | number): string {
   return `garden-${serverId}`;
 }
 
+export function farmFieldClientId(serverId: bigint | number): string {
+  return `farm-field-${serverId}`;
+}
+
+export function parseFarmFieldServerId(fieldId: string): bigint | null {
+  const match = /^farm-field-(\d+)$/.exec(fieldId);
+  return match ? BigInt(match[1]) : null;
+}
+
 export function parseBuildingServerId(buildingId: string): bigint | null {
   const match = /^building-(\d+)$/.exec(buildingId);
   if (!match) return null;

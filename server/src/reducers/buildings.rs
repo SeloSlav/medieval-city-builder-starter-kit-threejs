@@ -1,6 +1,7 @@
 use spacetimedb::{reducer, ReducerContext, Table};
 
 use crate::building_defs::{building_def, building_def_or_err};
+use crate::burgage::{zone_overlaps_footprint, Point2};
 use crate::balance_generated::CARPENTER_TIMBER_COST_MULTIPLIER;
 use crate::db::*;
 use crate::economy::{
@@ -18,7 +19,7 @@ use crate::placement_validation::{
 };
 use crate::roads::{has_building_road_access, load_owner_road_network};
 use crate::simulation::drain_trips_for_building;
-use crate::tables::{Building, WorldConfig};
+use crate::tables::{farm_field, Building, WorldConfig};
 
 fn is_within_same_kind_work_radius(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
     for building in ctx.db.building().iter() {
@@ -52,6 +53,19 @@ fn is_too_close_to_buildings(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -
         }
     }
     false
+}
+
+fn building_overlaps_farm_field(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
+    let Some(def) = building_def(kind) else { return false; };
+    ctx.db.farm_field().iter().any(|field| {
+        let polygon = [
+            Point2 { x: field.corner_ax, z: field.corner_az },
+            Point2 { x: field.corner_bx, z: field.corner_bz },
+            Point2 { x: field.corner_cx, z: field.corner_cz },
+            Point2 { x: field.corner_dx, z: field.corner_dz },
+        ];
+        zone_overlaps_footprint(&polygon, x, z, def.pick_radius)
+    })
 }
 
 fn has_mature_tree_in_radius(ctx: &ReducerContext, x: f64, z: f64, radius: f64) -> bool {
@@ -107,6 +121,9 @@ fn has_foraging_in_radius(
 
 #[reducer]
 pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Result<(), String> {
+    if kind == "grain_field" {
+        return Err("Use the field-drawing tool to cultivate land around a farmstead.".to_string());
+    }
     let def = building_def_or_err(&kind)?;
     let owner = ctx.sender();
     ensure_player_resources(ctx, owner);
@@ -148,6 +165,9 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
 
     if building_overlaps_residence_zone(ctx, &kind, x, z) {
         return Err("Cannot build inside a residence plot.".to_string());
+    }
+    if building_overlaps_farm_field(ctx, &kind, x, z) {
+        return Err("Cannot build inside cultivated farmland.".to_string());
     }
 
     if building_overlaps_road_surface(ctx, owner, &kind, x, z) {
@@ -286,6 +306,11 @@ pub fn demolish_building(ctx: &ReducerContext, building_id: u64) -> Result<(), S
 
     if building.owner != owner {
         return Err("You do not own this building.".to_string());
+    }
+    if building.kind == "threshing_barn"
+        && ctx.db.farm_field().farmstead_id().filter(&building_id).next().is_some()
+    {
+        return Err("Remove or reassign this farmstead's fields first.".to_string());
     }
 
     let trip_cargo = drain_trips_for_building(ctx, building_id);

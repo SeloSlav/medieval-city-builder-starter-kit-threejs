@@ -211,6 +211,7 @@ export class BurgageTool {
       if (validation.reason === 'no_road_frontage') return 'Frontage must face a connected road';
       if (validation.reason === 'overlaps_existing') return 'Overlaps an existing residence zone — adjust shape or plot count';
       if (validation.reason === 'overlaps_building') return 'Overlaps a building — choose a different spot';
+      if (validation.reason === 'overlaps_farm_field') return 'Overlaps cultivated farmland — choose a different spot';
       return 'Adjust plot shape or plot count';
     }
     const count = validation.layout.residences.length;
