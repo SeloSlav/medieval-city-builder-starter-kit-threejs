@@ -385,7 +385,10 @@ export async function bootstrapAppSession(
   burgageTool.attachTo(sceneManager.previewGroup);
 
   const residenceMarkers = new ResidenceMarkers(sceneManager.selectionGroup);
-  const backyardGardenMarkers = new BackyardGardenMarkers(sceneManager.selectionGroup);
+  const backyardGardenMarkers = new BackyardGardenMarkers(sceneManager.selectionGroup, {
+    maxAnisotropy: sceneManager.textureAnisotropy,
+    useSeedThree: sceneManager.rendererBackend === 'webgpu',
+  });
   const burgageFencing = new BurgageFencing(sceneManager.selectionGroup);
 
   toolbar = new BuildToolbar(uiRoot, {

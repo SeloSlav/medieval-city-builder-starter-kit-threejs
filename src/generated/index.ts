@@ -52,8 +52,10 @@ import RemoveRoadEdgeReducer from "./remove_road_edge_reducer";
 import ResetWorldReducer from "./reset_world_reducer";
 import SetChapelParishPolicyReducer from "./set_chapel_parish_policy_reducer";
 import SetEconomicActivityTaxRateReducer from "./set_economic_activity_tax_rate_reducer";
+import SetMonasteryPolicyReducer from "./set_monastery_policy_reducer";
 import SyncRoadNetworkReducer from "./sync_road_network_reducer";
 import TickSimReducer from "./tick_sim_reducer";
+import UpgradeResidenceReducer from "./upgrade_residence_reducer";
 
 // Import all procedure arg schemas
 
@@ -286,8 +288,10 @@ const reducersSchema = __reducers(
   __reducerSchema("reset_world", ResetWorldReducer),
   __reducerSchema("set_chapel_parish_policy", SetChapelParishPolicyReducer),
   __reducerSchema("set_economic_activity_tax_rate", SetEconomicActivityTaxRateReducer),
+  __reducerSchema("set_monastery_policy", SetMonasteryPolicyReducer),
   __reducerSchema("sync_road_network", SyncRoadNetworkReducer),
   __reducerSchema("tick_sim", TickSimReducer),
+  __reducerSchema("upgrade_residence", UpgradeResidenceReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

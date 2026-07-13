@@ -1,11 +1,13 @@
-export type ResidenceNeedKind = 'firewood' | 'water' | 'food';
+export type ResidenceNeedKind = 'firewood' | 'water' | 'food' | 'ale' | 'preservedFood';
 
-export const RESIDENCE_NEED_KINDS: readonly ResidenceNeedKind[] = ['firewood', 'water', 'food'];
+export const RESIDENCE_NEED_KINDS: readonly ResidenceNeedKind[] = ['firewood', 'water', 'food', 'preservedFood', 'ale'];
 
 export const RESIDENCE_NEED_KIND_IDS: Record<ResidenceNeedKind, number> = {
   firewood: 0,
   water: 1,
   food: 2,
+  ale: 6,
+  preservedFood: 7,
 };
 
 export type ResidenceNeedRecord = {
@@ -50,6 +52,8 @@ export function createDefaultNeeds(): ResidenceNeedsState {
     firewood: { stock: 0, deficitTicks: 0 },
     water: { stock: 0, deficitTicks: 0 },
     food: { stock: 0, deficitTicks: 0 },
+    ale: { stock: 0, deficitTicks: 0 },
+    preservedFood: { stock: 0, deficitTicks: 0 },
   };
 }
 
@@ -61,6 +65,10 @@ export function needKindFromId(id: number): ResidenceNeedKind | null {
       return 'water';
     case RESIDENCE_NEED_KIND_IDS.food:
       return 'food';
+    case RESIDENCE_NEED_KIND_IDS.ale:
+      return 'ale';
+    case RESIDENCE_NEED_KIND_IDS.preservedFood:
+      return 'preservedFood';
     default:
       return null;
   }

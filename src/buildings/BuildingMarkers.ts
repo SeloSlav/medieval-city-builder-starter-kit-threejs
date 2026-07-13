@@ -226,6 +226,17 @@ function workExtentColor(kind: BuildingKind): number {
       return 0xe8e2d8;
     case 'marketplace':
       return 0xd4a85a;
+    case 'grain_field': return 0xc6a34b;
+    case 'threshing_barn': return 0xb8894c;
+    case 'monastery': return 0xe4dfd2;
+    case 'brewery': return 0xb56b42;
+    case 'smokehouse': return 0x806451;
+    case 'granary': return 0xc19b58;
+    case 'apiary': return 0xd3b84d;
+    case 'watermill': return 0x4f91ae;
+    case 'carpenter': return 0x9b7046;
+    case 'ferry_landing': return 0x4d7f93;
+    case 'vineyard': return 0x7b7040;
     default: {
       const unreachable: never = kind;
       return unreachable;

@@ -91,6 +91,12 @@ export async function demolishResidence(residenceId: string): Promise<void> {
   await callReducer('demolishResidence', 'demolish_residence', { residenceId: serverId });
 }
 
+export async function upgradeResidence(residenceId: string): Promise<void> {
+  const serverId = parseResidenceServerId(residenceId);
+  if (serverId === null) throw new Error('Invalid residence id.');
+  await callReducer('upgradeResidence', 'upgrade_residence', { residenceId: serverId });
+}
+
 export async function placeBuilding(kind: BuildingKind, x: number, z: number): Promise<void> {
   await callReducer('placeBuilding', 'place_building', { kind, x, z });
 }

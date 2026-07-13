@@ -37,6 +37,18 @@ pub struct PlayerResources {
     /// Treasury food from demolished suppliers and undeposited delivery overflow.
     #[default(0.0)]
     pub food: f64,
+    #[default(0.0)]
+    pub grain: f64,
+    #[default(0.0)]
+    pub flour: f64,
+    #[default(0.0)]
+    pub ale: f64,
+    #[default(0.0)]
+    pub preserved_food: f64,
+    #[default(0.0)]
+    pub honey: f64,
+    #[default(0.0)]
+    pub wine: f64,
     /// Mayor tax rate on village economic activity (0–1 fraction).
     #[default(0.18)]
     pub economic_activity_tax_rate: f64,
@@ -49,6 +61,12 @@ pub struct PlayerResources {
     /// When true and a staffed chapel exists, villagers rest on Sundays.
     #[default(false)]
     pub sabbath_observance_enabled: bool,
+    /// Fraction of parish tithe income transferred to a linked Pauline monastery.
+    #[default(0.3)]
+    pub monastery_tithe_share: f64,
+    /// When true, linked monasteries observe the three annual settlement feast days.
+    #[default(true)]
+    pub monastery_feasts_enabled: bool,
     /// Lifetime gold manually collected from chapel coffers.
     #[default(0.0)]
     pub parish_manual_collect_total: f64,
@@ -64,6 +82,12 @@ pub struct PlayerResources {
     /// Lifetime poor-relief charity paid from chapel coffers.
     #[default(0.0)]
     pub parish_charity_paid_total: f64,
+    #[default(0.0)]
+    pub monastery_tithe_paid_total: f64,
+    #[default(0.0)]
+    pub monastery_pilgrimage_gold_total: f64,
+    #[default(0.0)]
+    pub monastery_food_charity_total: f64,
 }
 
 #[spacetimedb::table(accessor = quarry, public)]
@@ -119,6 +143,18 @@ pub struct Building {
     pub stone: f64,
     pub water: f64,
     pub food: f64,
+    #[default(0.0)]
+    pub grain: f64,
+    #[default(0.0)]
+    pub flour: f64,
+    #[default(0.0)]
+    pub ale: f64,
+    #[default(0.0)]
+    pub preserved_food: f64,
+    #[default(0.0)]
+    pub honey: f64,
+    #[default(0.0)]
+    pub wine: f64,
     pub water_capacity: f64,
     pub assigned_labor: u32,
     /// Chapel coffer gold (tithes); other buildings keep this at zero.
@@ -164,6 +200,9 @@ pub struct Residence {
     pub yaw: f64,
     pub population: u32,
     pub population_capacity: u32,
+    /// 1 = cottage, 2 = house, 3 = prosperous house.
+    #[default(1)]
+    pub tier: u8,
     pub settlement_ticks: u32,
     pub abandoned: bool,
     /// Gold saved by the household from marketplace garden sales (capped).
@@ -241,7 +280,7 @@ pub struct DeliveryTrip {
     pub destination_kind: u8,
     /// Lodge or other building receiving a supply haul when `destination_kind == 1`.
     pub target_building_id: u64,
-    /// 0 = firewood, 1 = water, 2 = food (matches `ResidenceNeedKind`), 3 = timber
+    /// 0 = firewood, 1 = water, 2 = food, 3 = timber, 4+ = expanded commodities.
     pub cargo_kind: u8,
     /// Cargo still on the cart (decreases when unloaded at residence).
     pub amount: f64,

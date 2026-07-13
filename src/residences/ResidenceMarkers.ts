@@ -83,6 +83,13 @@ function dimensionsForArchetype(archetype: ResidenceArchetype): HouseDimensions 
   }
 }
 
+function dimensionsForTier(archetype: ResidenceArchetype, tier: 1 | 2 | 3): HouseDimensions {
+  const base = dimensionsForArchetype(archetype);
+  if (tier === 1) return { width: base.width * 0.82, depth: base.depth * 0.82, foundationHeight: 0.38, groundHeight: 2.18, upperHeight: 0.62, ridgeHeight: 1.85 };
+  if (tier === 3) return { width: base.width * 1.22, depth: base.depth * 1.14, foundationHeight: 0.62, groundHeight: 2.58, upperHeight: 2.55, ridgeHeight: 2.78 };
+  return base;
+}
+
 function residenceTrimMaterial(trim: ResidenceTrimColor): THREE.MeshStandardMaterial {
   const color = trim === 'red'
     ? 0x9f4538
@@ -339,10 +346,10 @@ function addWorkingLeanTo(
   );
 }
 
-export function createResidenceMesh(seed = 0): THREE.Group {
+export function createResidenceMesh(seed = 0, tier: 1 | 2 | 3 = 1): THREE.Group {
   const appearance = pickResidenceAppearance(seed);
   const { facade, roof, archetype, entrySide, trim } = appearance;
-  const dimensions = dimensionsForArchetype(archetype);
+  const dimensions = dimensionsForTier(archetype, tier);
   const wallMaterial = residenceFacadeMaterial(facade);
   const roofSurfaceMaterial = residenceRoofMaterial(roof);
   const shutterMaterial = residenceTrimMaterial(trim);
@@ -352,6 +359,7 @@ export function createResidenceMesh(seed = 0): THREE.Group {
   group.name = 'Residence';
   group.userData.windowMaterial = windowMaterial;
   group.userData.residenceArchetype = archetype;
+  group.userData.residenceTier = tier;
 
   const { width, depth, foundationHeight, groundHeight, upperHeight, ridgeHeight } = dimensions;
   const halfW = width * 0.5;
@@ -409,11 +417,11 @@ export function createResidenceMesh(seed = 0): THREE.Group {
     false,
   );
 
-  if (archetype === 'timber_balcony') {
+  if (tier > 1 && archetype === 'timber_balcony') {
     addFrontWindow(group, windowMaterial, shutterMaterial, -entrySide * 1.35, groundTop + upperHeight * 0.55, frontZ + 0.02);
     addPlankDoor(group, entrySide * 0.82, groundTop + 0.08, frontZ + 0.03, 0.86, 1.84);
     addTimberBalcony(group, entrySide, frontZ, groundTop + 0.08);
-  } else {
+  } else if (tier > 1) {
     addFrontWindow(group, windowMaterial, shutterMaterial, -1.38, groundTop + upperHeight * 0.54, frontZ + 0.02);
     addFrontWindow(group, windowMaterial, shutterMaterial, 1.38, groundTop + upperHeight * 0.54, frontZ + 0.02);
   }
@@ -421,7 +429,7 @@ export function createResidenceMesh(seed = 0): THREE.Group {
   for (const side of [-1, 1] as const) {
     const x = side * (halfW - 0.035);
     addSideWindow(group, windowMaterial, side, x, foundationHeight + groundHeight * 0.56, -0.35, 0.74, 0.98);
-    addSideWindow(group, windowMaterial, side, x, groundTop + upperHeight * 0.54, 0.42, 0.78, 1.05);
+    if (tier > 1) addSideWindow(group, windowMaterial, side, x, groundTop + upperHeight * 0.54, 0.42, 0.78, 1.05);
   }
 
   for (let step = 0; step < 2; step++) {
@@ -472,9 +480,13 @@ export function createResidenceMesh(seed = 0): THREE.Group {
     }
   }
 
-  if (archetype === 'stone_portal') {
+  if (tier > 1 && archetype === 'stone_portal') {
     addStonePortalPorch(group, doorX, frontZ, foundationHeight);
   } else if (archetype === 'working_lean_to') {
+    addWorkingLeanTo(group, entrySide === -1 ? 1 : -1, halfW, foundationHeight);
+  }
+
+  if (tier === 3 && archetype !== 'working_lean_to') {
     addWorkingLeanTo(group, entrySide === -1 ? 1 : -1, halfW, foundationHeight);
   }
 
@@ -513,7 +525,7 @@ export function createResidenceMesh(seed = 0): THREE.Group {
 const PREVIEW_OPACITY = 0.72;
 
 export function createResidencePreviewMesh(seed = 0): THREE.Group {
-  const mesh = createResidenceMesh(seed);
+  const mesh = createResidenceMesh(seed, 1);
   mesh.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const source = child.material;
@@ -585,10 +597,18 @@ export class ResidenceMarkers {
     for (const residence of residences) {
       nextIds.add(residence.id);
       let marker = this.meshes.get(residence.id);
+      if (marker && marker.userData.residenceTier !== residence.tier) {
+        this.root.remove(marker);
+        disposeGroup(marker);
+        this.meshes.delete(residence.id);
+        this.smokeEmitters.get(residence.id)?.dispose();
+        this.smokeEmitters.delete(residence.id);
+        marker = undefined;
+      }
       if (!marker) {
         const appearanceSeed = hashStringSeed(residence.id);
-        marker = createResidenceMesh(appearanceSeed);
-        const shadowProxy = createResidenceShadowProxy();
+        marker = createResidenceMesh(appearanceSeed, residence.tier);
+        const shadowProxy = createResidenceShadowProxy(residence.tier);
         shadowProxy.castShadow = areBuildingShadowsEnabled();
         marker.add(shadowProxy);
         this.root.add(marker);
@@ -616,7 +636,7 @@ export class ResidenceMarkers {
       this.applyWindowGlowForResidence(marker, residence.id);
       syncFirewoodPile(marker, getNeedStock(residence.needs, 'firewood'));
       if (!marker.getObjectByName('Building shadow proxy')) {
-        const shadowProxy = createResidenceShadowProxy();
+        const shadowProxy = createResidenceShadowProxy(residence.tier);
         shadowProxy.castShadow = areBuildingShadowsEnabled();
         marker.add(shadowProxy);
       }

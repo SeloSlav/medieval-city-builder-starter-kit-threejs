@@ -12,6 +12,13 @@ mod population;
 mod storage;
 mod parish_accounting;
 mod village_economy;
+mod commodities;
+
+pub use commodities::{
+    building_commodity_cap, building_commodity_room, building_commodity_stock,
+    credit_treasury_commodity, deposit_building_commodity, withdraw_building_commodity,
+    CommodityKind,
+};
 
 pub use marketplace_trade::execute_marketplace_trade;
 pub use marketplace_orders::{
@@ -31,7 +38,7 @@ pub use chapel_coffer::{
 pub use parish_accounting::{clamp_chapel_coffer_reserve_gold, record_parish_ledger, ParishLedgerKind};
 pub use garden_market_activity::garden_market_activity;
 pub use household_wealth::{credit_residence_wealth, debit_residence_wealth};
-pub use population::{assign_building_labor, residence_population_for_parcel};
+pub use population::assign_building_labor;
 pub use storage::{
     building_food_storage_cap, building_storage_caps, building_water_storage_cap, credit_treasury_firewood,
     credit_treasury_food, credit_treasury_gold, credit_treasury_stone, credit_treasury_timber, credit_treasury_water,

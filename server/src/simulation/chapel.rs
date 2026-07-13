@@ -43,12 +43,59 @@ pub fn step_chapels(
             continue;
         }
 
-        let deposited = deposit_chapel_coffer(ctx, chapel.id, paid);
-        let overflow = paid - deposited;
+        let monastery_share = transfer_monastery_tithe(ctx, tick, chapel, paid);
+        let parish_share = (paid - monastery_share).max(0.0);
+        let deposited = deposit_chapel_coffer(ctx, chapel.id, parish_share);
+        let overflow = parish_share - deposited;
         if overflow > 1e-9 {
             credit_treasury_gold(ctx, residence.owner, overflow);
         }
     }
+}
+
+fn transfer_monastery_tithe(
+    ctx: &ReducerContext,
+    tick: &SimTickContext,
+    chapel: &Building,
+    paid: f64,
+) -> f64 {
+    let Some(network) = tick.road_network(chapel.owner) else {
+        return 0.0;
+    };
+    let share = ctx
+        .db
+        .player_resources()
+        .owner()
+        .find(&chapel.owner)
+        .map(|resources| resources.monastery_tithe_share.clamp(0.0, 0.8))
+        .unwrap_or(0.0);
+    if share <= 1e-9 {
+        return 0.0;
+    }
+    let mut monasteries: Vec<Building> = ctx
+        .db
+        .building()
+        .owner()
+        .filter(&chapel.owner)
+        .filter(|building| building.kind == "monastery")
+        .filter(|building| {
+            network
+                .road_path_distance(chapel.x, chapel.z, building.x, building.z)
+                .is_some()
+        })
+        .collect();
+    monasteries.sort_by_key(|building| building.id);
+    let Some(mut monastery) = monasteries.into_iter().next() else {
+        return 0.0;
+    };
+    let transferred = paid * share;
+    monastery.gold += transferred;
+    ctx.db.building().id().update(monastery);
+    if let Some(mut resources) = ctx.db.player_resources().owner().find(&chapel.owner) {
+        resources.monastery_tithe_paid_total += transferred;
+        ctx.db.player_resources().owner().update(resources);
+    }
+    transferred
 }
 
 fn roll_chapel_attendance(residence_id: u64, sim_tick: u64, chance: f64) -> bool {

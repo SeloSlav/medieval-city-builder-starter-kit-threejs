@@ -79,6 +79,10 @@ export class SceneManager {
   get riverField() {
     return this.riverSystem.field;
   }
+
+  get textureAnisotropy(): number {
+    return this.maxAnisotropy;
+  }
   private readonly roadGroup = new THREE.Group();
   private readonly junctionGroup = new THREE.Group();
   private readonly edgeVisuals = new Map<string, { revision: number; group: THREE.Group }>();

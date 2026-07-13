@@ -38,6 +38,18 @@ export function formatResourceAmount(kind: ResourceKind, amount: number): string
       return `${Math.round(amount)} berries`;
     case 'food':
       return `${Math.round(amount)} food`;
+    case 'grain':
+      return `${Math.round(amount)} grain`;
+    case 'flour':
+      return `${Math.round(amount)} flour`;
+    case 'ale':
+      return `${Math.round(amount)} ale`;
+    case 'preservedFood':
+      return `${Math.round(amount)} preserved food`;
+    case 'honey':
+      return `${Math.round(amount)} honey`;
+    case 'wine':
+      return `${Math.round(amount)} wine`;
     default: {
       const unreachable: never = kind;
       return unreachable;

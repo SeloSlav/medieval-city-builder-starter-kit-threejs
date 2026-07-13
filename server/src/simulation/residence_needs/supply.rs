@@ -1,5 +1,6 @@
 use spacetimedb::ReducerContext;
 
+use crate::db::*;
 use crate::simulation::road_logistics::{claim_residences_for_food_suppliers, owner_food_suppliers};
 use crate::simulation::residence_needs::kinds::ResidenceNeedKind;
 use crate::simulation::tick_context::SimTickContext;
@@ -20,6 +21,8 @@ impl ResidenceNeedSupplyContext {
             ResidenceNeedKind::Firewood => 0,
             ResidenceNeedKind::Water => 1,
             ResidenceNeedKind::Food => 2,
+            ResidenceNeedKind::PreservedFood => 3,
+            ResidenceNeedKind::Ale => 4,
         }
     }
 }
@@ -44,11 +47,41 @@ pub fn build_supply_context(
         let claims = claim_residences_for_food_suppliers(network, &suppliers, std::slice::from_ref(residence));
         claims.contains_key(&residence.id)
     });
+    let has_preserved_food_route = has_specialty_route(
+        tick,
+        ctx,
+        residence,
+        &["smokehouse", "granary", "monastery"],
+    );
+    let has_ale_route = has_specialty_route(
+        tick,
+        ctx,
+        residence,
+        &["brewery", "monastery"],
+    );
 
     let mut routes = [false; ResidenceNeedKind::ALL.len()];
     routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::Firewood)] =
         has_firewood_route;
     routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::Water)] = has_water_route;
     routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::Food)] = has_food_route;
+    routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::PreservedFood)] =
+        has_preserved_food_route;
+    routes[ResidenceNeedSupplyContext::index_for(ResidenceNeedKind::Ale)] = has_ale_route;
     ResidenceNeedSupplyContext { routes }
+}
+
+fn has_specialty_route(
+    tick: &SimTickContext,
+    ctx: &ReducerContext,
+    residence: &Residence,
+    supplier_kinds: &[&str],
+) -> bool {
+    let Some(network) = tick.road_network(residence.owner) else {
+        return false;
+    };
+    ctx.db.building().owner().filter(&residence.owner).any(|building| {
+        supplier_kinds.contains(&building.kind.as_str())
+            && network.road_connected(building.x, building.z, residence.x, residence.z)
+    })
 }

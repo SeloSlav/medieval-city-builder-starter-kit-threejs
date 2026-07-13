@@ -11,7 +11,17 @@ import {
   residenceFirewoodRunwayDays,
   SIM_TICK_SECONDS,
 } from '../resourceTotals.ts';
-import { RESIDENCE_FOOD_CAPACITY } from '../../generated/gameBalance.ts';
+import {
+  RESIDENCE_ALE_CAPACITY,
+  RESIDENCE_FOOD_CAPACITY,
+  RESIDENCE_PRESERVED_FOOD_CAPACITY,
+  RESIDENCE_TIER2_GOLD_COST,
+  RESIDENCE_TIER2_STONE_COST,
+  RESIDENCE_TIER2_TIMBER_COST,
+  RESIDENCE_TIER3_GOLD_COST,
+  RESIDENCE_TIER3_STONE_COST,
+  RESIDENCE_TIER3_TIMBER_COST,
+} from '../../generated/gameBalance.ts';
 import {
   formatFoodRunwayDays,
   residenceFoodRunwayDays,
@@ -110,6 +120,7 @@ export function renderResidenceInspector(
       <li><span>Residences</span><span>${residenceCount}</span></li>
       <li><span>Parcel</span><span>#${residence.parcelIndex + 1}</span></li>
       <li><span>Population</span><span>${residence.abandoned ? 0 : residence.population} / ${capacity}</span></li>
+      <li><span>House tier</span><span>${residence.tier} / 3</span></li>
       <li><span>Household wealth</span><span>${formatHouseholdWealth(residence.householdWealth)}</span></li>
       ${parishEconomy.hasChapelAccess
         ? `<li><span>Parish tithe</span><span>~${parishEconomy.tithePerDay.toFixed(1)} gold / day when attending (${parishEconomy.attendancePercent}% chance${parishEconomy.wealthLimited ? ', wealth-limited' : ''}) → chapel coffer</span></li>`
@@ -123,6 +134,8 @@ export function renderResidenceInspector(
       <li><span>Water runway</span><span>${waterRunwayLabel}</span></li>
       <li><span>Food stock</span><span>${Math.round(getNeedStock(residence.needs, 'food'))} / ${RESIDENCE_FOOD_CAPACITY}</span></li>
       <li><span>Food runway</span><span>${foodRunwayLabel}</span></li>
+      ${residence.tier >= 2 ? `<li><span>Preserved food</span><span>${Math.round(getNeedStock(residence.needs, 'preservedFood'))} / ${RESIDENCE_PRESERVED_FOOD_CAPACITY}</span></li>` : ''}
+      ${residence.tier >= 3 ? `<li><span>Ale</span><span>${Math.round(getNeedStock(residence.needs, 'ale'))} / ${RESIDENCE_ALE_CAPACITY}</span></li>` : ''}
       <li><span>Serving lodge</span><span>${lodgeLabel}</span></li>
       <li><span>Serving well</span><span>${wellLabel}</span></li>
       <li><span>Serving food supplier</span><span>${foodSupplierLabel}</span></li>
@@ -143,7 +156,17 @@ export function renderResidenceInspector(
         : undefined,
     },
     labor: hiddenLabor(),
+    supplementalPanelHtml: residence.tier < 3 ? residenceUpgradePanel(residence.tier) : '<p class="resource-inspector-note">This household has reached tier 3.</p>',
   };
+}
+
+function residenceUpgradePanel(tier: 1 | 2 | 3): string {
+  const next = tier + 1;
+  const costs = tier === 1
+    ? [RESIDENCE_TIER2_TIMBER_COST, RESIDENCE_TIER2_STONE_COST, RESIDENCE_TIER2_GOLD_COST]
+    : [RESIDENCE_TIER3_TIMBER_COST, RESIDENCE_TIER3_STONE_COST, RESIDENCE_TIER3_GOLD_COST];
+  const requirement = tier === 1 ? 'Requires preserved-food access.' : 'Requires ale access.';
+  return `<button type="button" class="resource-action-button" data-action="upgrade-residence">Upgrade to tier ${next}</button><p class="resource-inspector-note">${costs[0]} timber · ${costs[1]} stone · ${costs[2]} gold. ${requirement}</p>`;
 }
 
 function formatSettleEta(seconds: number): string {

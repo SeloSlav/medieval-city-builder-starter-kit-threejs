@@ -4,6 +4,7 @@ pub mod food;
 pub mod state;
 mod supply;
 pub mod water;
+pub mod provisions;
 
 pub use kinds::ResidenceNeedKind;
 pub use state::{load_needs, need_stock};
@@ -40,6 +41,9 @@ pub fn step_residence_needs(
     let mut any_unmet = false;
 
     for kind in ResidenceNeedKind::ALL {
+        if !kind.is_active_for_tier(residence.tier) {
+            continue;
+        }
         let Some(need) = find_need_mut(&mut needs, kind) else {
             continue;
         };
@@ -83,7 +87,7 @@ pub fn step_residence_recovery(
 
     let needs = load_needs(ctx, residence.id);
     let supply = supply::build_supply_context(tick, ctx, &residence);
-    if !recovery_ready(&needs, &supply, has_chapel_access) {
+    if !recovery_ready(&needs, &supply, residence.tier, has_chapel_access) {
         return;
     }
 
@@ -125,10 +129,12 @@ pub fn clear_residence_needs(ctx: &ReducerContext, residence_id: u64) {
 fn recovery_ready(
     needs: &[NeedState],
     supply: &supply::ResidenceNeedSupplyContext,
+    tier: u8,
     has_chapel_access: bool,
 ) -> bool {
     let ready_count = ResidenceNeedKind::ALL
         .into_iter()
+        .filter(|kind| kind.is_active_for_tier(tier))
         .filter(|kind| {
             let Some(need) = state::find_need(needs, *kind) else {
                 return false;
@@ -137,7 +143,11 @@ fn recovery_ready(
         })
         .count();
 
-    ready_count >= recovery_needs_required(has_chapel_access) as usize
+    let active_count = ResidenceNeedKind::ALL
+        .into_iter()
+        .filter(|kind| kind.is_active_for_tier(tier))
+        .count();
+    ready_count >= (recovery_needs_required(has_chapel_access) as usize).min(active_count)
 }
 
 enum ConsumeResult {
@@ -163,6 +173,14 @@ fn consume_need(
                 food::ConsumeOutcome::Met(updated) => ConsumeResult::Met(updated),
                 food::ConsumeOutcome::Unmet => ConsumeResult::Unmet,
             },
+            ResidenceNeedKind::Ale => match provisions::consume_ale(residence, need) {
+                provisions::ConsumeOutcome::Met(updated) => ConsumeResult::Met(updated),
+                provisions::ConsumeOutcome::Unmet => ConsumeResult::Unmet,
+            },
+            ResidenceNeedKind::PreservedFood => match provisions::consume_preserved_food(residence, need) {
+                provisions::ConsumeOutcome::Met(updated) => ConsumeResult::Met(updated),
+                provisions::ConsumeOutcome::Unmet => ConsumeResult::Unmet,
+            },
         }
 }
 
@@ -171,6 +189,7 @@ fn on_unmet_need(kind: ResidenceNeedKind, need: &NeedState) -> NeedState {
         ResidenceNeedKind::Firewood => firewood::on_unmet(need),
         ResidenceNeedKind::Water => water::on_unmet(need),
         ResidenceNeedKind::Food => food::on_unmet(need),
+        ResidenceNeedKind::Ale | ResidenceNeedKind::PreservedFood => provisions::on_unmet(need),
     }
 }
 
@@ -185,6 +204,9 @@ fn evaluate_recovery(
         ResidenceNeedKind::Firewood => firewood::evaluate_recovery(need, supply, stock_min),
         ResidenceNeedKind::Water => water::evaluate_recovery(need, supply, stock_min),
         ResidenceNeedKind::Food => food::evaluate_recovery(need, supply, stock_min),
+        ResidenceNeedKind::Ale | ResidenceNeedKind::PreservedFood => {
+            provisions::evaluate_recovery(kind, need, supply, stock_min)
+        }
     }
 }
 
@@ -197,5 +219,8 @@ fn apply_delivery_for_kind(
         ResidenceNeedKind::Firewood => firewood::apply_delivery(need, delivered),
         ResidenceNeedKind::Water => water::apply_delivery(need, delivered),
         ResidenceNeedKind::Food => food::apply_delivery(need, delivered),
+        ResidenceNeedKind::Ale | ResidenceNeedKind::PreservedFood => {
+            provisions::apply_delivery(need, delivered)
+        }
     }
 }

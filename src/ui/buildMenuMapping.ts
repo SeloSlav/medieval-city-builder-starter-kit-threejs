@@ -11,6 +11,17 @@ export const BUILDING_KIND_TO_MENU_ACTION: Record<BuildingKind, PlacementBuildMe
   foragers_shed: 'foragers-shed',
   chapel: 'chapel',
   marketplace: 'marketplace',
+  grain_field: 'grain-field',
+  threshing_barn: 'threshing-barn',
+  monastery: 'monastery',
+  brewery: 'brewery',
+  smokehouse: 'smokehouse',
+  granary: 'granary',
+  apiary: 'apiary',
+  watermill: 'watermill',
+  carpenter: 'carpenter',
+  ferry_landing: 'ferry-landing',
+  vineyard: 'vineyard',
 };
 
 export type BuildingMenuAction = Exclude<PlacementBuildMenuAction, 'residences'>;
@@ -25,6 +36,17 @@ export const MENU_ACTION_TO_BUILDING_KIND: Record<BuildingMenuAction, BuildingKi
   'foragers-shed': 'foragers_shed',
   chapel: 'chapel',
   marketplace: 'marketplace',
+  'grain-field': 'grain_field',
+  'threshing-barn': 'threshing_barn',
+  monastery: 'monastery',
+  brewery: 'brewery',
+  smokehouse: 'smokehouse',
+  granary: 'granary',
+  apiary: 'apiary',
+  watermill: 'watermill',
+  carpenter: 'carpenter',
+  'ferry-landing': 'ferry_landing',
+  vineyard: 'vineyard',
 };
 
 export function toolbarModeToMenuAction(

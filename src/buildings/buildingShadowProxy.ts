@@ -16,6 +16,17 @@ const BUILDING_SHADOW_HEIGHT: Record<BuildingKind, number> = {
   foragers_shed: 4.9,
   chapel: 8.6,
   marketplace: 5.3,
+  grain_field: 3.3,
+  threshing_barn: 7.1,
+  monastery: 9.8,
+  brewery: 6.7,
+  smokehouse: 6.9,
+  granary: 6.9,
+  apiary: 4.8,
+  watermill: 7.2,
+  carpenter: 5.8,
+  ferry_landing: 4.8,
+  vineyard: 4.2,
 };
 
 const RESIDENCE_SHADOW_HEIGHT = 7.7;
@@ -39,11 +50,11 @@ export function createBuildingShadowProxy(kind: BuildingKind): THREE.Mesh {
   return createShadowProxyMesh(geometry, height);
 }
 
-export function createResidenceShadowProxy(): THREE.Mesh {
-  const width = MAIN_HOUSE_WIDTH * 0.92;
-  const depth = MAIN_HOUSE_DEPTH * 0.92;
-  const geometry = new THREE.BoxGeometry(width, RESIDENCE_SHADOW_HEIGHT, depth);
-  return createShadowProxyMesh(geometry, RESIDENCE_SHADOW_HEIGHT);
+export function createResidenceShadowProxy(tier: 1 | 2 | 3 = 1): THREE.Mesh {
+  const scale = tier === 1 ? 0.82 : tier === 3 ? 1.22 : 1;
+  const height = tier === 1 ? 5.1 : tier === 3 ? 8.3 : RESIDENCE_SHADOW_HEIGHT;
+  const geometry = new THREE.BoxGeometry(MAIN_HOUSE_WIDTH * 0.92 * scale, height, MAIN_HOUSE_DEPTH * 0.92 * (tier === 3 ? 1.14 : scale));
+  return createShadowProxyMesh(geometry, height);
 }
 
 export function isBuildingShadowProxy(object: THREE.Object3D): boolean {
@@ -80,6 +91,17 @@ function createBuildingShadowGeometry(
     case 'foragers_shed':
     case 'chapel':
     case 'marketplace':
+    case 'grain_field':
+    case 'threshing_barn':
+    case 'monastery':
+    case 'brewery':
+    case 'smokehouse':
+    case 'granary':
+    case 'apiary':
+    case 'watermill':
+    case 'carpenter':
+    case 'ferry_landing':
+    case 'vineyard':
       return new THREE.BoxGeometry(params.radiusX * 2 * scale, height, params.radiusZ * 2 * scale);
     default: {
       const unreachable: never = kind;

@@ -2,176 +2,95 @@ import type { BuildingKind } from '../generated/gameBalance.ts';
 import { formatBuildingCost, getBuildingCost, residenceZoneCost } from '../resources/buildingEconomy.ts';
 import { MENU_ACTION_TO_BUILDING_KIND } from './buildMenuMapping.ts';
 
-const BUILD_CARD_ART = {
-  lumber_mill: '/assets/ui/build-menu/lumber-mill.png',
-  reforester: '/assets/ui/build-menu/reforester.png',
-  woodcutters_lodge: '/assets/ui/build-menu/woodcutters-lodge.png',
-  stone_quarry: '/assets/ui/build-menu/stonecutters-camp.png',
-  well: '/assets/ui/build-menu/water-well.png',
-  hunters_hall: '/assets/ui/build-menu/hunter-hall.png',
-  foragers_shed: '/assets/ui/build-menu/foragers-hut.png',
-  chapel: '/assets/ui/build-menu/chapel.png',
-  marketplace: '/assets/ui/build-menu/market.png',
-  residences: '/assets/ui/build-menu/residence.png',
-} as const;
-
-type PlacementArtKey = keyof typeof BUILD_CARD_ART;
-
-const BUILD_CARD_COPY: Record<PlacementArtKey, {
-  title: string;
-  hotkey: string;
-  description: string;
-  cost: () => string;
-}> = {
-  lumber_mill: {
-    title: 'Lumber mill',
-    hotkey: 'L',
-    description: 'Workers fell mature trees in a wide radius and stockpile timber for building.',
-    cost: () => formatBuildingCost(getBuildingCost('lumber_mill')),
-  },
-  stone_quarry: {
-    title: "Stonecutter's camp",
-    hotkey: 'S',
-    description: 'Quarries stone from rock outcrops within range for walls and foundations.',
-    cost: () => formatBuildingCost(getBuildingCost('stone_quarry')),
-  },
-  reforester: {
-    title: 'Reforester',
-    hotkey: 'F',
-    description: 'Regrows cleared woodland, turning stumps into saplings and mature forest.',
-    cost: () => formatBuildingCost(getBuildingCost('reforester')),
-  },
-  woodcutters_lodge: {
-    title: "Woodcutter's lodge",
-    hotkey: 'W',
-    description: 'Chops timber into firewood and hauls it to homes along connected roads.',
-    cost: () => formatBuildingCost(getBuildingCost('woodcutters_lodge')),
-  },
-  well: {
-    title: 'Well',
-    hotkey: 'E',
-    description: 'Draws groundwater along roads to homes within range. Yield depends on local hydrology and assigned labor.',
-    cost: () => formatBuildingCost(getBuildingCost('well')),
-  },
-  hunters_hall: {
-    title: "Hunter's hall",
-    hotkey: 'K',
-    description: 'Hunts game from forest trails and hauls food to homes along connected roads.',
-    cost: () => formatBuildingCost(getBuildingCost('hunters_hall')),
-  },
-  foragers_shed: {
-    title: "Forager's shed",
-    hotkey: 'Y',
-    description: 'Gathers berries from forest edges and delivers food via road-connected routes.',
-    cost: () => formatBuildingCost(getBuildingCost('foragers_shed')),
-  },
-  chapel: {
-    title: 'Chapel',
-    hotkey: 'C',
-    description: 'Village chapel on the road. Assign a priest to collect tithes from household wealth and boost road-linked homes — faster settlement, longer grace, easier recovery.',
-    cost: () => formatBuildingCost(getBuildingCost('chapel')),
-  },
-  marketplace: {
-    title: 'Marketplace',
-    hotkey: 'P',
-    description: 'Trade hub on the road. Buy and sell goods with neighboring villages, and link homes to sell backyard produce.',
-    cost: () => formatBuildingCost(getBuildingCost('marketplace')),
-  },
-  residences: {
-    title: 'Residence',
-    hotkey: 'H',
-    description: 'Draw residence plots along a road. Three clicks: frontage start, frontage end, then backyard depth.',
-    cost: () => `${formatBuildingCost(residenceZoneCost(1))} per home`,
-  },
-};
-
 export type PlacementBuildMenuAction =
-  | 'lumber-mill'
-  | 'stone-quarry'
-  | 'reforester'
-  | 'woodcutters-lodge'
-  | 'well'
-  | 'hunters-hall'
-  | 'foragers-shed'
-  | 'chapel'
-  | 'marketplace'
+  | 'lumber-mill' | 'stone-quarry' | 'reforester' | 'woodcutters-lodge'
+  | 'well' | 'hunters-hall' | 'foragers-shed' | 'chapel' | 'marketplace'
+  | 'grain-field' | 'threshing-barn' | 'monastery' | 'brewery' | 'smokehouse'
+  | 'granary' | 'apiary' | 'watermill' | 'carpenter' | 'ferry-landing' | 'vineyard'
   | 'residences';
 
 export type BuildMenuAction = PlacementBuildMenuAction;
-
+type PlacementArtKey = BuildingKind | 'residences';
 export type BuildMenuEntry = { kind: 'placement'; action: PlacementBuildMenuAction; artKey: PlacementArtKey };
 
-/** Settlement essentials: housing, water, civic buildings, and raw-material extraction. */
-export const BASIC_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
-  { kind: 'placement', action: 'residences', artKey: 'residences' },
-  { kind: 'placement', action: 'well', artKey: 'well' },
-  { kind: 'placement', action: 'chapel', artKey: 'chapel' },
-  { kind: 'placement', action: 'lumber-mill', artKey: 'lumber_mill' },
-  { kind: 'placement', action: 'stone-quarry', artKey: 'stone_quarry' },
-];
-
-/** Production chain: forestry, provisioning, and trade buildings. */
-export const INDUSTRY_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
-  { kind: 'placement', action: 'reforester', artKey: 'reforester' },
-  { kind: 'placement', action: 'woodcutters-lodge', artKey: 'woodcutters_lodge' },
-  { kind: 'placement', action: 'hunters-hall', artKey: 'hunters_hall' },
-  { kind: 'placement', action: 'foragers-shed', artKey: 'foragers_shed' },
-  { kind: 'placement', action: 'marketplace', artKey: 'marketplace' },
-];
-
-export const BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
-  ...BASIC_BUILD_MENU_ENTRIES,
-  ...INDUSTRY_BUILD_MENU_ENTRIES,
-];
-
-export type BuildMenuHandlers = {
-  onToggleBuilding: (kind: BuildingKind) => void;
-  onToggleResidences: () => void;
+const BUILD_CARD_ART: Record<PlacementArtKey, string> = {
+  lumber_mill: '/assets/ui/build-menu/lumber-mill.png', reforester: '/assets/ui/build-menu/reforester.png',
+  woodcutters_lodge: '/assets/ui/build-menu/woodcutters-lodge.png', stone_quarry: '/assets/ui/build-menu/stonecutters-camp.png',
+  well: '/assets/ui/build-menu/water-well.png', hunters_hall: '/assets/ui/build-menu/hunter-hall.png',
+  foragers_shed: '/assets/ui/build-menu/foragers-hut.png', chapel: '/assets/ui/build-menu/chapel.png',
+  marketplace: '/assets/ui/build-menu/market.png', residences: '/assets/ui/build-menu/residence.png',
+  grain_field: '/assets/ui/build-menu/grain-field.png', threshing_barn: '/assets/ui/build-menu/threshing-barn.png',
+  monastery: '/assets/ui/build-menu/monastery.png', brewery: '/assets/ui/build-menu/brewery.png',
+  smokehouse: '/assets/ui/build-menu/smokehouse.png', granary: '/assets/ui/build-menu/granary.png',
+  apiary: '/assets/ui/build-menu/apiary.png', watermill: '/assets/ui/build-menu/watermill.png',
+  carpenter: '/assets/ui/build-menu/carpenter.png', ferry_landing: '/assets/ui/build-menu/ferry-landing.png',
+  vineyard: '/assets/ui/build-menu/vineyard.png',
 };
 
+const DETAILS: Record<PlacementArtKey, [title: string, hotkey: string, description: string]> = {
+  residences: ['Residence', 'H', 'Lay out Croatian Gorski Kotar homesteads along a road; homes can grow through three distinct tiers.'],
+  well: ['Well', 'E', 'Draws groundwater and dispatches it to road-linked homes.'],
+  chapel: ['Chapel', 'C', 'A staffed parish chapel collects tithes and supports nearby households.'],
+  monastery: ['Pauline monastery', 'O', 'An autonomous hillside monastery offering charity, pilgrimages, feasts, and wider faith coverage.'],
+  marketplace: ['Marketplace', 'P', 'Trade hub for household produce and specialty exports.'],
+  ferry_landing: ['Ferry landing', 'J', 'A staffed river crossing and modest source of trade income. Must touch open water.'],
+  lumber_mill: ['Lumber mill', 'L', 'Fells mature trees and stockpiles construction timber.'],
+  stone_quarry: ["Stonecutter's camp", 'S', 'Cuts stone from rock outcrops inside its working range.'],
+  reforester: ['Reforester', 'F', 'Restores harvested woodland with native saplings.'],
+  woodcutters_lodge: ["Woodcutter's lodge", 'W', 'Splits timber into firewood and supplies connected homes.'],
+  hunters_hall: ["Hunter's hall", 'K', 'Hunts game and delivers fresh food along the road network.'],
+  foragers_shed: ["Forager's shed", 'Y', 'Gathers berries and provisions homes from forest edges.'],
+  grain_field: ['Rye and oat field', 'G', 'Cultivates historically appropriate upland grain.'],
+  threshing_barn: ['Threshing barn', 'T', 'Collects and threshes grain from surrounding fields.'],
+  watermill: ['Grain watermill', 'M', 'Uses a river wheel to grind grain into flour. Must touch open water.'],
+  granary: ['Village granary', 'N', 'Stores grain and flour, bakes staple food, and buffers shortages.'],
+  brewery: ['Brewhouse', 'B', 'Brews grain and water into ale for prosperous households and export.'],
+  smokehouse: ['Smokehouse', 'Q', 'Preserves fresh food with firewood for tier-two households.'],
+  apiary: ['Forest apiary', 'A', 'Produces honey and a little food at a quiet woodland edge.'],
+  carpenter: ['Carpenter & wheelwright', 'R', 'A specialist workshop that strengthens local construction and cart logistics.'],
+  vineyard: ['Vineyard terrace', 'V', 'Stone-banked vines yield food and high-value wine for trade.'],
+};
+
+const action = (kind: BuildingKind): PlacementBuildMenuAction => kind.replaceAll('_', '-') as PlacementBuildMenuAction;
+const entry = (artKey: PlacementArtKey): BuildMenuEntry => ({ kind: 'placement', action: artKey === 'residences' ? 'residences' : action(artKey), artKey });
+
+/** Housing, water, faith, trade, and transport. */
+export const BASIC_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
+  entry('residences'), entry('well'), entry('chapel'), entry('monastery'), entry('marketplace'), entry('ferry_landing'),
+];
+
+/** Agriculture, food processing, forestry, extraction, and rural craft. */
+export const INDUSTRY_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
+  entry('grain_field'), entry('threshing_barn'), entry('watermill'), entry('granary'), entry('brewery'), entry('smokehouse'),
+  entry('apiary'), entry('vineyard'), entry('hunters_hall'), entry('foragers_shed'), entry('woodcutters_lodge'),
+  entry('lumber_mill'), entry('reforester'), entry('stone_quarry'), entry('carpenter'),
+];
+
+export const BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [...BASIC_BUILD_MENU_ENTRIES, ...INDUSTRY_BUILD_MENU_ENTRIES];
+
+export type BuildMenuHandlers = { onToggleBuilding: (kind: BuildingKind) => void; onToggleResidences: () => void };
+
 export function renderBuildMenuCards(entries: readonly BuildMenuEntry[] = BUILD_MENU_ENTRIES): string {
-  return entries.map(renderBuildMenuEntry).join('');
+  return entries.map((entry) => {
+    const [title, hotkey, description] = DETAILS[entry.artKey];
+    const cost = entry.artKey === 'residences'
+      ? `${formatBuildingCost(residenceZoneCost(1))} per home`
+      : formatBuildingCost(getBuildingCost(entry.artKey));
+    return `<button type="button" class="construction-card" data-action="${entry.action}" data-hotkey="${hotkey}" aria-label="${title} (${hotkey})">
+      <img class="construction-card__art" src="${BUILD_CARD_ART[entry.artKey]}" alt="" draggable="false" />
+      <span class="construction-card__hotkey" aria-hidden="true">${hotkey}</span>
+      <span class="construction-card__tooltip" role="tooltip"><span class="construction-card__tooltip-title">${title} (${hotkey})</span><span class="construction-card__tooltip-desc">${description}</span><span class="construction-card__tooltip-cost">Cost: ${cost}</span></span>
+    </button>`;
+  }).join('');
 }
 
-export function resolveBuildMenuHotkey(
-  key: string,
-  entries: readonly BuildMenuEntry[] = BUILD_MENU_ENTRIES,
-): BuildMenuAction | null {
+export function resolveBuildMenuHotkey(key: string, entries: readonly BuildMenuEntry[] = BUILD_MENU_ENTRIES): BuildMenuAction | null {
   const normalized = key.toLowerCase();
-  for (const entry of entries) {
-    const hotkey = BUILD_CARD_COPY[entry.artKey].hotkey.toLowerCase();
-    if (hotkey === normalized) {
-      return entry.action;
-    }
-  }
-  return null;
+  return entries.find((candidate) => DETAILS[candidate.artKey][1].toLowerCase() === normalized)?.action ?? null;
 }
 
-export function runBuildMenuAction(
-  action: BuildMenuAction,
-  handlers: BuildMenuHandlers,
-  closeMenu: () => void,
-): void {
+export function runBuildMenuAction(action: BuildMenuAction, handlers: BuildMenuHandlers, closeMenu: () => void): void {
   closeMenu();
-  if (action === 'residences') {
-    handlers.onToggleResidences();
-    return;
-  }
-  const kind = MENU_ACTION_TO_BUILDING_KIND[action];
-  handlers.onToggleBuilding(kind);
-}
-
-function renderBuildMenuEntry(entry: BuildMenuEntry): string {
-  const copy = BUILD_CARD_COPY[entry.artKey];
-  const cost = copy.cost();
-  return `
-          <button type="button" class="construction-card" data-action="${entry.action}" data-hotkey="${copy.hotkey}" aria-label="${copy.title} (${copy.hotkey})">
-            <img class="construction-card__art" src="${BUILD_CARD_ART[entry.artKey]}" alt="" draggable="false" />
-            <span class="construction-card__hotkey" aria-hidden="true">${copy.hotkey}</span>
-            <span class="construction-card__tooltip" role="tooltip">
-              <span class="construction-card__tooltip-title">${copy.title} (${copy.hotkey})</span>
-              <span class="construction-card__tooltip-desc">${copy.description}</span>
-              <span class="construction-card__tooltip-cost">Cost: ${cost}</span>
-            </span>
-          </button>`;
+  if (action === 'residences') handlers.onToggleResidences();
+  else handlers.onToggleBuilding(MENU_ACTION_TO_BUILDING_KIND[action]);
 }

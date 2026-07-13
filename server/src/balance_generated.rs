@@ -29,6 +29,12 @@ pub const HIGH_TAX_PRODUCTIVITY_DRAG: f64 = 0.58;
 pub const FOOD_SALE_GOLD_PER_UNIT: f64 = 0.35;
 pub const RESIDENCE_TIMBER_COST: f64 = 8.0;
 pub const RESIDENCE_STONE_COST: f64 = 12.0;
+pub const RESIDENCE_TIER2_TIMBER_COST: f64 = 18.0;
+pub const RESIDENCE_TIER2_STONE_COST: f64 = 14.0;
+pub const RESIDENCE_TIER2_GOLD_COST: f64 = 8.0;
+pub const RESIDENCE_TIER3_TIMBER_COST: f64 = 28.0;
+pub const RESIDENCE_TIER3_STONE_COST: f64 = 24.0;
+pub const RESIDENCE_TIER3_GOLD_COST: f64 = 22.0;
 pub const HOUSEHOLD_MAX_WEALTH: f64 = 200.0;
 
 pub const STARTING_POPULATION: u32 = 5;
@@ -43,6 +49,13 @@ pub const RESIDENCE_WATER_CAPACITY: f64 = 24.0;
 pub const RESIDENCE_WATER_PER_PERSON_PER_SEC: f64 = 0.012;
 pub const RESIDENCE_FOOD_CAPACITY: f64 = 32.0;
 pub const RESIDENCE_FOOD_PER_PERSON_PER_SEC: f64 = 0.015;
+pub const RESIDENCE_TIER1_CAPACITY: u32 = 3;
+pub const RESIDENCE_TIER2_CAPACITY: u32 = 6;
+pub const RESIDENCE_TIER3_CAPACITY: u32 = 10;
+pub const RESIDENCE_PRESERVED_FOOD_CAPACITY: f64 = 28.0;
+pub const RESIDENCE_PRESERVED_FOOD_PER_PERSON_PER_SEC: f64 = 0.004;
+pub const RESIDENCE_ALE_CAPACITY: f64 = 20.0;
+pub const RESIDENCE_ALE_PER_PERSON_PER_SEC: f64 = 0.0025;
 pub const ABANDON_AFTER_DEFICIT_TICKS: u32 = 3600;
 pub const RESIDENCE_RECOVERY_FIREWOOD_MIN: f64 = 8.0;
 pub const RESIDENCE_RECOVERY_WATER_MIN: f64 = 5.0;
@@ -101,6 +114,36 @@ pub const WELL_SURGE_AMOUNT_MAX: f64 = 26.0;
 pub const WELL_SURGE_COOLDOWN_SEC: f64 = 42.0;
 pub const WELL_WATER_PER_DELIVERY: f64 = 3.0;
 pub const MILL_WATER_PER_HARVEST: f64 = 4.0;
+pub const GRAIN_PER_FIELD_CYCLE: f64 = 4.0;
+pub const GRAIN_TRANSFER_PER_TRIP: f64 = 6.0;
+pub const WATERMILL_GRAIN_PER_CYCLE: f64 = 3.0;
+pub const WATERMILL_WATER_PER_CYCLE: f64 = 1.0;
+pub const WATERMILL_FLOUR_PER_CYCLE: f64 = 4.0;
+pub const GRANARY_FLOUR_PER_CYCLE: f64 = 3.0;
+pub const GRANARY_FOOD_PER_CYCLE: f64 = 4.0;
+pub const BREWERY_GRAIN_PER_CYCLE: f64 = 3.0;
+pub const BREWERY_WATER_PER_CYCLE: f64 = 2.0;
+pub const BREWERY_ALE_PER_CYCLE: f64 = 4.0;
+pub const SMOKEHOUSE_FOOD_PER_CYCLE: f64 = 3.0;
+pub const SMOKEHOUSE_FIREWOOD_PER_CYCLE: f64 = 1.0;
+pub const SMOKEHOUSE_PRESERVED_FOOD_PER_CYCLE: f64 = 3.0;
+pub const APIARY_HONEY_PER_CYCLE: f64 = 2.0;
+pub const APIARY_FOOD_PER_CYCLE: f64 = 1.0;
+pub const VINEYARD_WINE_PER_CYCLE: f64 = 3.0;
+pub const VINEYARD_FOOD_PER_CYCLE: f64 = 1.0;
+pub const MONASTERY_GRAIN_PER_CYCLE: f64 = 2.0;
+pub const MONASTERY_FOOD_PER_CYCLE: f64 = 2.0;
+pub const MONASTERY_PILGRIMAGE_GOLD_PER_DAY: f64 = 3.5;
+pub const MONASTERY_UNLINKED_PRODUCTIVITY: f64 = 0.45;
+pub const MONASTERY_COVERAGE_RADIUS: f64 = 520.0;
+pub const MONASTERY_TITHE_SHARE_DEFAULT: f64 = 0.3;
+pub const MONASTERY_CHARITY_FOOD_PER_DELIVERY: f64 = 4.0;
+pub const SPECIALTY_EXPORT_GOLD_PER_HONEY: f64 = 0.8;
+pub const SPECIALTY_EXPORT_GOLD_PER_ALE: f64 = 1.15;
+pub const SPECIALTY_EXPORT_GOLD_PER_WINE: f64 = 1.6;
+pub const FERRY_GOLD_PER_DAY: f64 = 2.25;
+pub const CARPENTER_DELIVERY_SPEED_MULTIPLIER: f64 = 1.18;
+pub const CARPENTER_TIMBER_COST_MULTIPLIER: f64 = 0.9;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildingSimKind {
@@ -111,6 +154,17 @@ pub enum BuildingSimKind {
     Well,
     HuntersHall,
     ForagersShed,
+    GrainField,
+    ThreshingBarn,
+    Monastery,
+    Brewery,
+    Smokehouse,
+    Granary,
+    Apiary,
+    Watermill,
+    Carpenter,
+    FerryLanding,
+    Vineyard,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -123,6 +177,12 @@ pub struct BuildingDef {
     pub storage_stone: f64,
     pub storage_water: f64,
     pub storage_food: f64,
+    pub storage_grain: f64,
+    pub storage_flour: f64,
+    pub storage_ale: f64,
+    pub storage_preserved_food: f64,
+    pub storage_honey: f64,
+    pub storage_wine: f64,
     pub accepts_labor: bool,
     pub max_labor: u32,
     pub work_radius: f64,
@@ -133,6 +193,7 @@ pub struct BuildingDef {
     pub requires_quarry_stone: bool,
     pub requires_game: bool,
     pub requires_berries: bool,
+    pub requires_water_shore: bool,
     pub sim_kind: Option<BuildingSimKind>,
 }
 
@@ -145,6 +206,12 @@ const LUMBER_MILL: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 48.0,
     storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 3,
     work_radius: 210.0,
@@ -155,6 +222,7 @@ const LUMBER_MILL: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::LumberMill),
 };
 
@@ -167,6 +235,12 @@ const REFORESTER: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 0.0,
     storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 1,
     work_radius: 190.0,
@@ -177,6 +251,7 @@ const REFORESTER: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::Reforester),
 };
 
@@ -189,6 +264,12 @@ const WOODCUTTERS_LODGE: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 0.0,
     storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 2,
     work_radius: 0.0,
@@ -199,6 +280,7 @@ const WOODCUTTERS_LODGE: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::WoodcuttersLodge),
 };
 
@@ -211,6 +293,12 @@ const STONE_QUARRY: BuildingDef = BuildingDef {
     storage_stone: 180.0,
     storage_water: 0.0,
     storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 4,
     work_radius: 55.0,
@@ -221,6 +309,7 @@ const STONE_QUARRY: BuildingDef = BuildingDef {
     requires_quarry_stone: true,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::StoneQuarry),
 };
 
@@ -233,6 +322,12 @@ const WELL: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 100.0,
     storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 2,
     work_radius: 90.0,
@@ -243,6 +338,7 @@ const WELL: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::Well),
 };
 
@@ -255,6 +351,12 @@ const HUNTERS_HALL: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 0.0,
     storage_food: 100.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 3,
     work_radius: 68.0,
@@ -265,6 +367,7 @@ const HUNTERS_HALL: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: true,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::HuntersHall),
 };
 
@@ -277,6 +380,12 @@ const FORAGERS_SHED: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 0.0,
     storage_food: 80.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 2,
     work_radius: 48.0,
@@ -287,6 +396,7 @@ const FORAGERS_SHED: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: true,
+    requires_water_shore: false,
     sim_kind: Some(BuildingSimKind::ForagersShed),
 };
 
@@ -299,6 +409,12 @@ const CHAPEL: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 0.0,
     storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 1,
     work_radius: 0.0,
@@ -309,6 +425,7 @@ const CHAPEL: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: None,
 };
 
@@ -321,6 +438,12 @@ const MARKETPLACE: BuildingDef = BuildingDef {
     storage_stone: 0.0,
     storage_water: 48.0,
     storage_food: 96.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
     accepts_labor: true,
     max_labor: 2,
     work_radius: 0.0,
@@ -331,10 +454,330 @@ const MARKETPLACE: BuildingDef = BuildingDef {
     requires_quarry_stone: false,
     requires_game: false,
     requires_berries: false,
+    requires_water_shore: false,
     sim_kind: None,
 };
 
-const ALL: &[BuildingDef] = &[LUMBER_MILL, REFORESTER, WOODCUTTERS_LODGE, STONE_QUARRY, WELL, HUNTERS_HALL, FORAGERS_SHED, CHAPEL, MARKETPLACE];
+const GRAIN_FIELD: BuildingDef = BuildingDef {
+    kind: "grain_field",
+    cost_timber: 14.0,
+    cost_stone: 4.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 0.0,
+    storage_grain: 120.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 2,
+    work_radius: 0.0,
+    action_interval: 12.0,
+    pick_radius: 11.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::GrainField),
+};
+
+const THRESHING_BARN: BuildingDef = BuildingDef {
+    kind: "threshing_barn",
+    cost_timber: 44.0,
+    cost_stone: 16.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 0.0,
+    storage_grain: 280.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 3,
+    work_radius: 150.0,
+    action_interval: 6.0,
+    pick_radius: 9.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::ThreshingBarn),
+};
+
+const MONASTERY: BuildingDef = BuildingDef {
+    kind: "monastery",
+    cost_timber: 90.0,
+    cost_stone: 150.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 180.0,
+    storage_grain: 180.0,
+    storage_flour: 0.0,
+    storage_ale: 120.0,
+    storage_preserved_food: 80.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: false,
+    max_labor: 0,
+    work_radius: 520.0,
+    action_interval: 12.0,
+    pick_radius: 15.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Monastery),
+};
+
+const BREWERY: BuildingDef = BuildingDef {
+    kind: "brewery",
+    cost_timber: 48.0,
+    cost_stone: 36.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 100.0,
+    storage_food: 0.0,
+    storage_grain: 140.0,
+    storage_flour: 0.0,
+    storage_ale: 200.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 3,
+    work_radius: 120.0,
+    action_interval: 7.0,
+    pick_radius: 9.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Brewery),
+};
+
+const SMOKEHOUSE: BuildingDef = BuildingDef {
+    kind: "smokehouse",
+    cost_timber: 34.0,
+    cost_stone: 22.0,
+    storage_timber: 0.0,
+    storage_firewood: 40.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 120.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 180.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 2,
+    work_radius: 110.0,
+    action_interval: 6.0,
+    pick_radius: 8.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Smokehouse),
+};
+
+const GRANARY: BuildingDef = BuildingDef {
+    kind: "granary",
+    cost_timber: 50.0,
+    cost_stone: 28.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 340.0,
+    storage_grain: 420.0,
+    storage_flour: 260.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 180.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 3,
+    work_radius: 150.0,
+    action_interval: 5.0,
+    pick_radius: 9.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Granary),
+};
+
+const APIARY: BuildingDef = BuildingDef {
+    kind: "apiary",
+    cost_timber: 22.0,
+    cost_stone: 6.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 40.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 140.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 1,
+    work_radius: 72.0,
+    action_interval: 18.0,
+    pick_radius: 7.0,
+    requires_road: false,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Apiary),
+};
+
+const WATERMILL: BuildingDef = BuildingDef {
+    kind: "watermill",
+    cost_timber: 58.0,
+    cost_stone: 42.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 80.0,
+    storage_food: 0.0,
+    storage_grain: 180.0,
+    storage_flour: 260.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 3,
+    work_radius: 130.0,
+    action_interval: 7.0,
+    pick_radius: 10.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: true,
+    sim_kind: Some(BuildingSimKind::Watermill),
+};
+
+const CARPENTER: BuildingDef = BuildingDef {
+    kind: "carpenter",
+    cost_timber: 52.0,
+    cost_stone: 20.0,
+    storage_timber: 140.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 2,
+    work_radius: 180.0,
+    action_interval: 8.0,
+    pick_radius: 9.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Carpenter),
+};
+
+const FERRY_LANDING: BuildingDef = BuildingDef {
+    kind: "ferry_landing",
+    cost_timber: 46.0,
+    cost_stone: 18.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 0.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 0.0,
+    accepts_labor: true,
+    max_labor: 2,
+    work_radius: 120.0,
+    action_interval: 0.0,
+    pick_radius: 9.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: true,
+    sim_kind: Some(BuildingSimKind::FerryLanding),
+};
+
+const VINEYARD: BuildingDef = BuildingDef {
+    kind: "vineyard",
+    cost_timber: 26.0,
+    cost_stone: 18.0,
+    storage_timber: 0.0,
+    storage_firewood: 0.0,
+    storage_stone: 0.0,
+    storage_water: 0.0,
+    storage_food: 40.0,
+    storage_grain: 0.0,
+    storage_flour: 0.0,
+    storage_ale: 0.0,
+    storage_preserved_food: 0.0,
+    storage_honey: 0.0,
+    storage_wine: 180.0,
+    accepts_labor: true,
+    max_labor: 2,
+    work_radius: 0.0,
+    action_interval: 20.0,
+    pick_radius: 11.0,
+    requires_road: true,
+    requires_mature_trees: false,
+    requires_quarry_stone: false,
+    requires_game: false,
+    requires_berries: false,
+    requires_water_shore: false,
+    sim_kind: Some(BuildingSimKind::Vineyard),
+};
+
+const ALL: &[BuildingDef] = &[LUMBER_MILL, REFORESTER, WOODCUTTERS_LODGE, STONE_QUARRY, WELL, HUNTERS_HALL, FORAGERS_SHED, CHAPEL, MARKETPLACE, GRAIN_FIELD, THRESHING_BARN, MONASTERY, BREWERY, SMOKEHOUSE, GRANARY, APIARY, WATERMILL, CARPENTER, FERRY_LANDING, VINEYARD];
 
 pub fn building_def(kind: &str) -> Option<&'static BuildingDef> {
     ALL.iter().find(|def| def.kind == kind)

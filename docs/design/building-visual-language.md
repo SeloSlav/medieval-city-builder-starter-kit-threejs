@@ -106,10 +106,29 @@ Do not build close details until the first two levels work.
 | Hunter's hall | Low forest hall with a lean-to profile | Dark timber, shingles, stone hearth | Drying rack, hides, bows or traps |
 | Forager's shed | Smallest and lightest enclosed work building | Weathered timber, shingles | Baskets, herb racks, drying bundles |
 | Marketplace | Broad open civic canopy or arcade | Timber posts, stone paving, selective tile or canvas | Stalls, crates, scales, barrels |
+| Rye and oat field | Bounded crop parcel with a tiny red-roof shelter | Earth, dry grain, rough oak, red tile | Crop rows, fence, field shelter |
+| Threshing barn | Large high-roofed through-barn | Weathered oak, stone plinth, red tile | Broad opposing doors, grain sheaves |
+| Pauline monastery | L-shaped pale complex with restrained belfry | Limewash, limestone, red tile | Cloister edge, cells, belfry |
+| Brewhouse | Stout warm-walled house with a tall chimney | Limewash, stone, red tile, oak | Barrels, brewing hearth |
+| Smokehouse | Dark compact gable dominated by its flue | Stone ground floor, dark timber, shingles | Tall chimney and smoke plume |
+| Granary | Raised long storehouse | Stone piers, weathered timber, red tile | Vent openings, elevated floor, grain rack |
+| Forest apiary | Modest yellow hut beside ordered hive rows | Ochre limewash, shingles, painted hive boxes | Hive stands and small work hut |
+| Grain watermill | Riverside stone house with a dominant wheel | Limestone, limewash, red tile, oak | Full-height wheel and axle |
+| Carpenter & wheelwright | Workshop with a deep side working bay | Timber, stone plinth, red tile | Lean-to, wheels, work yard |
+| Ferry landing | Small ferryman's hut and a long timber jetty | Weathered timber, stone, red tile | Pier piles, planks, ferry boat |
+| Vineyard terrace | Broad stepped stone-banked agricultural parcel | Earth, limestone, dark vine posts | Terraces, vine rows, vintner shelter |
 
 ## Residence variants
 
 Residence variety must not be color-only.
+
+Residence tiers are structural, not cosmetic:
+
+- Tier 1 is a compact single-storey-plus-attic cottage for three people. It must read lower, narrower, and humbler than the established two-storey family.
+- Tier 2 is the canonical two-storey Gorski house for six people, using the three established archetypes.
+- Tier 3 is a wider, taller prosperous house for ten people. It gains a working annex or lean-to as well as additional upper-storey mass.
+- Paint, roof, trim, archetype, chimney, and firewood variants persist across tiers because the deterministic residence id seed does not change on upgrade.
+- Backyard gardens remain parcel features rather than being baked into a tier mesh.
 
 - Share a construction kit: foundations, wall systems, roof families, openings, chimneys, porches, and props.
 - Vary at least two major traits per house: footprint/proportion, roof form, entry placement, chimney placement, porch/lean-to, or upper-storey treatment.
@@ -122,7 +141,21 @@ Narrow and wide parcels should affect the architecture, not merely stretch the s
 
 The current procedural residence family in `ResidenceMarkers.ts` and `residenceAppearance.ts` establishes three canonical archetypes: `stone_portal`, `timber_balcony`, and `working_lean_to`. Preserve this level of structural variation when extending the family. All three use an exposed-stone lower storey, a limewashed upper storey, steep weather roof, deterministic paint/roof/trim choices, and the state-driven firewood pile.
 
-The current non-residential family is also canonical. Its dedicated meshes live in `src/buildings/meshes/`: `industryBuildingMeshes.ts`, `serviceBuildingMeshes.ts`, `stoneQuarryMesh.ts`, `marketplaceMesh.ts`, and `chapelMesh.ts`. Shared enclosed-building construction belongs in `buildingMeshKit.ts`; do not regress to one generic hut with scale and prop substitutions.
+The current non-residential family is also canonical. Its dedicated meshes live in `src/buildings/meshes/`: `industryBuildingMeshes.ts`, `serviceBuildingMeshes.ts`, `stoneQuarryMesh.ts`, `marketplaceMesh.ts`, `chapelMesh.ts`, and `expandedBuildingMeshes.ts`. Shared enclosed-building construction belongs in `buildingMeshKit.ts`; do not regress to one generic hut with scale and prop substitutions.
+
+## Backyard gardens and cultivated plants
+
+Backyards are small working landscapes, not map icons enlarged into 3D. Their source of truth is `backyardGardenMesh.ts`; cultivated tree forms live in `vegetation/seedthree/backyardPlantAssets.ts`.
+
+- Apple orchards use low, broad, slightly gnarled SeedThree trees, visible apples, grass understorey, a harvest basket, stepping stones, and a low wattle edge.
+- Cherry orchards use taller, lighter, vase-shaped SeedThree trees, paired dark cherries, and the same bounded vernacular yard vocabulary without sharing the apple silhouette.
+- Flower gardens are cottage gardens built around custom SeedThree rose shrubs, mixed-height blooms, irregular beds, and a stone footpath. Avoid uniform dots on a soil rectangle.
+- Vegetable gardens use divided raised beds, legible cabbage rosettes, a bean trellis where space permits, paths, and a working basket.
+- Herb gardens use ordered kitchen-herb beds, varied green and silver foliage, restrained lavender color, terracotta, and a drying rack on deeper plots.
+- Size every composition from the actual burgage backyard footprint. Shallow plots reduce tree/bed count rather than squashing plants non-uniformly.
+- Residence ids seed layout and plant variants deterministically so a household keeps its garden identity.
+- SeedThree geometry is shared by session-level prototypes. Garden disposal must never dispose those shared buffers; only per-garden prop geometry is owned by the marker.
+- Keep colors muted and materials consistent with the residence palette. Fruit and flowers may carry focused saturation, but soil, stone, wicker, and timber must remain the dominant frame.
 
 ## Resource-state props
 

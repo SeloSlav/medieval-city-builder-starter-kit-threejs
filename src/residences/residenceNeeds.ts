@@ -51,7 +51,7 @@ export function evaluateResidenceNeedRecovery(
   supply: ResidenceNeedSupplyContext,
   community: ResidenceCommunityContext = DEFAULT_RESIDENCE_COMMUNITY_CONTEXT,
 ): ResidenceNeedRecoveryStatus[] {
-  return RESIDENCE_NEED_KINDS.map((kind) => evaluateNeedRecovery(kind, residence, supply, community));
+  return activeNeedKinds(residence).map((kind) => evaluateNeedRecovery(kind, residence, supply, community));
 }
 
 export function residenceRecoveryReady(
@@ -120,6 +120,10 @@ function evaluateNeedRecovery(
         threshold,
         supplyAvailable: supply.servingFoodSupplierId != null,
       };
+    case 'preservedFood':
+      return { kind, label: 'Preserved food', ready: need.stock + 1e-6 >= threshold, stock: need.stock, threshold, supplyAvailable: true };
+    case 'ale':
+      return { kind, label: 'Ale', ready: need.stock + 1e-6 >= threshold, stock: need.stock, threshold, supplyAvailable: true };
     default: {
       const unhandled: never = kind;
       return unhandled;
@@ -189,7 +193,7 @@ function describeDeficitWarning(
   const deficitTicks = maxNeedDeficitTicks(residence.needs);
   if (deficitTicks <= 0) return null;
 
-  const unmetNeeds = RESIDENCE_NEED_KINDS
+  const unmetNeeds = activeNeedKinds(residence)
     .filter((kind) => getNeed(residence.needs, kind).deficitTicks > 0)
     .map((kind) => needLabel(kind).toLowerCase());
 
@@ -204,7 +208,7 @@ function describeDeficitWarning(
 }
 
 function describeActiveNeeds(residence: ResidenceState): ResidenceNeedsStatus {
-  const warnings = RESIDENCE_NEED_KINDS
+  const warnings = activeNeedKinds(residence)
     .map((kind) => describeActiveNeed(kind, residence))
     .filter((status): status is ResidenceNeedsStatus => status != null);
 
@@ -292,6 +296,14 @@ function describeActiveNeed(
       }
       return null;
     }
+    case 'preservedFood':
+      return getNeed(residence.needs, kind).stock <= 1e-6
+        ? { label: 'Out of preserved food — awaiting smokehouse supply', state: 'warning' }
+        : null;
+    case 'ale':
+      return getNeed(residence.needs, kind).stock <= 1e-6
+        ? { label: 'Out of ale — awaiting brewhouse supply', state: 'warning' }
+        : null;
     default: {
       const unhandled: never = kind;
       return unhandled;
@@ -307,6 +319,10 @@ function needLabel(kind: ResidenceNeedKind): string {
       return 'Water';
     case 'food':
       return 'Food';
+    case 'ale':
+      return 'Ale';
+    case 'preservedFood':
+      return 'Preserved food';
     default: {
       const unhandled: never = kind;
       return unhandled;
@@ -327,6 +343,12 @@ function formatShortDuration(seconds: number): string {
     return `~${minutes} min`;
   }
   return `~${Math.max(1, Math.round(seconds))}s`;
+}
+
+function activeNeedKinds(residence: ResidenceState): ResidenceNeedKind[] {
+  return RESIDENCE_NEED_KINDS.filter((kind) =>
+    kind === 'preservedFood' ? residence.tier >= 2 : kind === 'ale' ? residence.tier >= 3 : true,
+  );
 }
 
 function residenceFoodRunwayDays(residence: ResidenceState): number | null {

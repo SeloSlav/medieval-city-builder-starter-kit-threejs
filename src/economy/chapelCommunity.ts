@@ -83,6 +83,10 @@ function recoveryStockBase(kind: ResidenceNeedKind): number {
       return RESIDENCE_RECOVERY_WATER_MIN;
     case 'food':
       return RESIDENCE_RECOVERY_FOOD_MIN;
+    case 'ale':
+      return 3;
+    case 'preservedFood':
+      return 4;
     default: {
       const unhandled: never = kind;
       return unhandled;

@@ -239,6 +239,10 @@ export class SpacetimeGameStore {
     return spacetimeReducers.demolishResidence(residenceId);
   }
 
+  upgradeResidence(residenceId: string): Promise<void> {
+    return spacetimeReducers.upgradeResidence(residenceId);
+  }
+
   placeBuilding(kind: BuildingKind, x: number, z: number): Promise<void> {
     return spacetimeReducers.placeBuilding(kind, x, z);
   }

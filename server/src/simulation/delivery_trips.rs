@@ -3,8 +3,12 @@
 use spacetimedb::ReducerContext;
 
 use crate::constants::TICK_DT;
+use crate::balance_generated::CARPENTER_DELIVERY_SPEED_MULTIPLIER;
 use crate::db::*;
-use crate::economy::{building_storage_caps, credit_treasury_timber, deposit_building, withdraw_building};
+use crate::economy::{
+    building_commodity_room, building_commodity_stock, credit_treasury_commodity,
+    deposit_building_commodity, withdraw_building_commodity, CommodityKind,
+};
 use crate::simulation::delivery_cargo::{
     building_delivery_stock, credit_undeposited_delivery_cargo, deposit_delivery_cargo,
     pick_delivery_target, residence_delivery_room, withdraw_delivery_cargo, DeliveryCargoTotals,
@@ -46,16 +50,12 @@ impl DeliveryTripPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TripCargoKind {
-    ResidenceNeed(ResidenceNeedKind),
-    Timber,
+    Commodity(CommodityKind),
 }
 
 impl TripCargoKind {
     fn from_trip(trip: &DeliveryTrip) -> Option<Self> {
-        if trip.cargo_kind == CARGO_KIND_TIMBER {
-            return Some(Self::Timber);
-        }
-        ResidenceNeedKind::from_u8(trip.cargo_kind).map(Self::ResidenceNeed)
+        CommodityKind::from_u8(trip.cargo_kind).map(Self::Commodity)
     }
 }
 
@@ -125,10 +125,8 @@ pub fn drain_trips_for_building(ctx: &ReducerContext, building_id: u64) -> Deliv
         .collect();
     let mut totals = DeliveryCargoTotals::default();
     for trip in trips {
-        if trip.cargo_kind == CARGO_KIND_TIMBER {
-            return_timber_cargo_to_building(ctx, trip.building_id, trip.amount);
-        } else if let Some(kind) = ResidenceNeedKind::from_u8(trip.cargo_kind) {
-            totals.add(kind, trip.amount);
+        if let Some(kind) = CommodityKind::from_u8(trip.cargo_kind) {
+            totals.add_commodity(kind, trip.amount);
         }
         ctx.db.delivery_trip().id().delete(trip.id);
     }
@@ -214,26 +212,56 @@ pub fn try_start_timber_supply_trip(
     per_delivery_amount: f64,
     needed: f64,
 ) -> bool {
-    if delivery_workers == 0 || building_has_active_trip(ctx, mill.id) {
+    try_start_building_supply_trip(
+        ctx,
+        clock,
+        network,
+        mill,
+        lodge,
+        delivery_workers,
+        CommodityKind::Timber,
+        speed_mps,
+        unload_seconds,
+        per_delivery_amount,
+        needed,
+    )
+}
+
+pub fn try_start_building_supply_trip(
+    ctx: &ReducerContext,
+    clock: &GameClock,
+    network: &RoadNetwork,
+    origin: &mut Building,
+    target: &Building,
+    delivery_workers: u32,
+    commodity: CommodityKind,
+    speed_mps: f64,
+    unload_seconds: f64,
+    per_delivery_amount: f64,
+    needed: f64,
+) -> bool {
+    if delivery_workers == 0 || building_has_active_trip(ctx, origin.id) {
         return false;
     }
 
-    if labor_and_logistics_paused(ctx, mill.owner, clock) {
+    if labor_and_logistics_paused(ctx, origin.owner, clock) {
         return false;
     }
 
-    if mill.timber <= 1e-6 {
+    if building_commodity_stock(origin, commodity) <= 1e-6 {
         return false;
     }
 
-    let caps = building_storage_caps(&lodge.kind);
-    let lodge_room = (caps.timber - lodge.timber).max(0.0);
-    if lodge_room <= 1e-6 {
+    let target_room = building_commodity_room(target, commodity);
+    if target_room <= 1e-6 {
         return false;
     }
 
     let batch = per_delivery_amount * delivery_workers as f64;
-    let load = mill.timber.min(lodge_room).min(batch).min(needed);
+    let load = building_commodity_stock(origin, commodity)
+        .min(target_room)
+        .min(batch)
+        .min(needed);
     if load <= 1e-6 {
         return false;
     }
@@ -243,24 +271,20 @@ pub fn try_start_timber_supply_trip(
         clock,
         network,
         StartTripSpec {
-            origin: mill.clone(),
+            origin: origin.clone(),
             destination: TripDestination::Building {
-                id: lodge.id,
-                x: lodge.x,
-                z: lodge.z,
+                id: target.id,
+                x: target.x,
+                z: target.z,
             },
-            cargo_kind: CARGO_KIND_TIMBER,
+            cargo_kind: commodity.as_u8(),
             delivery_workers,
             speed_mps,
             unload_seconds,
             load_amount: load,
         },
-        |origin, amount| {
-            let (withdrawn, _, _, updated) = withdraw_building(origin, amount, 0.0, 0.0);
-            *origin = updated;
-            withdrawn
-        },
-        |origin| *mill = origin.clone(),
+        |source, amount| withdraw_building_commodity(source, commodity, amount),
+        |source| *origin = source.clone(),
     )
 }
 
@@ -337,7 +361,7 @@ fn step_one_trip(ctx: &ReducerContext, tick: &SimTickContext, clock: &GameClock,
     trip.progress = trip.progress.min(path_distance);
 
     let workers = trip.delivery_workers.max(1) as f64;
-    let travel_speed = trip.speed_mps * workers;
+    let travel_speed = trip.speed_mps * workers * carpenter_delivery_multiplier(ctx, &network, &trip);
 
     let Some(phase) = DeliveryTripPhase::from_u8(trip.phase) else {
         return_trip_cargo_to_building(ctx, &trip);
@@ -404,24 +428,37 @@ fn trip_route(
 }
 
 fn complete_unload(ctx: &ReducerContext, trip: &mut DeliveryTrip) {
-    match TripCargoKind::from_trip(trip) {
-        Some(TripCargoKind::Timber) => unload_timber_to_lodge(ctx, trip),
-        Some(TripCargoKind::ResidenceNeed(need_kind)) => {
-            unload_need_to_residence(ctx, trip, need_kind);
-        }
-        None => {}
+    let Some(TripCargoKind::Commodity(commodity)) = TripCargoKind::from_trip(trip) else {
+        return;
+    };
+    if trip.destination_kind == DELIVERY_DESTINATION_BUILDING {
+        unload_commodity_to_building(ctx, trip, commodity);
+    } else if let Some(need_kind) = ResidenceNeedKind::from_u8(trip.cargo_kind) {
+        unload_need_to_residence(ctx, trip, need_kind);
     }
 }
 
-fn unload_timber_to_lodge(ctx: &ReducerContext, trip: &mut DeliveryTrip) {
-    let Some(mut lodge) = ctx.db.building().id().find(&trip.target_building_id) else {
+fn carpenter_delivery_multiplier(ctx: &ReducerContext, network: &RoadNetwork, trip: &DeliveryTrip) -> f64 {
+    let Some(origin) = ctx.db.building().id().find(&trip.building_id) else { return 1.0; };
+    let supported = ctx.db.building().owner().filter(&trip.owner).any(|shop| {
+        shop.kind == "carpenter" && shop.assigned_labor > 0
+            && network.road_path_distance(origin.x, origin.z, shop.x, shop.z).is_some()
+    });
+    if supported { CARPENTER_DELIVERY_SPEED_MULTIPLIER } else { 1.0 }
+}
+
+fn unload_commodity_to_building(
+    ctx: &ReducerContext,
+    trip: &mut DeliveryTrip,
+    commodity: CommodityKind,
+) {
+    let Some(mut target) = ctx.db.building().id().find(&trip.target_building_id) else {
         return;
     };
-    let caps = building_storage_caps(&lodge.kind);
-    let (_, timber_added, _, updated) = deposit_building(&mut lodge, caps, trip.amount, 0.0, 0.0);
-    if timber_added > 1e-6 {
-        trip.amount = (trip.amount - timber_added).max(0.0);
-        ctx.db.building().id().update(updated);
+    let deposited = deposit_building_commodity(&mut target, commodity, trip.amount);
+    if deposited > 1e-6 {
+        trip.amount = (trip.amount - deposited).max(0.0);
+        ctx.db.building().id().update(target);
     }
 }
 
@@ -448,9 +485,8 @@ fn return_trip_cargo_to_building(ctx: &ReducerContext, trip: &DeliveryTrip) {
         return;
     }
     match TripCargoKind::from_trip(trip) {
-        Some(TripCargoKind::Timber) => return_timber_cargo_to_building(ctx, trip.building_id, trip.amount),
-        Some(TripCargoKind::ResidenceNeed(need_kind)) => {
-            return_need_cargo_to_building(ctx, trip.building_id, need_kind, trip.amount)
+        Some(TripCargoKind::Commodity(commodity)) => {
+            return_commodity_to_building(ctx, trip.building_id, commodity, trip.amount)
         }
         None => {}
     }
@@ -473,18 +509,22 @@ fn return_need_cargo_to_building(
     ctx.db.building().id().update(building);
 }
 
-fn return_timber_cargo_to_building(ctx: &ReducerContext, building_id: u64, amount: f64) {
+fn return_commodity_to_building(
+    ctx: &ReducerContext,
+    building_id: u64,
+    commodity: CommodityKind,
+    amount: f64,
+) {
     if amount <= 1e-6 {
         return;
     }
     let Some(mut building) = ctx.db.building().id().find(&building_id) else {
         return;
     };
-    let caps = building_storage_caps(&building.kind);
-    let (_, timber_added, _, updated) = deposit_building(&mut building, caps, amount, 0.0, 0.0);
-    let remainder = (amount - timber_added).max(0.0);
+    let deposited = deposit_building_commodity(&mut building, commodity, amount);
+    let remainder = (amount - deposited).max(0.0);
     if remainder > 1e-6 {
-        credit_treasury_timber(ctx, building.owner, remainder);
+        credit_treasury_commodity(ctx, building.owner, commodity, remainder);
     }
-    ctx.db.building().id().update(updated);
+    ctx.db.building().id().update(building);
 }

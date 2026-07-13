@@ -1,0 +1,62 @@
+use crate::balance_generated::{
+    RESIDENCE_ALE_CAPACITY, RESIDENCE_ALE_PER_PERSON_PER_SEC,
+    RESIDENCE_PRESERVED_FOOD_CAPACITY, RESIDENCE_PRESERVED_FOOD_PER_PERSON_PER_SEC, TICK_DT,
+};
+use crate::simulation::residence_needs::kinds::ResidenceNeedKind;
+use crate::simulation::residence_needs::state::NeedState;
+use crate::simulation::residence_needs::supply::ResidenceNeedSupplyContext;
+use crate::tables::Residence;
+
+#[derive(Clone, Copy, Debug)]
+pub enum ConsumeOutcome {
+    Met(NeedState),
+    Unmet,
+}
+
+pub fn consume_ale(residence: &Residence, need: &NeedState) -> ConsumeOutcome {
+    consume(residence, need, RESIDENCE_ALE_PER_PERSON_PER_SEC)
+}
+
+pub fn consume_preserved_food(residence: &Residence, need: &NeedState) -> ConsumeOutcome {
+    consume(residence, need, RESIDENCE_PRESERVED_FOOD_PER_PERSON_PER_SEC)
+}
+
+fn consume(residence: &Residence, need: &NeedState, rate: f64) -> ConsumeOutcome {
+    let demand = residence.population as f64 * rate * TICK_DT;
+    if demand <= 1e-9 || need.stock + 1e-9 >= demand {
+        return ConsumeOutcome::Met(NeedState {
+            stock: (need.stock - demand).max(0.0),
+            ..*need
+        });
+    }
+    ConsumeOutcome::Unmet
+}
+
+pub fn on_unmet(need: &NeedState) -> NeedState {
+    NeedState { stock: 0.0, ..*need }
+}
+
+pub fn evaluate_recovery(
+    kind: ResidenceNeedKind,
+    need: &NeedState,
+    supply: &ResidenceNeedSupplyContext,
+    stock_min: f64,
+) -> bool {
+    supply.has_route(kind) && need.stock + 1e-9 >= stock_min
+}
+
+pub fn apply_delivery(need: &NeedState, delivered: f64) -> NeedState {
+    NeedState {
+        stock: need.stock + delivered,
+        deficit_ticks: 0,
+        ..*need
+    }
+}
+
+pub fn stock_capacity(kind: ResidenceNeedKind) -> f64 {
+    match kind {
+        ResidenceNeedKind::Ale => RESIDENCE_ALE_CAPACITY,
+        ResidenceNeedKind::PreservedFood => RESIDENCE_PRESERVED_FOOD_CAPACITY,
+        _ => 0.0,
+    }
+}

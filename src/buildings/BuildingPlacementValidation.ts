@@ -11,6 +11,7 @@ import { hasRoadAccess, isOnRoadSurface } from '../roads/roadConnectivity.ts';
 
 export type BuildingPlacementFailureReason =
   | 'water'
+  | 'requires_shore'
   | 'too_steep'
   | 'too_close'
   | 'within_work_radius'
@@ -51,6 +52,10 @@ export function validateBuildingPlacement(
 ): BuildingPlacementResult {
   if (context.isWaterAt(x, z)) {
     return { ok: false, reason: 'water' };
+  }
+
+  if (getBuildingDefinition(kind).requiresWaterShore && !isNearOpenWater(x, z, context.isWaterAt)) {
+    return { ok: false, reason: 'requires_shore' };
   }
 
   if (isFootprintTooUneven(kind, x, z, context.getNaturalHeightAt)) {
@@ -117,6 +122,16 @@ export function validateBuildingPlacement(
   }
 
   return { ok: true };
+}
+
+function isNearOpenWater(x: number, z: number, isWaterAt: (x: number, z: number) => boolean): boolean {
+  for (const radius of [10, 17, 24]) {
+    for (let i = 0; i < 16; i++) {
+      const angle = i * Math.PI * 2 / 16;
+      if (isWaterAt(x + Math.cos(angle) * radius, z + Math.sin(angle) * radius)) return true;
+    }
+  }
+  return false;
 }
 
 export function isBuildingPlacementValid(

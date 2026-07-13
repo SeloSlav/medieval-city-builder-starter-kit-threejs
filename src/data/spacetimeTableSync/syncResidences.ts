@@ -46,6 +46,7 @@ export function syncResidences(
       yaw: row.yaw,
       population: Number(row.population),
       populationCapacity: Number(row.populationCapacity ?? row.population),
+      tier: Math.max(1, Math.min(3, Number(row.tier ?? 1))) as 1 | 2 | 3,
       settlementTicks: Number(row.settlementTicks ?? 0),
       needs: needsByResidence.get(residenceId) ?? createDefaultNeeds(),
       abandoned: row.abandoned,

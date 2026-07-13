@@ -27,6 +27,19 @@ pub fn is_open_water(x: f64, z: f64) -> bool {
     sample_hydrology_score(x, z) >= OPEN_WATER_THRESHOLD
 }
 
+pub fn is_near_open_water(x: f64, z: f64, max_distance: f64) -> bool {
+    for ring in [0.45, 0.72, 1.0] {
+        let radius = max_distance * ring;
+        for index in 0..16 {
+            let angle = index as f64 / 16.0 * std::f64::consts::TAU;
+            if is_open_water(x + angle.cos() * radius, z + angle.sin() * radius) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn burgage_zone_on_water(corners: &ZoneCorners) -> bool {
     for corner in zone_corners_polygon(corners) {
         if is_open_water(corner.x, corner.z) {

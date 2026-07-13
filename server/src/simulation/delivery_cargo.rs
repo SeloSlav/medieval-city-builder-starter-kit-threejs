@@ -7,18 +7,27 @@ use crate::economy::{
     credit_treasury_firewood, credit_treasury_food, credit_treasury_water, deposit_building,
     deposit_building_food, deposit_building_water, withdraw_building, withdraw_building_food,
     withdraw_building_water,
+    credit_treasury_commodity, deposit_building_commodity, withdraw_building_commodity,
+    CommodityKind,
 };
 use crate::simulation::residence_needs::{
     load_needs, need_stock, ResidenceNeedKind,
 };
-use crate::simulation::residence_needs::{firewood, food, water};
+use crate::simulation::residence_needs::{firewood, food, provisions, water};
 use crate::tables::Building;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DeliveryCargoTotals {
+    pub timber: f64,
     pub firewood: f64,
     pub water: f64,
     pub food: f64,
+    pub grain: f64,
+    pub flour: f64,
+    pub ale: f64,
+    pub preserved_food: f64,
+    pub honey: f64,
+    pub wine: f64,
 }
 
 impl DeliveryCargoTotals {
@@ -27,6 +36,23 @@ impl DeliveryCargoTotals {
             ResidenceNeedKind::Firewood => self.firewood += amount,
             ResidenceNeedKind::Water => self.water += amount,
             ResidenceNeedKind::Food => self.food += amount,
+            ResidenceNeedKind::Ale => self.ale += amount,
+            ResidenceNeedKind::PreservedFood => self.preserved_food += amount,
+        }
+    }
+
+    pub fn add_commodity(&mut self, kind: CommodityKind, amount: f64) {
+        match kind {
+            CommodityKind::Timber => self.timber += amount,
+            CommodityKind::Firewood => self.firewood += amount,
+            CommodityKind::Water => self.water += amount,
+            CommodityKind::Food => self.food += amount,
+            CommodityKind::Grain => self.grain += amount,
+            CommodityKind::Flour => self.flour += amount,
+            CommodityKind::Ale => self.ale += amount,
+            CommodityKind::PreservedFood => self.preserved_food += amount,
+            CommodityKind::Honey => self.honey += amount,
+            CommodityKind::Wine => self.wine += amount,
         }
     }
 }
@@ -36,6 +62,8 @@ pub fn building_delivery_stock(building: &Building, kind: ResidenceNeedKind) -> 
         ResidenceNeedKind::Firewood => building.firewood,
         ResidenceNeedKind::Water => building.water,
         ResidenceNeedKind::Food => building.food,
+        ResidenceNeedKind::Ale => building.ale,
+        ResidenceNeedKind::PreservedFood => building.preserved_food,
     }
 }
 
@@ -59,6 +87,10 @@ pub fn withdraw_delivery_cargo(
             let (withdrawn, updated) = withdraw_building_food(building, amount);
             *building = updated;
             withdrawn
+        }
+        ResidenceNeedKind::Ale => withdraw_building_commodity(building, CommodityKind::Ale, amount),
+        ResidenceNeedKind::PreservedFood => {
+            withdraw_building_commodity(building, CommodityKind::PreservedFood, amount)
         }
     }
 }
@@ -93,6 +125,10 @@ pub fn deposit_delivery_cargo(
             *building = updated;
             deposited
         }
+        ResidenceNeedKind::Ale => deposit_building_commodity(building, CommodityKind::Ale, amount),
+        ResidenceNeedKind::PreservedFood => {
+            deposit_building_commodity(building, CommodityKind::PreservedFood, amount)
+        }
     }
 }
 
@@ -109,6 +145,10 @@ pub fn credit_undeposited_delivery_cargo(
         ResidenceNeedKind::Firewood => credit_treasury_firewood(ctx, owner, amount),
         ResidenceNeedKind::Water => credit_treasury_water(ctx, owner, amount),
         ResidenceNeedKind::Food => credit_treasury_food(ctx, owner, amount),
+        ResidenceNeedKind::Ale => credit_treasury_commodity(ctx, owner, CommodityKind::Ale, amount),
+        ResidenceNeedKind::PreservedFood => {
+            credit_treasury_commodity(ctx, owner, CommodityKind::PreservedFood, amount)
+        }
     }
 }
 
@@ -117,6 +157,9 @@ pub fn delivery_stock_room(kind: ResidenceNeedKind, stock: f64) -> f64 {
         ResidenceNeedKind::Firewood => (firewood::stock_capacity() - stock).max(0.0),
         ResidenceNeedKind::Water => (water::stock_capacity() - stock).max(0.0),
         ResidenceNeedKind::Food => (food::stock_capacity() - stock).max(0.0),
+        ResidenceNeedKind::Ale | ResidenceNeedKind::PreservedFood => {
+            (provisions::stock_capacity(kind) - stock).max(0.0)
+        }
     }
 }
 
@@ -125,6 +168,9 @@ pub fn has_delivery_stock_room(kind: ResidenceNeedKind, stock: f64) -> bool {
         ResidenceNeedKind::Firewood => firewood::has_stock_room(stock),
         ResidenceNeedKind::Water => water::has_stock_room(stock),
         ResidenceNeedKind::Food => food::has_stock_room(stock),
+        ResidenceNeedKind::Ale | ResidenceNeedKind::PreservedFood => {
+            stock + 1e-6 < provisions::stock_capacity(kind)
+        }
     }
 }
 

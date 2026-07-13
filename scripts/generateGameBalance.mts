@@ -19,7 +19,19 @@ import {
 type BuildingBalance = {
   label: string;
   cost: { timber: number; stone: number };
-  storage: { timber: number; firewood: number; stone: number; water?: number; food?: number };
+  storage: {
+    timber: number;
+    firewood: number;
+    stone: number;
+    water?: number;
+    food?: number;
+    grain?: number;
+    flour?: number;
+    ale?: number;
+    preservedFood?: number;
+    honey?: number;
+    wine?: number;
+  };
   workRadius: number;
   pickRadius: number;
   harvestInterval: number;
@@ -32,6 +44,7 @@ type BuildingBalance = {
   requiresQuarryStone: boolean;
   requiresGame: boolean;
   requiresBerries: boolean;
+  requiresWaterShore?: boolean;
 };
 
 type BackyardGardenBalance = {
@@ -97,6 +110,12 @@ export type GameBalance = {
     foodSaleGoldPerUnit: number;
     residenceTimberCost: number;
     residenceStoneCost: number;
+    residenceTier2TimberCost: number;
+    residenceTier2StoneCost: number;
+    residenceTier2GoldCost: number;
+    residenceTier3TimberCost: number;
+    residenceTier3StoneCost: number;
+    residenceTier3GoldCost: number;
     householdMaxWealth: number;
   };
   population: {
@@ -112,6 +131,13 @@ export type GameBalance = {
     residenceWaterPerPersonPerSec: number;
     residenceFoodCapacity: number;
     residenceFoodPerPersonPerSec: number;
+    residenceTier1Capacity: number;
+    residenceTier2Capacity: number;
+    residenceTier3Capacity: number;
+    residencePreservedFoodCapacity: number;
+    residencePreservedFoodPerPersonPerSec: number;
+    residenceAleCapacity: number;
+    residenceAlePerPersonPerSec: number;
     abandonAfterDeficitTicks: number;
     residenceRecoveryFirewoodMin: number;
     residenceRecoveryWaterMin: number;
@@ -172,6 +198,36 @@ export type GameBalance = {
     wellSurgeCooldownSec: number;
     wellWaterPerDelivery: number;
     millWaterPerHarvest: number;
+    grainPerFieldCycle: number;
+    grainTransferPerTrip: number;
+    watermillGrainPerCycle: number;
+    watermillWaterPerCycle: number;
+    watermillFlourPerCycle: number;
+    granaryFlourPerCycle: number;
+    granaryFoodPerCycle: number;
+    breweryGrainPerCycle: number;
+    breweryWaterPerCycle: number;
+    breweryAlePerCycle: number;
+    smokehouseFoodPerCycle: number;
+    smokehouseFirewoodPerCycle: number;
+    smokehousePreservedFoodPerCycle: number;
+    apiaryHoneyPerCycle: number;
+    apiaryFoodPerCycle: number;
+    vineyardWinePerCycle: number;
+    vineyardFoodPerCycle: number;
+    monasteryGrainPerCycle: number;
+    monasteryFoodPerCycle: number;
+    monasteryPilgrimageGoldPerDay: number;
+    monasteryUnlinkedProductivity: number;
+    monasteryCoverageRadius: number;
+    monasteryTitheShareDefault: number;
+    monasteryCharityFoodPerDelivery: number;
+    specialtyExportGoldPerHoney: number;
+    specialtyExportGoldPerAle: number;
+    specialtyExportGoldPerWine: number;
+    ferryGoldPerDay: number;
+    carpenterDeliverySpeedMultiplier: number;
+    carpenterTimberCostMultiplier: number;
   };
   buildings: Record<string, BuildingBalance>;
   backyardGardens: Record<string, BackyardGardenBalance>;
@@ -198,6 +254,17 @@ const simKindByKind: Record<string, string | null> = {
   foragers_shed: 'ForagersShed',
   chapel: null,
   marketplace: null,
+  grain_field: 'GrainField',
+  threshing_barn: 'ThreshingBarn',
+  monastery: 'Monastery',
+  brewery: 'Brewery',
+  smokehouse: 'Smokehouse',
+  granary: 'Granary',
+  apiary: 'Apiary',
+  watermill: 'Watermill',
+  carpenter: 'Carpenter',
+  ferry_landing: 'FerryLanding',
+  vineyard: 'Vineyard',
 };
 
 function rustF64(value: number): string {
@@ -238,6 +305,12 @@ function generateRust(): string {
     `pub const FOOD_SALE_GOLD_PER_UNIT: f64 = ${rustF64(b.economy.foodSaleGoldPerUnit)};`,
     `pub const RESIDENCE_TIMBER_COST: f64 = ${rustF64(b.economy.residenceTimberCost)};`,
     `pub const RESIDENCE_STONE_COST: f64 = ${rustF64(b.economy.residenceStoneCost)};`,
+    `pub const RESIDENCE_TIER2_TIMBER_COST: f64 = ${rustF64(b.economy.residenceTier2TimberCost)};`,
+    `pub const RESIDENCE_TIER2_STONE_COST: f64 = ${rustF64(b.economy.residenceTier2StoneCost)};`,
+    `pub const RESIDENCE_TIER2_GOLD_COST: f64 = ${rustF64(b.economy.residenceTier2GoldCost)};`,
+    `pub const RESIDENCE_TIER3_TIMBER_COST: f64 = ${rustF64(b.economy.residenceTier3TimberCost)};`,
+    `pub const RESIDENCE_TIER3_STONE_COST: f64 = ${rustF64(b.economy.residenceTier3StoneCost)};`,
+    `pub const RESIDENCE_TIER3_GOLD_COST: f64 = ${rustF64(b.economy.residenceTier3GoldCost)};`,
     `pub const HOUSEHOLD_MAX_WEALTH: f64 = ${rustF64(b.economy.householdMaxWealth)};`,
     '',
     `pub const STARTING_POPULATION: u32 = ${b.population.starting};`,
@@ -252,6 +325,13 @@ function generateRust(): string {
     `pub const RESIDENCE_WATER_PER_PERSON_PER_SEC: f64 = ${rustF64(b.population.residenceWaterPerPersonPerSec)};`,
     `pub const RESIDENCE_FOOD_CAPACITY: f64 = ${rustF64(b.population.residenceFoodCapacity)};`,
     `pub const RESIDENCE_FOOD_PER_PERSON_PER_SEC: f64 = ${rustF64(b.population.residenceFoodPerPersonPerSec)};`,
+    `pub const RESIDENCE_TIER1_CAPACITY: u32 = ${b.population.residenceTier1Capacity};`,
+    `pub const RESIDENCE_TIER2_CAPACITY: u32 = ${b.population.residenceTier2Capacity};`,
+    `pub const RESIDENCE_TIER3_CAPACITY: u32 = ${b.population.residenceTier3Capacity};`,
+    `pub const RESIDENCE_PRESERVED_FOOD_CAPACITY: f64 = ${rustF64(b.population.residencePreservedFoodCapacity)};`,
+    `pub const RESIDENCE_PRESERVED_FOOD_PER_PERSON_PER_SEC: f64 = ${rustF64(b.population.residencePreservedFoodPerPersonPerSec)};`,
+    `pub const RESIDENCE_ALE_CAPACITY: f64 = ${rustF64(b.population.residenceAleCapacity)};`,
+    `pub const RESIDENCE_ALE_PER_PERSON_PER_SEC: f64 = ${rustF64(b.population.residenceAlePerPersonPerSec)};`,
     `pub const ABANDON_AFTER_DEFICIT_TICKS: u32 = ${b.population.abandonAfterDeficitTicks};`,
     `pub const RESIDENCE_RECOVERY_FIREWOOD_MIN: f64 = ${rustF64(b.population.residenceRecoveryFirewoodMin)};`,
     `pub const RESIDENCE_RECOVERY_WATER_MIN: f64 = ${rustF64(b.population.residenceRecoveryWaterMin)};`,
@@ -310,6 +390,36 @@ function generateRust(): string {
     `pub const WELL_SURGE_COOLDOWN_SEC: f64 = ${rustF64(b.production.wellSurgeCooldownSec)};`,
     `pub const WELL_WATER_PER_DELIVERY: f64 = ${rustF64(b.production.wellWaterPerDelivery)};`,
     `pub const MILL_WATER_PER_HARVEST: f64 = ${rustF64(b.production.millWaterPerHarvest)};`,
+    `pub const GRAIN_PER_FIELD_CYCLE: f64 = ${rustF64(b.production.grainPerFieldCycle)};`,
+    `pub const GRAIN_TRANSFER_PER_TRIP: f64 = ${rustF64(b.production.grainTransferPerTrip)};`,
+    `pub const WATERMILL_GRAIN_PER_CYCLE: f64 = ${rustF64(b.production.watermillGrainPerCycle)};`,
+    `pub const WATERMILL_WATER_PER_CYCLE: f64 = ${rustF64(b.production.watermillWaterPerCycle)};`,
+    `pub const WATERMILL_FLOUR_PER_CYCLE: f64 = ${rustF64(b.production.watermillFlourPerCycle)};`,
+    `pub const GRANARY_FLOUR_PER_CYCLE: f64 = ${rustF64(b.production.granaryFlourPerCycle)};`,
+    `pub const GRANARY_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.granaryFoodPerCycle)};`,
+    `pub const BREWERY_GRAIN_PER_CYCLE: f64 = ${rustF64(b.production.breweryGrainPerCycle)};`,
+    `pub const BREWERY_WATER_PER_CYCLE: f64 = ${rustF64(b.production.breweryWaterPerCycle)};`,
+    `pub const BREWERY_ALE_PER_CYCLE: f64 = ${rustF64(b.production.breweryAlePerCycle)};`,
+    `pub const SMOKEHOUSE_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.smokehouseFoodPerCycle)};`,
+    `pub const SMOKEHOUSE_FIREWOOD_PER_CYCLE: f64 = ${rustF64(b.production.smokehouseFirewoodPerCycle)};`,
+    `pub const SMOKEHOUSE_PRESERVED_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.smokehousePreservedFoodPerCycle)};`,
+    `pub const APIARY_HONEY_PER_CYCLE: f64 = ${rustF64(b.production.apiaryHoneyPerCycle)};`,
+    `pub const APIARY_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.apiaryFoodPerCycle)};`,
+    `pub const VINEYARD_WINE_PER_CYCLE: f64 = ${rustF64(b.production.vineyardWinePerCycle)};`,
+    `pub const VINEYARD_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.vineyardFoodPerCycle)};`,
+    `pub const MONASTERY_GRAIN_PER_CYCLE: f64 = ${rustF64(b.production.monasteryGrainPerCycle)};`,
+    `pub const MONASTERY_FOOD_PER_CYCLE: f64 = ${rustF64(b.production.monasteryFoodPerCycle)};`,
+    `pub const MONASTERY_PILGRIMAGE_GOLD_PER_DAY: f64 = ${rustF64(b.production.monasteryPilgrimageGoldPerDay)};`,
+    `pub const MONASTERY_UNLINKED_PRODUCTIVITY: f64 = ${rustF64(b.production.monasteryUnlinkedProductivity)};`,
+    `pub const MONASTERY_COVERAGE_RADIUS: f64 = ${rustF64(b.production.monasteryCoverageRadius)};`,
+    `pub const MONASTERY_TITHE_SHARE_DEFAULT: f64 = ${rustF64(b.production.monasteryTitheShareDefault)};`,
+    `pub const MONASTERY_CHARITY_FOOD_PER_DELIVERY: f64 = ${rustF64(b.production.monasteryCharityFoodPerDelivery)};`,
+    `pub const SPECIALTY_EXPORT_GOLD_PER_HONEY: f64 = ${rustF64(b.production.specialtyExportGoldPerHoney)};`,
+    `pub const SPECIALTY_EXPORT_GOLD_PER_ALE: f64 = ${rustF64(b.production.specialtyExportGoldPerAle)};`,
+    `pub const SPECIALTY_EXPORT_GOLD_PER_WINE: f64 = ${rustF64(b.production.specialtyExportGoldPerWine)};`,
+    `pub const FERRY_GOLD_PER_DAY: f64 = ${rustF64(b.production.ferryGoldPerDay)};`,
+    `pub const CARPENTER_DELIVERY_SPEED_MULTIPLIER: f64 = ${rustF64(b.production.carpenterDeliverySpeedMultiplier)};`,
+    `pub const CARPENTER_TIMBER_COST_MULTIPLIER: f64 = ${rustF64(b.production.carpenterTimberCostMultiplier)};`,
     '',
   ];
 
@@ -322,6 +432,17 @@ function generateRust(): string {
   lines.push('    Well,');
   lines.push('    HuntersHall,');
   lines.push('    ForagersShed,');
+  lines.push('    GrainField,');
+  lines.push('    ThreshingBarn,');
+  lines.push('    Monastery,');
+  lines.push('    Brewery,');
+  lines.push('    Smokehouse,');
+  lines.push('    Granary,');
+  lines.push('    Apiary,');
+  lines.push('    Watermill,');
+  lines.push('    Carpenter,');
+  lines.push('    FerryLanding,');
+  lines.push('    Vineyard,');
   lines.push('}');
   lines.push('');
   lines.push('#[derive(Clone, Copy, Debug)]');
@@ -334,6 +455,12 @@ function generateRust(): string {
   lines.push('    pub storage_stone: f64,');
   lines.push('    pub storage_water: f64,');
   lines.push('    pub storage_food: f64,');
+  lines.push('    pub storage_grain: f64,');
+  lines.push('    pub storage_flour: f64,');
+  lines.push('    pub storage_ale: f64,');
+  lines.push('    pub storage_preserved_food: f64,');
+  lines.push('    pub storage_honey: f64,');
+  lines.push('    pub storage_wine: f64,');
   lines.push('    pub accepts_labor: bool,');
   lines.push('    pub max_labor: u32,');
   lines.push('    pub work_radius: f64,');
@@ -344,6 +471,7 @@ function generateRust(): string {
   lines.push('    pub requires_quarry_stone: bool,');
   lines.push('    pub requires_game: bool,');
   lines.push('    pub requires_berries: bool,');
+  lines.push('    pub requires_water_shore: bool,');
   lines.push('    pub sim_kind: Option<BuildingSimKind>,');
   lines.push('}');
   lines.push('');
@@ -360,6 +488,12 @@ function generateRust(): string {
     lines.push(`    storage_stone: ${rustF64(def.storage.stone)},`);
     lines.push(`    storage_water: ${rustF64(def.storage.water ?? 0)},`);
     lines.push(`    storage_food: ${rustF64(def.storage.food ?? 0)},`);
+    lines.push(`    storage_grain: ${rustF64(def.storage.grain ?? 0)},`);
+    lines.push(`    storage_flour: ${rustF64(def.storage.flour ?? 0)},`);
+    lines.push(`    storage_ale: ${rustF64(def.storage.ale ?? 0)},`);
+    lines.push(`    storage_preserved_food: ${rustF64(def.storage.preservedFood ?? 0)},`);
+    lines.push(`    storage_honey: ${rustF64(def.storage.honey ?? 0)},`);
+    lines.push(`    storage_wine: ${rustF64(def.storage.wine ?? 0)},`);
     lines.push(`    accepts_labor: ${def.acceptsLabor},`);
     lines.push(`    max_labor: ${def.maxLabor},`);
     lines.push(`    work_radius: ${rustF64(def.workRadius)},`);
@@ -370,6 +504,7 @@ function generateRust(): string {
     lines.push(`    requires_quarry_stone: ${def.requiresQuarryStone},`);
     lines.push(`    requires_game: ${def.requiresGame},`);
     lines.push(`    requires_berries: ${def.requiresBerries},`);
+    lines.push(`    requires_water_shore: ${def.requiresWaterShore ?? false},`);
     lines.push(`    sim_kind: ${simKind ? `Some(BuildingSimKind::${simKind})` : 'None'},`);
     lines.push('};');
     lines.push('');
@@ -504,6 +639,12 @@ function generateTypeScript(): string {
     `export const FOOD_SALE_GOLD_PER_UNIT = ${b.economy.foodSaleGoldPerUnit};`,
     `export const RESIDENCE_TIMBER_COST = ${b.economy.residenceTimberCost};`,
     `export const RESIDENCE_STONE_COST = ${b.economy.residenceStoneCost};`,
+    `export const RESIDENCE_TIER2_TIMBER_COST = ${b.economy.residenceTier2TimberCost};`,
+    `export const RESIDENCE_TIER2_STONE_COST = ${b.economy.residenceTier2StoneCost};`,
+    `export const RESIDENCE_TIER2_GOLD_COST = ${b.economy.residenceTier2GoldCost};`,
+    `export const RESIDENCE_TIER3_TIMBER_COST = ${b.economy.residenceTier3TimberCost};`,
+    `export const RESIDENCE_TIER3_STONE_COST = ${b.economy.residenceTier3StoneCost};`,
+    `export const RESIDENCE_TIER3_GOLD_COST = ${b.economy.residenceTier3GoldCost};`,
     `export const HOUSEHOLD_MAX_WEALTH = ${b.economy.householdMaxWealth};`,
     '',
     `export const STARTING_POPULATION = ${b.population.starting};`,
@@ -518,6 +659,13 @@ function generateTypeScript(): string {
     `export const RESIDENCE_WATER_PER_PERSON_PER_SEC = ${b.population.residenceWaterPerPersonPerSec};`,
     `export const RESIDENCE_FOOD_CAPACITY = ${b.population.residenceFoodCapacity};`,
     `export const RESIDENCE_FOOD_PER_PERSON_PER_SEC = ${b.population.residenceFoodPerPersonPerSec};`,
+    `export const RESIDENCE_TIER1_CAPACITY = ${b.population.residenceTier1Capacity};`,
+    `export const RESIDENCE_TIER2_CAPACITY = ${b.population.residenceTier2Capacity};`,
+    `export const RESIDENCE_TIER3_CAPACITY = ${b.population.residenceTier3Capacity};`,
+    `export const RESIDENCE_PRESERVED_FOOD_CAPACITY = ${b.population.residencePreservedFoodCapacity};`,
+    `export const RESIDENCE_PRESERVED_FOOD_PER_PERSON_PER_SEC = ${b.population.residencePreservedFoodPerPersonPerSec};`,
+    `export const RESIDENCE_ALE_CAPACITY = ${b.population.residenceAleCapacity};`,
+    `export const RESIDENCE_ALE_PER_PERSON_PER_SEC = ${b.population.residenceAlePerPersonPerSec};`,
     `export const ABANDON_AFTER_DEFICIT_TICKS = ${b.population.abandonAfterDeficitTicks};`,
     `export const RESIDENCE_RECOVERY_FIREWOOD_MIN = ${b.population.residenceRecoveryFirewoodMin};`,
     `export const RESIDENCE_RECOVERY_WATER_MIN = ${b.population.residenceRecoveryWaterMin};`,
@@ -572,6 +720,36 @@ function generateTypeScript(): string {
     `export const WELL_SURGE_COOLDOWN_SEC = ${b.production.wellSurgeCooldownSec};`,
     `export const WELL_WATER_PER_DELIVERY = ${b.production.wellWaterPerDelivery};`,
     `export const MILL_WATER_PER_HARVEST = ${b.production.millWaterPerHarvest};`,
+    `export const GRAIN_PER_FIELD_CYCLE = ${b.production.grainPerFieldCycle};`,
+    `export const GRAIN_TRANSFER_PER_TRIP = ${b.production.grainTransferPerTrip};`,
+    `export const WATERMILL_GRAIN_PER_CYCLE = ${b.production.watermillGrainPerCycle};`,
+    `export const WATERMILL_WATER_PER_CYCLE = ${b.production.watermillWaterPerCycle};`,
+    `export const WATERMILL_FLOUR_PER_CYCLE = ${b.production.watermillFlourPerCycle};`,
+    `export const GRANARY_FLOUR_PER_CYCLE = ${b.production.granaryFlourPerCycle};`,
+    `export const GRANARY_FOOD_PER_CYCLE = ${b.production.granaryFoodPerCycle};`,
+    `export const BREWERY_GRAIN_PER_CYCLE = ${b.production.breweryGrainPerCycle};`,
+    `export const BREWERY_WATER_PER_CYCLE = ${b.production.breweryWaterPerCycle};`,
+    `export const BREWERY_ALE_PER_CYCLE = ${b.production.breweryAlePerCycle};`,
+    `export const SMOKEHOUSE_FOOD_PER_CYCLE = ${b.production.smokehouseFoodPerCycle};`,
+    `export const SMOKEHOUSE_FIREWOOD_PER_CYCLE = ${b.production.smokehouseFirewoodPerCycle};`,
+    `export const SMOKEHOUSE_PRESERVED_FOOD_PER_CYCLE = ${b.production.smokehousePreservedFoodPerCycle};`,
+    `export const APIARY_HONEY_PER_CYCLE = ${b.production.apiaryHoneyPerCycle};`,
+    `export const APIARY_FOOD_PER_CYCLE = ${b.production.apiaryFoodPerCycle};`,
+    `export const VINEYARD_WINE_PER_CYCLE = ${b.production.vineyardWinePerCycle};`,
+    `export const VINEYARD_FOOD_PER_CYCLE = ${b.production.vineyardFoodPerCycle};`,
+    `export const MONASTERY_GRAIN_PER_CYCLE = ${b.production.monasteryGrainPerCycle};`,
+    `export const MONASTERY_FOOD_PER_CYCLE = ${b.production.monasteryFoodPerCycle};`,
+    `export const MONASTERY_PILGRIMAGE_GOLD_PER_DAY = ${b.production.monasteryPilgrimageGoldPerDay};`,
+    `export const MONASTERY_UNLINKED_PRODUCTIVITY = ${b.production.monasteryUnlinkedProductivity};`,
+    `export const MONASTERY_COVERAGE_RADIUS = ${b.production.monasteryCoverageRadius};`,
+    `export const MONASTERY_TITHE_SHARE_DEFAULT = ${b.production.monasteryTitheShareDefault};`,
+    `export const MONASTERY_CHARITY_FOOD_PER_DELIVERY = ${b.production.monasteryCharityFoodPerDelivery};`,
+    `export const SPECIALTY_EXPORT_GOLD_PER_HONEY = ${b.production.specialtyExportGoldPerHoney};`,
+    `export const SPECIALTY_EXPORT_GOLD_PER_ALE = ${b.production.specialtyExportGoldPerAle};`,
+    `export const SPECIALTY_EXPORT_GOLD_PER_WINE = ${b.production.specialtyExportGoldPerWine};`,
+    `export const FERRY_GOLD_PER_DAY = ${b.production.ferryGoldPerDay};`,
+    `export const CARPENTER_DELIVERY_SPEED_MULTIPLIER = ${b.production.carpenterDeliverySpeedMultiplier};`,
+    `export const CARPENTER_TIMBER_COST_MULTIPLIER = ${b.production.carpenterTimberCostMultiplier};`,
     '',
     'export type BuildingResourceCost = {',
     '  timber: number;',
@@ -584,6 +762,12 @@ function generateTypeScript(): string {
     '  stone: number;',
     '  water?: number;',
     '  food?: number;',
+    '  grain?: number;',
+    '  flour?: number;',
+    '  ale?: number;',
+    '  preservedFood?: number;',
+    '  honey?: number;',
+    '  wine?: number;',
     '};',
     '',
     'export type BuildingDefinition = {',
@@ -597,6 +781,7 @@ function generateTypeScript(): string {
     '  acceptsLabor: boolean;',
     '  requiresRoad: boolean;',
     '  facesRoad: boolean;',
+    '  requiresWaterShore: boolean;',
     '};',
     '',
     `export const BUILDING_DEFINITIONS = {`,
@@ -614,6 +799,7 @@ function generateTypeScript(): string {
     lines.push(`    acceptsLabor: ${def.acceptsLabor},`);
     lines.push(`    requiresRoad: ${def.requiresRoad},`);
     lines.push(`    facesRoad: ${def.facesRoad},`);
+    lines.push(`    requiresWaterShore: ${def.requiresWaterShore ?? false},`);
     lines.push('  },');
   }
 
@@ -632,9 +818,21 @@ function generateTypeScript(): string {
   for (const [kind, def] of Object.entries(b.buildings)) {
     const water = def.storage.water ?? 0;
     const food = def.storage.food ?? 0;
+    const grain = def.storage.grain ?? 0;
+    const flour = def.storage.flour ?? 0;
+    const ale = def.storage.ale ?? 0;
+    const preservedFood = def.storage.preservedFood ?? 0;
+    const honey = def.storage.honey ?? 0;
+    const wine = def.storage.wine ?? 0;
     const extras: string[] = [];
     if (water > 0) extras.push(`water: ${water}`);
     if (food > 0) extras.push(`food: ${food}`);
+    if (grain > 0) extras.push(`grain: ${grain}`);
+    if (flour > 0) extras.push(`flour: ${flour}`);
+    if (ale > 0) extras.push(`ale: ${ale}`);
+    if (preservedFood > 0) extras.push(`preservedFood: ${preservedFood}`);
+    if (honey > 0) extras.push(`honey: ${honey}`);
+    if (wine > 0) extras.push(`wine: ${wine}`);
     lines.push(
       `  ${kind}: { timber: ${def.storage.timber}, firewood: ${def.storage.firewood}, stone: ${def.storage.stone}${extras.length > 0 ? `, ${extras.join(', ')}` : ''} },`,
     );

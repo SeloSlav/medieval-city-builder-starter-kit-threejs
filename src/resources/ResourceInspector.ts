@@ -30,6 +30,7 @@ type ResourceInspectorOptions = {
   getMarketState?: () => RegionalMarketState;
   onDemolishBuilding?: (buildingId: string) => void | Promise<void>;
   onDemolishResidence?: (residenceId: string) => void | Promise<void>;
+  onUpgradeResidence?: (residenceId: string) => void | Promise<void>;
   onDemolishBurgageZone?: (zoneId: string) => void | Promise<void>;
   onPlaceBackyardGarden?: (residenceId: string, kind: BackyardGardenKind) => void | Promise<void>;
   onDemolishBackyardGarden?: (residenceId: string) => void | Promise<void>;
@@ -185,6 +186,7 @@ export class ResourceInspector {
       onPlaceBackyardGarden: this.options.onPlaceBackyardGarden,
       onMarketplaceTrade: this.options.onMarketplaceTrade,
       onCollectChapelCoffer: this.options.onCollectChapelCoffer,
+      onUpgradeResidence: this.options.onUpgradeResidence,
     });
   };
 

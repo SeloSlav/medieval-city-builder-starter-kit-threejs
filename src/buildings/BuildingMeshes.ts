@@ -13,6 +13,19 @@ import {
   createWellMesh,
 } from './meshes/serviceBuildingMeshes.ts';
 import { createStoneQuarryMesh } from './meshes/stoneQuarryMesh.ts';
+import {
+  createApiaryMesh,
+  createBreweryMesh,
+  createCarpenterMesh,
+  createFerryLandingMesh,
+  createGrainFieldMesh,
+  createGranaryMesh,
+  createMonasteryMesh,
+  createSmokehouseMesh,
+  createThreshingBarnMesh,
+  createVineyardMesh,
+  createWatermillMesh,
+} from './meshes/expandedBuildingMeshes.ts';
 
 export function createBuildingMesh(kind: BuildingKind): THREE.Group {
   switch (kind) {
@@ -34,6 +47,17 @@ export function createBuildingMesh(kind: BuildingKind): THREE.Group {
       return createChapelMesh();
     case 'marketplace':
       return createMarketplaceMesh();
+    case 'grain_field': return createGrainFieldMesh();
+    case 'threshing_barn': return createThreshingBarnMesh();
+    case 'monastery': return createMonasteryMesh();
+    case 'brewery': return createBreweryMesh();
+    case 'smokehouse': return createSmokehouseMesh();
+    case 'granary': return createGranaryMesh();
+    case 'apiary': return createApiaryMesh();
+    case 'watermill': return createWatermillMesh();
+    case 'carpenter': return createCarpenterMesh();
+    case 'ferry_landing': return createFerryLandingMesh();
+    case 'vineyard': return createVineyardMesh();
     default: {
       const unreachable: never = kind;
       return unreachable;

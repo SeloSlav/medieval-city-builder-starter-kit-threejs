@@ -39,6 +39,8 @@ pub fn recovery_stock_min(kind: ResidenceNeedKind, has_chapel_access: bool) -> f
         ResidenceNeedKind::Firewood => RESIDENCE_RECOVERY_FIREWOOD_MIN,
         ResidenceNeedKind::Water => RESIDENCE_RECOVERY_WATER_MIN,
         ResidenceNeedKind::Food => RESIDENCE_RECOVERY_FOOD_MIN,
+        ResidenceNeedKind::PreservedFood => 4.0,
+        ResidenceNeedKind::Ale => 3.0,
     };
 
     if !has_chapel_access {

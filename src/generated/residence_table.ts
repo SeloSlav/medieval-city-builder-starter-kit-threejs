@@ -20,6 +20,7 @@ export default __t.row({
   yaw: __t.f64(),
   population: __t.u32(),
   populationCapacity: __t.u32().name("population_capacity"),
+  tier: __t.u8(),
   settlementTicks: __t.u32().name("settlement_ticks"),
   abandoned: __t.bool(),
   householdWealth: __t.f64().name("household_wealth"),

@@ -26,6 +26,12 @@ export function buildingStorageRows(building: BuildingState, kind: BuildingKind)
     caps.stone > 0 ? `<li><span>Stone stored</span><span>${Math.round(building.stone)} / ${caps.stone}</span></li>` : '',
     caps.water != null && caps.water > 0 ? `<li><span>Water stored</span><span>${Math.round(building.water)} / ${caps.water}</span></li>` : '',
     caps.food != null && caps.food > 0 ? `<li><span>Food stored</span><span>${Math.round(building.food)} / ${caps.food}</span></li>` : '',
+    caps.grain != null && caps.grain > 0 ? `<li><span>Grain stored</span><span>${Math.round(building.grain)} / ${caps.grain}</span></li>` : '',
+    caps.flour != null && caps.flour > 0 ? `<li><span>Flour stored</span><span>${Math.round(building.flour)} / ${caps.flour}</span></li>` : '',
+    caps.ale != null && caps.ale > 0 ? `<li><span>Ale stored</span><span>${Math.round(building.ale)} / ${caps.ale}</span></li>` : '',
+    caps.preservedFood != null && caps.preservedFood > 0 ? `<li><span>Preserved food</span><span>${Math.round(building.preservedFood)} / ${caps.preservedFood}</span></li>` : '',
+    caps.honey != null && caps.honey > 0 ? `<li><span>Honey stored</span><span>${Math.round(building.honey)} / ${caps.honey}</span></li>` : '',
+    caps.wine != null && caps.wine > 0 ? `<li><span>Wine stored</span><span>${Math.round(building.wine)} / ${caps.wine}</span></li>` : '',
   ].filter(Boolean).join('');
 }
 

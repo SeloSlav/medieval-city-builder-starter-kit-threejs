@@ -8,6 +8,7 @@ import { renderStoneQuarryInspector } from './stoneQuarryRenderer.ts';
 import { renderWoodcuttersLodgeInspector } from './woodcuttersLodgeRenderer.ts';
 import { renderWellInspector } from './wellRenderer.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
+import { renderExpandedBuildingInspector } from './expandedBuildingRenderer.ts';
 
 export function renderBuildingInspector(
   target: Extract<InspectableTarget, { kind: 'building' }>,
@@ -32,6 +33,18 @@ export function renderBuildingInspector(
     case 'hunters_hall':
     case 'foragers_shed':
       return renderHarvestBuildingInspector(target, context);
+    case 'grain_field':
+    case 'threshing_barn':
+    case 'monastery':
+    case 'brewery':
+    case 'smokehouse':
+    case 'granary':
+    case 'apiary':
+    case 'watermill':
+    case 'carpenter':
+    case 'ferry_landing':
+    case 'vineyard':
+      return renderExpandedBuildingInspector(target, context);
     default: {
       const unreachable: never = building.kind;
       throw new Error(`Unhandled building kind: ${unreachable}`);

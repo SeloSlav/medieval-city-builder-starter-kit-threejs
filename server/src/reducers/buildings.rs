@@ -1,17 +1,22 @@
 use spacetimedb::{reducer, ReducerContext, Table};
 
 use crate::building_defs::{building_def, building_def_or_err};
+use crate::balance_generated::CARPENTER_TIMBER_COST_MULTIPLIER;
 use crate::db::*;
 use crate::economy::{
     assign_building_labor as set_building_labor, building_cost, building_salvage_refund,
     chapel_coffer_gold, collect_chapel_coffer as sweep_chapel_coffer, credit_treasury_firewood,
     credit_treasury_food, credit_treasury_gold, credit_treasury_stone, credit_treasury_timber,
     credit_treasury_water, spend_aggregate_stone, spend_aggregate_timber, total_stone, total_timber,
+    credit_treasury_commodity, CommodityKind,
 };
 use crate::lifecycle::ensure_player_resources;
 use crate::hydrology::{sample_hydrology_score, well_capacity_from_hydrology};
-use crate::placement_validation::{building_overlaps_residence_zone, building_overlaps_road_surface, is_on_quarry_pit, is_open_water};
-use crate::roads::has_building_road_access;
+use crate::placement_validation::{
+    building_overlaps_residence_zone, building_overlaps_road_surface, is_near_open_water,
+    is_on_quarry_pit, is_open_water,
+};
+use crate::roads::{has_building_road_access, load_owner_road_network};
 use crate::simulation::drain_trips_for_building;
 use crate::tables::{Building, WorldConfig};
 
@@ -118,6 +123,29 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         });
     }
 
+    if def.requires_water_shore && !is_near_open_water(x, z, 24.0) {
+        return Err("This building must be placed on a river or lake shore.".to_string());
+    }
+
+    if kind == "monastery" {
+        let staffed_chapel = ctx.db.building().owner().filter(&owner).any(|building| {
+            building.kind == "chapel" && building.assigned_labor > 0
+        });
+        if !staffed_chapel {
+            return Err("A staffed chapel is required before founding a monastery.".to_string());
+        }
+        let parish_population: u32 = ctx
+            .db
+            .residence()
+            .owner()
+            .filter(&owner)
+            .map(|residence| residence.population)
+            .sum();
+        if parish_population < 12 {
+            return Err("The parish needs at least 12 residents before founding a monastery.".to_string());
+        }
+    }
+
     if building_overlaps_residence_zone(ctx, &kind, x, z) {
         return Err("Cannot build inside a residence plot.".to_string());
     }
@@ -155,10 +183,15 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     }
 
     let cost = building_cost(&kind)?;
-    if total_timber(ctx, owner) + 1e-6 < cost.timber {
+    let carpenter_discount = load_owner_road_network(ctx, owner).map(|network| {
+        ctx.db.building().owner().filter(&owner).any(|shop| shop.kind == "carpenter" && shop.assigned_labor > 0
+            && network.road_path_distance(x, z, shop.x, shop.z).is_some())
+    }).unwrap_or(false);
+    let timber_cost = cost.timber * if carpenter_discount { CARPENTER_TIMBER_COST_MULTIPLIER } else { 1.0 };
+    if total_timber(ctx, owner) + 1e-6 < timber_cost {
         return Err(format!(
             "Not enough timber (need {} timber).",
-            cost.timber.round() as i64
+            timber_cost.round() as i64
         ));
     }
     if total_stone(ctx, owner) + 1e-6 < cost.stone {
@@ -167,7 +200,7 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
             cost.stone.round() as i64
         ));
     }
-    spend_aggregate_timber(ctx, owner, cost.timber)?;
+    spend_aggregate_timber(ctx, owner, timber_cost)?;
     spend_aggregate_stone(ctx, owner, cost.stone)?;
 
     let config = ctx
@@ -202,6 +235,12 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         stone: 0.0,
         water: 0.0,
         food: 0.0,
+        grain: 0.0,
+        flour: 0.0,
+        ale: 0.0,
+        preserved_food: 0.0,
+        honey: 0.0,
+        wine: 0.0,
         water_capacity,
         assigned_labor: 0,
         gold: 0.0,
@@ -252,12 +291,23 @@ pub fn demolish_building(ctx: &ReducerContext, building_id: u64) -> Result<(), S
     let trip_cargo = drain_trips_for_building(ctx, building_id);
 
     let refund = building_salvage_refund(&building.kind)?;
-    credit_treasury_timber(ctx, owner, refund.timber + building.timber);
+    credit_treasury_timber(ctx, owner, refund.timber + building.timber + trip_cargo.timber);
     credit_treasury_stone(ctx, owner, refund.stone + building.stone);
     credit_treasury_firewood(ctx, owner, building.firewood + trip_cargo.firewood);
     credit_treasury_water(ctx, owner, building.water + trip_cargo.water);
     credit_treasury_food(ctx, owner, building.food + trip_cargo.food);
     credit_treasury_gold(ctx, owner, chapel_coffer_gold(&building));
+    credit_treasury_commodity(ctx, owner, CommodityKind::Grain, building.grain + trip_cargo.grain);
+    credit_treasury_commodity(ctx, owner, CommodityKind::Flour, building.flour + trip_cargo.flour);
+    credit_treasury_commodity(ctx, owner, CommodityKind::Ale, building.ale + trip_cargo.ale);
+    credit_treasury_commodity(
+        ctx,
+        owner,
+        CommodityKind::PreservedFood,
+        building.preserved_food + trip_cargo.preserved_food,
+    );
+    credit_treasury_commodity(ctx, owner, CommodityKind::Honey, building.honey + trip_cargo.honey);
+    credit_treasury_commodity(ctx, owner, CommodityKind::Wine, building.wine + trip_cargo.wine);
 
     ctx.db.building().id().delete(building_id);
 

@@ -25,8 +25,10 @@ import RemoveRoadEdgeReducer from "../remove_road_edge_reducer";
 import ResetWorldReducer from "../reset_world_reducer";
 import SetChapelParishPolicyReducer from "../set_chapel_parish_policy_reducer";
 import SetEconomicActivityTaxRateReducer from "../set_economic_activity_tax_rate_reducer";
+import SetMonasteryPolicyReducer from "../set_monastery_policy_reducer";
 import SyncRoadNetworkReducer from "../sync_road_network_reducer";
 import TickSimReducer from "../tick_sim_reducer";
+import UpgradeResidenceReducer from "../upgrade_residence_reducer";
 
 export type AssignBuildingLaborParams = __Infer<typeof AssignBuildingLaborReducer>;
 export type BootstrapForagingParams = __Infer<typeof BootstrapForagingReducer>;
@@ -47,6 +49,8 @@ export type RemoveRoadEdgeParams = __Infer<typeof RemoveRoadEdgeReducer>;
 export type ResetWorldParams = __Infer<typeof ResetWorldReducer>;
 export type SetChapelParishPolicyParams = __Infer<typeof SetChapelParishPolicyReducer>;
 export type SetEconomicActivityTaxRateParams = __Infer<typeof SetEconomicActivityTaxRateReducer>;
+export type SetMonasteryPolicyParams = __Infer<typeof SetMonasteryPolicyReducer>;
 export type SyncRoadNetworkParams = __Infer<typeof SyncRoadNetworkReducer>;
 export type TickSimParams = __Infer<typeof TickSimReducer>;
+export type UpgradeResidenceParams = __Infer<typeof UpgradeResidenceReducer>;
 

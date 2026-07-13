@@ -14,6 +14,8 @@ const tests = [
   'test:settlement-schedule',
   'test:world-config',
   'test:chapel-bell-schedule',
+  'test:expanded-settlement',
+  'test:backyard-gardens',
 ] as const;
 
 let failed = 0;

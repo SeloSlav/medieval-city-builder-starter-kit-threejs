@@ -44,3 +44,20 @@ pub fn set_chapel_parish_policy(
     ctx.db.player_resources().owner().update(resources);
     Ok(())
 }
+
+#[reducer]
+pub fn set_monastery_policy(
+    ctx: &ReducerContext,
+    tithe_share: f64,
+    feasts_enabled: bool,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    ensure_player_resources(ctx, owner);
+    let Some(mut resources) = ctx.db.player_resources().owner().find(&owner) else {
+        return Err("Player resources not found.".to_string());
+    };
+    resources.monastery_tithe_share = tithe_share.clamp(0.0, 0.8);
+    resources.monastery_feasts_enabled = feasts_enabled;
+    ctx.db.player_resources().owner().update(resources);
+    Ok(())
+}

@@ -24,6 +24,7 @@ mod stone_quarry;
 mod tick_context;
 mod well;
 mod woodcutters_lodge;
+mod expanded_economy;
 pub mod spatial;
 
 pub use backyard_garden::{clear_backyard_garden_for_residence, step_backyard_gardens};
@@ -50,3 +51,8 @@ pub use game_calendar::game_clock;
 pub use labor_schedule::labor_and_logistics_paused;
 pub use well::step_well;
 pub use woodcutters_lodge::step_woodcutters_lodge;
+pub use expanded_economy::{
+    step_apiary, step_brewery, step_carpenter, step_ferry_landing, step_grain_field,
+    step_granary, step_monastery, step_smokehouse, step_threshing_barn, step_vineyard,
+    step_watermill,
+};

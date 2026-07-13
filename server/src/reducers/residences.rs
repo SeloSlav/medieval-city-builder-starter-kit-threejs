@@ -6,10 +6,11 @@ use crate::burgage::{
 };
 use crate::db::*;
 use crate::economy::{
-    credit_treasury_stone, credit_treasury_timber, residence_population_for_parcel,
+    credit_treasury_stone, credit_treasury_timber,
     residence_zone_cost,
     spend_aggregate_stone, spend_aggregate_timber, total_stone, total_timber,
     TIMBER_SALVAGE_FRACTION, STONE_SALVAGE_FRACTION, ResourceAmount,
+    spend_treasury_gold,
 };
 use crate::lifecycle::ensure_player_resources;
 use crate::placement_validation::{
@@ -21,6 +22,11 @@ use crate::simulation::{
     ensure_residence_needs,
 };
 use crate::tables::{BurgageZone, Residence};
+use crate::balance_generated::{
+    RESIDENCE_TIER1_CAPACITY, RESIDENCE_TIER2_CAPACITY, RESIDENCE_TIER2_GOLD_COST,
+    RESIDENCE_TIER2_STONE_COST, RESIDENCE_TIER2_TIMBER_COST, RESIDENCE_TIER3_CAPACITY,
+    RESIDENCE_TIER3_GOLD_COST, RESIDENCE_TIER3_STONE_COST, RESIDENCE_TIER3_TIMBER_COST,
+};
 
 #[reducer]
 pub fn place_burgage_zone(
@@ -152,7 +158,7 @@ pub fn place_burgage_zone(
         .ok_or_else(|| "Failed to resolve residence zone id.".to_string())?;
 
     for residence in layout.residences {
-        let population_capacity = residence_population_for_parcel(residence.parcel_frontage);
+        let population_capacity = RESIDENCE_TIER1_CAPACITY;
         let inserted = ctx.db.residence().insert(Residence {
             id: 0,
             zone_id,
@@ -163,6 +169,7 @@ pub fn place_burgage_zone(
             yaw: residence.yaw,
             population: 0,
             population_capacity,
+            tier: 1,
             settlement_ticks: 0,
             abandoned: false,
             household_wealth: 0.0,
@@ -172,6 +179,87 @@ pub fn place_burgage_zone(
     }
 
     Ok(())
+}
+
+#[reducer]
+pub fn upgrade_residence(ctx: &ReducerContext, residence_id: u64) -> Result<(), String> {
+    let owner = ctx.sender();
+    ensure_player_resources(ctx, owner);
+    let residence = ctx
+        .db
+        .residence()
+        .id()
+        .find(&residence_id)
+        .ok_or_else(|| "Residence not found.".to_string())?;
+    if residence.owner != owner {
+        return Err("You do not own this residence.".to_string());
+    }
+    if residence.abandoned || residence.population == 0 {
+        return Err("Only an occupied residence can be upgraded.".to_string());
+    }
+
+    let next_tier = residence.tier.saturating_add(1);
+    let (timber, stone, gold, capacity, required_supplier_kinds): (f64, f64, f64, u32, &[&str]) =
+        match next_tier {
+            2 => (
+                RESIDENCE_TIER2_TIMBER_COST,
+                RESIDENCE_TIER2_STONE_COST,
+                RESIDENCE_TIER2_GOLD_COST,
+                RESIDENCE_TIER2_CAPACITY,
+                &["smokehouse", "granary", "monastery"],
+            ),
+            3 => (
+                RESIDENCE_TIER3_TIMBER_COST,
+                RESIDENCE_TIER3_STONE_COST,
+                RESIDENCE_TIER3_GOLD_COST,
+                RESIDENCE_TIER3_CAPACITY,
+                &["brewery", "monastery"],
+            ),
+            _ => return Err("This residence is already at tier 3.".to_string()),
+        };
+
+    if !has_connected_supplier(ctx, &residence, required_supplier_kinds) {
+        return Err(if next_tier == 2 {
+            "Tier 2 requires a road-linked smokehouse, granary, or monastery.".to_string()
+        } else {
+            "Tier 3 requires a road-linked brewery or monastery.".to_string()
+        });
+    }
+    if total_timber(ctx, owner) + 1e-6 < timber || total_stone(ctx, owner) + 1e-6 < stone {
+        return Err(format!(
+            "Upgrade requires {} timber and {} stone.",
+            timber.round() as i64,
+            stone.round() as i64
+        ));
+    }
+    spend_aggregate_timber(ctx, owner, timber)?;
+    spend_aggregate_stone(ctx, owner, stone)?;
+    spend_treasury_gold(ctx, owner, gold)?;
+
+    ctx.db.residence().id().update(Residence {
+        tier: next_tier,
+        population_capacity: capacity,
+        settlement_ticks: 0,
+        ..residence
+    });
+    ensure_residence_needs(ctx, residence_id);
+    Ok(())
+}
+
+fn has_connected_supplier(
+    ctx: &ReducerContext,
+    residence: &Residence,
+    kinds: &[&str],
+) -> bool {
+    let Some(network) = crate::roads::load_owner_road_network(ctx, residence.owner) else {
+        return false;
+    };
+    ctx.db.building().owner().filter(&residence.owner).any(|building| {
+        kinds.contains(&building.kind.as_str())
+            && network
+                .road_path_distance(building.x, building.z, residence.x, residence.z)
+                .is_some()
+    })
 }
 
 #[reducer]

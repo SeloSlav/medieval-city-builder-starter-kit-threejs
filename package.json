@@ -27,6 +27,8 @@
     "test:settlement-schedule": "npx tsx scripts/testSettlementSchedule.mts",
     "test:world-config": "npx tsx scripts/testWorldConfigAuthority.mts",
     "test:chapel-bell-schedule": "npx tsx scripts/testChapelBellSchedule.mts",
+    "test:expanded-settlement": "npx tsx scripts/testExpandedSettlement.mts",
+    "test:backyard-gardens": "npx tsx scripts/testBackyardGardenVisuals.mts",
     "test": "npm run test:ci",
     "test:ci": "npx tsx scripts/run-all-tests.mts",
     "deploy:local": "powershell -ExecutionPolicy Bypass -File ./server/deploy-local.ps1",
