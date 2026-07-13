@@ -32,16 +32,6 @@ export function getActivePlacedBuildingLayout(): BuildingTerrainLayout | null {
   return activePlacedBuildingLayout;
 }
 
-/** @deprecated Use getActivePlacedBuildingLayout — kept for grass blocking call site. */
-export function getActiveBuildingLayout(): BuildingTerrainLayout | null {
-  return activePlacedBuildingLayout;
-}
-
-/** @deprecated Use setActivePlacedBuildingLayout */
-export function setActiveBuildingLayout(layout: BuildingTerrainLayout | null): void {
-  setActivePlacedBuildingLayout(layout);
-}
-
 function smoothstep(edge0: number, edge1: number, value: number): number {
   const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);

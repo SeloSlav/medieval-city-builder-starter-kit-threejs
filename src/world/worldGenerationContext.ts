@@ -50,8 +50,3 @@ export function getActiveWorldGeneration(): WorldGenerationSettings {
 export function getActiveWorldDimensions(): WorldDimensions {
   return activeDimensions;
 }
-
-/** @deprecated Use {@link setDraftWorldGeneration} for pre-connect scene build. */
-export function setActiveWorldGeneration(settings: WorldGenerationSettings): void {
-  setDraftWorldGeneration(settings);
-}

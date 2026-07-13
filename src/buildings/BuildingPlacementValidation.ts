@@ -1,4 +1,4 @@
-import type { BuildingKind, BuildingState, BurgageZoneState, QuarryNodeState } from '../resources/types.ts';
+import type { BuildingKind, BuildingState, BurgageZoneState, ForagingNodeState, ResourceNodeState } from '../resources/types.ts';
 import type { ResourceTotals } from '../resources/resourceTotals.ts';
 import { canAffordBuilding } from '../resources/buildingEconomy.ts';
 import { buildingRequiresRoad } from '../resources/buildingPlacementPolicy.ts';
@@ -33,8 +33,8 @@ const MAX_FOOTPRINT_HEIGHT_DELTA = 9.5;
 type BuildingPlacementContext = {
   buildings: Iterable<BuildingState>;
   burgageZones: Iterable<BurgageZoneState>;
-  quarries: Iterable<QuarryNodeState>;
-  foragingNodes: Iterable<QuarryNodeState>;
+  quarries: Iterable<ResourceNodeState>;
+  foragingNodes: Iterable<ForagingNodeState>;
   stockpile: Pick<ResourceTotals, 'timber' | 'stone'>;
   isWaterAt: (x: number, z: number) => boolean;
   isQuarryPitAt?: (x: number, z: number) => boolean;
@@ -164,7 +164,7 @@ function hasQuarryStoneInRadius(
   x: number,
   z: number,
   radius: number,
-  quarries: Iterable<QuarryNodeState>,
+  quarries: Iterable<ResourceNodeState>,
 ): boolean {
   for (const quarry of quarries) {
     if (quarry.remaining <= 0) continue;
@@ -180,7 +180,7 @@ function hasForagingInRadius(
   z: number,
   radius: number,
   nodeKind: 'game' | 'berries',
-  nodes: Iterable<QuarryNodeState>,
+  nodes: Iterable<ForagingNodeState>,
 ): boolean {
   for (const node of nodes) {
     if (node.kind !== nodeKind || node.remaining <= 0) continue;

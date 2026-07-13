@@ -407,7 +407,7 @@ git submodule update --init --recursive
 - GitHub Actions CI runs contract tests, client build, `cargo check`, `cargo test`, and the browser smoke job against a local SpacetimeDB instance.
 - `npm run test:lodge-logistics` runs a standalone script validating firewood delivery routing logic.
 - WebGPU is attempted first; if initialization fails or the browser lacks support, the app falls back to WebGL automatically.
-- A Vite chunk-size warning may appear because Three.js and post-processing code are bundled into the main client chunk. The build still completes successfully.
+- Production build splits Three.js, SpacetimeDB bindings, and vendored vegetation/sky code into separate chunks to keep the main entry bundle smaller.
 - Forest and grass vegetation build asynchronously after the first frame to keep initial load responsive.
 - `window.__medievalGameState` exposes dev helpers for inspecting live client state in the browser console.
 - `dist/`, `node_modules/`, logs, and local editor files are ignored by Git.

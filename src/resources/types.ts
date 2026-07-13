@@ -36,9 +36,6 @@ export type ResourceNodeState = {
   z: number;
 };
 
-/** @deprecated Use ResourceNodeState */
-export type QuarryNodeState = ResourceNodeState;
-
 export type ForagingNodeState = ResourceNodeState;
 
 export type TreeLayoutEntry = {
@@ -115,7 +112,7 @@ export type GameState = {
   seed: number;
   tick: number;
   stockpile: ResourceStockpile;
-  quarries: Map<string, QuarryNodeState>;
+  quarries: Map<string, ResourceNodeState>;
   foragingNodes: Map<string, ForagingNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
@@ -130,7 +127,7 @@ export type InspectableTarget =
   | {
       kind: 'quarry';
       definition: ResourceNodeDefinition;
-      state: QuarryNodeState;
+      state: ResourceNodeState;
     }
   | {
       kind: 'foraging';

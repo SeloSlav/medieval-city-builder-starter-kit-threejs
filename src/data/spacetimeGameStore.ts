@@ -32,7 +32,7 @@ import type {
   BurgageFrontageEdge,
   BurgageZoneState,
   GameState,
-  QuarryNodeState,
+  ResourceNodeState,
   ForagingNodeState,
   ResidenceState,
   ResourceStockpile,
@@ -62,7 +62,7 @@ export type SpacetimeGameSnapshot = {
   economicActivityTaxRate: number;
   parishPolicy: ParishPolicyState;
   marketState: RegionalMarketState;
-  quarries: Map<string, QuarryNodeState>;
+  quarries: Map<string, ResourceNodeState>;
   foragingNodes: Map<string, ForagingNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
@@ -191,11 +191,6 @@ export class SpacetimeGameStore {
       },
     });
     return this.connection;
-  }
-
-  /** @deprecated Use {@link connect} — tokens are server-issued, not client-generated. */
-  connectWithToken(token: string): DbConnection {
-    return this.connectWithOptionalToken(token, false);
   }
 
   toGameState(_registry: WorldLayoutRegistry): GameState {

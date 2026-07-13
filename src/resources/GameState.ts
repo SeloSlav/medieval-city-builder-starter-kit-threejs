@@ -2,8 +2,9 @@ import {
   createEmptyStockpile,
   isBuildingKind,
   type BuildingState,
+  type ForagingNodeState,
   type GameState,
-  type QuarryNodeState,
+  type ResourceNodeState,
   type TreeEntityState,
 } from './types.ts';
 import type { WorldLayoutRegistry } from './WorldLayoutRegistry.ts';
@@ -12,8 +13,8 @@ import { getBuildingDefinition } from './buildings.ts';
 import type { BuildingKind } from './types.ts';
 
 export function createInitialGameState(registry: WorldLayoutRegistry, seed: number): GameState {
-  const quarries = new Map<string, QuarryNodeState>();
-  const foragingNodes = new Map<string, QuarryNodeState>();
+  const quarries = new Map<string, ResourceNodeState>();
+  const foragingNodes = new Map<string, ForagingNodeState>();
   for (const definition of registry.definitionList) {
     const nodeState = {
       nodeId: definition.id,

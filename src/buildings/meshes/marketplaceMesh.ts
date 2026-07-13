@@ -1,132 +1,155 @@
 import * as THREE from 'three';
-import { addMesh } from '../buildingMaterials.ts';
-import { stoneMaterial, timberMaterial } from '../buildingMaterials.ts';
+import {
+  addMesh,
+  metalMaterial,
+  stoneMaterial,
+  tileMaterial,
+  timberMaterial,
+} from '../buildingMaterials.ts';
+import { addTriangularGableWall } from '../meshPrimitives.ts';
+import { addBarrel, addCrate } from './buildingMeshKit.ts';
 
-const MARKET_AWN_RED = new THREE.MeshStandardMaterial({ color: 0xb8423a, roughness: 0.9, metalness: 0 });
-const MARKET_AWN_CREAM = new THREE.MeshStandardMaterial({ color: 0xd8c48a, roughness: 0.9, metalness: 0 });
-const MARKET_CANOPY = new THREE.MeshStandardMaterial({ color: 0x8b5e3c, roughness: 0.88, metalness: 0 });
+function addMarketTable(group: THREE.Group, x: number, z: number, rotation = 0): void {
+  const table = new THREE.Group();
+  table.position.set(x, 0, z);
+  table.rotation.y = rotation;
+  addMesh(
+    table,
+    new THREE.BoxGeometry(2.0, 0.16, 0.86),
+    timberMaterial('light'),
+    new THREE.Vector3(0, 0.98, 0),
+  );
+  for (const px of [-0.72, 0.72]) {
+    for (const pz of [-0.27, 0.27]) {
+      addMesh(
+        table,
+        new THREE.BoxGeometry(0.13, 0.9, 0.13),
+        timberMaterial('dark'),
+        new THREE.Vector3(px, 0.48, pz),
+      );
+    }
+  }
+  group.add(table);
+}
 
-/** Village marketplace — trade hub; homes need a road link here to sell backyard goods. */
+/** Open Croatian market loggia: a permanent civic roof, not a carnival tent. */
 export function createMarketplaceMesh(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Marketplace';
-
-  const width = 7.4;
-  const depth = 5.6;
-  const stoneHeight = 0.22;
+  const width = 7.55;
+  const depth = 5.35;
   const halfW = width * 0.5;
   const halfD = depth * 0.5;
-  const postHeight = 2.65;
-  const awningHeight = 2.35;
+  const floorY = 0.24;
+  const wallTop = 3.15;
+  const ridgeHeight = 2.05;
+  const pitch = Math.atan2(ridgeHeight, halfW);
+  const slope = halfW / Math.cos(pitch) + 0.3;
 
   addMesh(
     group,
-    new THREE.BoxGeometry(width + 0.5, stoneHeight, depth + 0.5),
+    new THREE.BoxGeometry(width + 0.55, floorY, depth + 0.55),
     stoneMaterial('light'),
-    new THREE.Vector3(0, stoneHeight * 0.5, 0),
+    new THREE.Vector3(0, floorY * 0.5, 0),
   );
-
-  for (const [x, z] of [
-    [-halfW + 0.35, -halfD + 0.35],
-    [halfW - 0.35, -halfD + 0.35],
-    [-halfW + 0.35, halfD - 0.35],
-    [halfW - 0.35, halfD - 0.35],
-  ] as const) {
+  for (const z of [-halfD + 0.28, halfD - 0.28]) {
     addMesh(
       group,
-      new THREE.BoxGeometry(0.22, postHeight, 0.22),
-      timberMaterial('dark'),
-      new THREE.Vector3(x, stoneHeight + postHeight * 0.5, z),
-    );
-  }
-
-  addMesh(
-    group,
-    new THREE.BoxGeometry(width - 0.5, 0.1, 0.18),
-    timberMaterial('weathered'),
-    new THREE.Vector3(0, stoneHeight + awningHeight, halfD - 0.12),
-  );
-  addMesh(
-    group,
-    new THREE.BoxGeometry(width - 0.5, 0.1, 0.18),
-    timberMaterial('weathered'),
-    new THREE.Vector3(0, stoneHeight + awningHeight, -halfD + 0.12),
-  );
-
-  const awningPanelCount = 6;
-  const panelWidth = (width - 0.8) / awningPanelCount;
-  for (let i = 0; i < awningPanelCount; i++) {
-    const x = -halfW + 0.55 + panelWidth * (i + 0.5);
-    const material = i % 2 === 0 ? MARKET_AWN_RED : MARKET_AWN_CREAM;
-    addMesh(
-      group,
-      new THREE.BoxGeometry(panelWidth * 0.92, 0.06, depth - 0.55),
-      material,
-      new THREE.Vector3(x, stoneHeight + awningHeight + 0.04, 0),
-    );
-  }
-
-  addMesh(
-    group,
-    new THREE.BoxGeometry(width - 0.7, 0.08, depth - 0.7),
-    MARKET_CANOPY,
-    new THREE.Vector3(0, stoneHeight + awningHeight - 0.12, 0),
-  );
-
-  for (const [x, crateMaterial] of [
-    [-2.1, timberMaterial('weathered')],
-    [-0.7, timberMaterial('mid')],
-    [0.9, timberMaterial('light')],
-    [2.2, timberMaterial('weathered')],
-  ] as const) {
-    addMesh(
-      group,
-      new THREE.BoxGeometry(0.95, 0.62, 0.72),
-      crateMaterial,
-      new THREE.Vector3(x, stoneHeight + 0.31, -0.35),
-    );
-    addMesh(
-      group,
-      new THREE.BoxGeometry(0.42, 0.48, 0.42),
+      new THREE.BoxGeometry(width - 0.3, 0.24, 0.42),
       stoneMaterial('mid'),
-      new THREE.Vector3(x + 0.28, stoneHeight + 0.24, 0.55),
+      new THREE.Vector3(0, 0.36, z),
     );
   }
 
-  addMesh(
-    group,
-    new THREE.CylinderGeometry(0.34, 0.38, 0.55, 10),
-    timberMaterial('dark'),
-    new THREE.Vector3(-2.55, stoneHeight + 0.28, 1.05),
-  );
-  addMesh(
-    group,
-    new THREE.CylinderGeometry(0.34, 0.38, 0.55, 10),
-    timberMaterial('dark'),
-    new THREE.Vector3(2.45, stoneHeight + 0.28, 1.05),
-  );
-
-  addMesh(
-    group,
-    new THREE.BoxGeometry(1.35, 0.9, 0.55),
-    timberMaterial('mid'),
-    new THREE.Vector3(0, stoneHeight + 0.45, halfD - 0.55),
-  );
-  addMesh(
-    group,
-    new THREE.BoxGeometry(1.05, 0.72, 0.08),
-    timberMaterial('dark'),
-    new THREE.Vector3(0, stoneHeight + 0.36, halfD - 0.18),
-  );
+  for (const x of [-halfW + 0.38, 0, halfW - 0.38]) {
+    for (const z of [-halfD + 0.3, halfD - 0.3]) {
+      addMesh(
+        group,
+        new THREE.BoxGeometry(0.28, wallTop - floorY, 0.28),
+        timberMaterial('dark'),
+        new THREE.Vector3(x, floorY + (wallTop - floorY) * 0.5, z),
+      );
+      addMesh(
+        group,
+        new THREE.BoxGeometry(0.5, 0.18, 0.5),
+        stoneMaterial('light'),
+        new THREE.Vector3(x, floorY + 0.09, z),
+      );
+    }
+  }
+  for (const z of [-halfD + 0.3, halfD - 0.3]) {
+    addMesh(
+      group,
+      new THREE.BoxGeometry(width - 0.32, 0.2, 0.22),
+      timberMaterial('weathered'),
+      new THREE.Vector3(0, wallTop - 0.08, z),
+    );
+  }
 
   for (const side of [-1, 1] as const) {
     addMesh(
       group,
-      new THREE.BoxGeometry(0.14, 0.14, depth - 0.4),
-      timberMaterial('dark'),
-      new THREE.Vector3(side * (halfW - 0.1), stoneHeight + awningHeight, 0),
+      new THREE.BoxGeometry(slope, 0.14, depth + 0.58),
+      tileMaterial(side > 0 ? 0 : 1),
+      new THREE.Vector3(side * halfW * 0.46, wallTop + ridgeHeight * 0.48, 0),
+      new THREE.Euler(0, 0, side * -pitch),
+    );
+    for (let row = 0; row < 4; row++) {
+      const t = (row + 0.5) / 4.8;
+      addMesh(
+        group,
+        new THREE.BoxGeometry(0.07, 0.055, depth + 0.6),
+        tileMaterial(row % 2 === 0 ? 0 : 1),
+        new THREE.Vector3(side * halfW * (1 - t), wallTop + ridgeHeight * t + 0.02, 0),
+        new THREE.Euler(0, 0, side * -pitch),
+      );
+    }
+  }
+  addMesh(
+    group,
+    new THREE.BoxGeometry(0.24, 0.18, depth + 0.72),
+    tileMaterial(2),
+    new THREE.Vector3(0, wallTop + ridgeHeight + 0.04, 0),
+  );
+  for (const zSign of [-1, 1] as const) {
+    addTriangularGableWall(
+      group,
+      'z',
+      zSign * (halfD - 0.05),
+      halfW,
+      wallTop,
+      ridgeHeight,
+      0.14,
+      timberMaterial('weathered'),
     );
   }
 
+  addMarketTable(group, -1.95, -0.65);
+  addMarketTable(group, 1.15, -0.65);
+  addMarketTable(group, -0.45, 1.15);
+  addCrate(group, 2.65, 1.45, 0.86);
+  addCrate(group, 2.8, 0.55, 0.72);
+  addBarrel(group, -2.8, 1.45, 0.88);
+
+  // A simple hanging steelyard gives the open loggia a strong trade silhouette.
+  addMesh(
+    group,
+    new THREE.BoxGeometry(1.55, 0.08, 0.08),
+    metalMaterial('iron'),
+    new THREE.Vector3(0, 2.55, halfD - 0.22),
+    new THREE.Euler(0, 0, 0.08),
+  );
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(0.022, 0.022, 0.72, 6),
+    metalMaterial('iron'),
+    new THREE.Vector3(0.48, 2.18, halfD - 0.22),
+  );
+  addMesh(
+    group,
+    new THREE.CylinderGeometry(0.34, 0.28, 0.08, 12),
+    metalMaterial('iron'),
+    new THREE.Vector3(0.48, 1.8, halfD - 0.22),
+  );
   return group;
 }

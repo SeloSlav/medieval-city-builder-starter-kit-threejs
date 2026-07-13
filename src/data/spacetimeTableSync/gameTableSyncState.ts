@@ -8,7 +8,7 @@ import type {
   BuildingState,
   BurgageZoneState,
   ForagingNodeState,
-  QuarryNodeState,
+  ResourceNodeState,
   ResidenceState,
   ResourceStockpile,
   TreeEntityState,
@@ -22,7 +22,7 @@ export type GameTableSyncState = {
   economicActivityTaxRate: number;
   parishPolicy: ParishPolicyState;
   marketState: RegionalMarketState;
-  quarries: Map<string, QuarryNodeState>;
+  quarries: Map<string, ResourceNodeState>;
   foragingNodes: Map<string, ForagingNodeState>;
   trees: Map<string, TreeEntityState>;
   buildings: Map<string, BuildingState>;
