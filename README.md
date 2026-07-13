@@ -310,9 +310,11 @@ scripts/
   generateGameBalance.mts         Generates Rust + TypeScript balance constants
   testLodgeLogistics.mts         Standalone firewood delivery logic validation
 docs/
-  design/     Connection model and design decisions
+  design/     Connection model, visual language, and design decisions
   screenshots/ Project screenshots used by this README
 ```
+
+All new building and residence models must follow the canonical [building visual language](docs/design/building-visual-language.md). The custom chapel mesh is its reference implementation.
 
 ## How It Works
 

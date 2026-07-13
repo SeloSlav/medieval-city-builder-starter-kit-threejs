@@ -252,6 +252,7 @@ function addBellTower(
   const baseSize = 1.62;
   const belfryFloorY = roofY + 0.18;
   const belfryHeight = 1.72;
+  const bellLift = 0.18;
 
   addMesh(
     group,
@@ -288,27 +289,27 @@ function addBellTower(
     group,
     new THREE.CylinderGeometry(0.24, 0.43, 0.72, 12),
     materials.brass,
-    new THREE.Vector3(0, belfryFloorY + 0.84, towerZ),
+    new THREE.Vector3(0, belfryFloorY + 0.84 + bellLift, towerZ),
   );
   addMesh(
     group,
     new THREE.TorusGeometry(0.4, 0.055, 7, 16),
     materials.brass,
-    new THREE.Vector3(0, belfryFloorY + 0.48, towerZ),
+    new THREE.Vector3(0, belfryFloorY + 0.48 + bellLift, towerZ),
     new THREE.Euler(Math.PI * 0.5, 0, 0),
   );
   addMesh(
     group,
     new THREE.CylinderGeometry(0.055, 0.055, 1.34, 8),
     timberMaterial('dark'),
-    new THREE.Vector3(0, belfryFloorY + 1.28, towerZ),
+    new THREE.Vector3(0, belfryFloorY + 1.28 + bellLift, towerZ),
     new THREE.Euler(0, 0, Math.PI * 0.5),
   );
   addMesh(
     group,
     new THREE.SphereGeometry(0.09, 8, 6),
     materials.brass,
-    new THREE.Vector3(0, belfryFloorY + 0.38, towerZ),
+    new THREE.Vector3(0, belfryFloorY + 0.38 + bellLift, towerZ),
   );
 
   const towerRoofY = belfryFloorY + belfryHeight + 0.63;
