@@ -1,7 +1,12 @@
 import * as THREE from 'three';
+import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
+import { pointWithinBuildingSiteClearance } from '../buildings/BuildingTerrainLayout.ts';
 import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import { createRockShadowGeometry } from '../props/ForestProps.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
+import type { Point2 } from '../utils/polygonGeometry.ts';
+import { distancePointToPolygon2 } from '../utils/polygonGeometry.ts';
+import type { RockObstacle } from '../utils/pathGeometry.ts';
 import type { RiverField } from './RiverField.ts';
 import { buildRiverShoreCrossingGaps, isInRiverShoreCrossingGap } from './RiverShoreCrossingGaps.ts';
 
@@ -16,6 +21,23 @@ type StonePlacement = {
   scale: number;
 };
 
+type ShoreStoneInstance = {
+  placement: StonePlacement;
+  mesh: THREE.InstancedMesh;
+  shadowMesh: THREE.InstancedMesh;
+  instanceIndex: number;
+  matrix: THREE.Matrix4;
+};
+
+export type RiverShoreStoneField = {
+  group: THREE.Group;
+  readonly placements: ReadonlyArray<RockObstacle>;
+  syncPlacementClearance: (
+    buildings: Iterable<BuildingTerrainSource>,
+    farmFieldPolygons: Iterable<Point2[]>,
+  ) => void;
+};
+
 const TAU = Math.PI * 2;
 
 export function createRiverShoreStones(
@@ -24,15 +46,22 @@ export function createRiverShoreStones(
   material: THREE.Material,
   shadowMaterials: RockShadowMaterials,
   rng: () => number,
-): { group: THREE.Group; placements: StonePlacement[] } {
+): RiverShoreStoneField {
   const group = new THREE.Group();
   group.name = 'River shore stones';
   const placements = createShoreStonePlacements(riverField, rng);
-  if (placements.length === 0) return { group, placements };
+  if (placements.length === 0) {
+    return {
+      group,
+      placements,
+      syncPlacementClearance: () => {},
+    };
+  }
 
   const variants = [createBoulderGeometry(1.3), createBoulderGeometry(7.7), createBoulderGeometry(13.2)];
   const shadowGeometry = createRockShadowGeometry();
   const buckets = variants.map(() => [] as StonePlacement[]);
+  const instances: ShoreStoneInstance[] = [];
   placements.forEach((placement, index) => buckets[index % buckets.length].push(placement));
 
   const matrix = new THREE.Matrix4();
@@ -64,13 +93,71 @@ export function createRiverShoreStones(
       matrix.compose(position, quaternion, scaleVector);
       mesh.setMatrixAt(rockIndex, matrix);
       shadowMesh.setMatrixAt(rockIndex, matrix);
+      instances.push({
+        placement: rock,
+        mesh,
+        shadowMesh,
+        instanceIndex: rockIndex,
+        matrix: matrix.clone(),
+      });
     });
     mesh.instanceMatrix.needsUpdate = true;
     shadowMesh.instanceMatrix.needsUpdate = true;
     group.add(mesh, shadowMesh);
   });
 
-  return { group, placements };
+  const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+  let removed = new Set<number>();
+  let activePlacements: ReadonlyArray<RockObstacle> = instances.map((instance) => instance.placement);
+
+  return {
+    group,
+    get placements() {
+      return activePlacements;
+    },
+    syncPlacementClearance(buildings, farmFieldPolygons) {
+      const buildingList = [...buildings];
+      const farmFields = [...farmFieldPolygons];
+      const nextRemoved = new Set<number>();
+
+      for (let index = 0; index < instances.length; index++) {
+        const placement = instances[index].placement;
+        const clearRadius = placement.scale * 1.35 + 0.35;
+        const overlapsBuilding = buildingList.some((building) =>
+          pointWithinBuildingSiteClearance(placement.x, placement.z, building, clearRadius),
+        );
+        const overlapsFarmField = farmFields.some((polygon) =>
+          distancePointToPolygon2(placement, polygon) <= clearRadius,
+        );
+        if (overlapsBuilding || overlapsFarmField) nextRemoved.add(index);
+      }
+
+      if (indexSetsEqual(nextRemoved, removed)) return;
+
+      for (let index = 0; index < instances.length; index++) {
+        if (nextRemoved.has(index) === removed.has(index)) continue;
+        const instance = instances[index];
+        const instanceMatrix = nextRemoved.has(index) ? hiddenMatrix : instance.matrix;
+        instance.mesh.setMatrixAt(instance.instanceIndex, instanceMatrix);
+        instance.shadowMesh.setMatrixAt(instance.instanceIndex, instanceMatrix);
+        instance.mesh.instanceMatrix.needsUpdate = true;
+        instance.shadowMesh.instanceMatrix.needsUpdate = true;
+      }
+
+      removed = nextRemoved;
+      activePlacements = instances
+        .filter((_, index) => !nextRemoved.has(index))
+        .map((instance) => instance.placement);
+    },
+  };
+}
+
+function indexSetsEqual(left: ReadonlySet<number>, right: ReadonlySet<number>): boolean {
+  if (left.size !== right.size) return false;
+  for (const value of left) {
+    if (!right.has(value)) return false;
+  }
+  return true;
 }
 
 function createShoreStonePlacements(riverField: RiverField, rng: () => number): StonePlacement[] {

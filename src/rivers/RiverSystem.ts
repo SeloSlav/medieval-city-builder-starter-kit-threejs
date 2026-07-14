@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { MeshStandardNodeMaterial } from 'three/webgpu';
+import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
 import type { MossyRockTextureSet } from '../utils/propTextureLoad.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import { RiverField } from './RiverField.ts';
@@ -8,6 +9,7 @@ import { createRiverReeds, type RiverReedField } from './RiverReeds.ts';
 import { createRiverShoreStones } from './RiverShoreStones.ts';
 import { createRiverWaterMesh, disposeSharedRiverWaterMaterial } from './RiverWaterMesh.ts';
 import type { RockObstacle } from '../utils/pathGeometry.ts';
+import type { Point2 } from '../utils/polygonGeometry.ts';
 import type { RendererBackendKind } from '../scene/RendererBackend.ts';
 
 function createPropShadowMaterials(): {
@@ -31,7 +33,11 @@ export type RiverSystem = {
   field: RiverField;
   group: THREE.Group;
   reedsGroup: THREE.Group;
-  shoreRockPlacements: ReadonlyArray<RockObstacle>;
+  getShoreRockPlacements: () => ReadonlyArray<RockObstacle>;
+  syncPlacementClearance: (
+    buildings: Iterable<BuildingTerrainSource>,
+    farmFieldPolygons: Iterable<Point2[]>,
+  ) => void;
   isBlockedAt: (x: number, z: number) => boolean;
   isGrassBlockedAt: (x: number, z: number) => boolean;
   updateCameraState: (
@@ -86,7 +92,10 @@ export async function createRiverSystem(
     field: riverField,
     group,
     reedsGroup: reeds.group,
-    shoreRockPlacements: shoreStones.placements,
+    getShoreRockPlacements: () => shoreStones.placements,
+    syncPlacementClearance: (buildings, farmFieldPolygons) => {
+      shoreStones.syncPlacementClearance(buildings, farmFieldPolygons);
+    },
     isBlockedAt: (x, z) => riverField.isBlockedForProps(x, z),
     isGrassBlockedAt: (x, z) => riverField.isGrassBlockedAt(x, z),
     updateCameraState: (cameraPosition, cameraTarget, cameraDistance, firstPersonActive) => {

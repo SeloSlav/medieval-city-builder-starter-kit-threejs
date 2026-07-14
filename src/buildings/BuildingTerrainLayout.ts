@@ -89,6 +89,26 @@ export function getBuildingPadParams(kind: BuildingKind): BuildingPadParams {
   return PAD_PARAMS[kind];
 }
 
+/** Tests a point or circular obstacle against the visible construction pad. */
+export function pointWithinBuildingSiteClearance(
+  x: number,
+  z: number,
+  building: BuildingTerrainSource,
+  clearanceRadius = 0,
+): boolean {
+  const params = PAD_PARAMS[building.kind];
+  const rotation = buildingPlacementYaw(building.kind, building.x, building.z);
+  const dx = x - building.x;
+  const dz = z - building.z;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const localX = dx * cos + dz * sin;
+  const localZ = -dx * sin + dz * cos;
+  const normDist = Math.hypot(localX / params.radiusX, localZ / params.radiusZ);
+  const clearOuter = params.outerFade * 1.04 + clearanceRadius / Math.min(params.radiusX, params.radiusZ);
+  return normDist <= clearOuter;
+}
+
 export function sampleBuildingFootprintHeights(
   kind: BuildingKind,
   x: number,

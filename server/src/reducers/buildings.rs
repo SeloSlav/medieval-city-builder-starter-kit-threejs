@@ -14,8 +14,8 @@ use crate::economy::{
 use crate::lifecycle::ensure_player_resources;
 use crate::hydrology::{sample_hydrology_score, well_capacity_from_hydrology};
 use crate::placement_validation::{
-    building_overlaps_residence_zone, building_overlaps_road_surface, is_near_open_water,
-    is_on_quarry_pit, is_open_water,
+    building_overlaps_residence_zone, building_overlaps_road_surface,
+    building_site_contains_point, is_near_open_water, is_on_quarry_pit, is_open_water,
 };
 use crate::roads::load_owner_road_network;
 use crate::simulation::drain_trips_for_building;
@@ -240,6 +240,17 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     } else {
         0.0
     };
+
+    let cleared_tree_ids = ctx
+        .db
+        .tree_entity()
+        .iter()
+        .filter(|tree| building_site_contains_point(&kind, x, z, tree.x, tree.z))
+        .map(|tree| tree.tree_id)
+        .collect::<Vec<_>>();
+    for tree_id in cleared_tree_ids {
+        ctx.db.tree_entity().tree_id().delete(&tree_id);
+    }
 
     let building_id = config.next_building_id;
     ctx.db.building().insert(Building {

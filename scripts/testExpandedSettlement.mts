@@ -14,6 +14,7 @@ import type { ResidenceState } from '../src/resources/types.ts';
 import * as THREE from 'three';
 import { createBuildingMesh } from '../src/buildings/BuildingMeshes.ts';
 import { validateBuildingPlacement } from '../src/buildings/BuildingPlacementValidation.ts';
+import { pointWithinBuildingSiteClearance } from '../src/buildings/BuildingTerrainLayout.ts';
 import { getBuildingExtent } from '../src/buildings/buildingExtents.ts';
 import { createResidenceMesh } from '../src/residences/ResidenceMarkers.ts';
 import { RoadNetwork } from '../src/roads/RoadNetwork.ts';
@@ -63,6 +64,16 @@ assert.equal(
   validateBuildingPlacement('carpenter', 0, 0, roadlessPlacementContext).ok,
   true,
   'roads must be connected after construction, not required for placement',
+);
+assert.equal(
+  pointWithinBuildingSiteClearance(10, -6, { kind: 'watermill', x: 10, z: -6 }),
+  true,
+  'the construction pad must clear an obstacle at its center',
+);
+assert.equal(
+  pointWithinBuildingSiteClearance(40, -6, { kind: 'watermill', x: 10, z: -6 }),
+  false,
+  'construction clearing must not expand to the functional work radius',
 );
 
 const closeShorePlacement = validateBuildingPlacement('watermill', 0, 0, {

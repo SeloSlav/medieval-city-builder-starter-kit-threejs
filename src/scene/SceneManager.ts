@@ -391,7 +391,7 @@ export class SceneManager {
   private rebuildRockSpatialIndex(): void {
     const rocks = [
       ...(this.forestManager?.rockPlacements ?? []),
-      ...this.riverSystem.shoreRockPlacements,
+      ...this.riverSystem.getShoreRockPlacements(),
       ...this.quarrySystem.rockPlacements,
     ];
     this.rockSpatialIndex = rocks.length > 0 ? new RockSpatialIndex(rocks) : null;
@@ -594,6 +594,10 @@ export class SceneManager {
       burgageParcelPolygons: this.forestClearanceBurgageParcelPolygons,
       farmFieldPolygons: this.forestClearanceFarmFieldPolygons,
     });
+    this.riverSystem.syncPlacementClearance(
+      this.forestClearanceBuildings,
+      this.forestClearanceFarmFieldPolygons,
+    );
     this.rebuildRockSpatialIndex();
   }
 

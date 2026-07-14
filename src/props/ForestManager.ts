@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { BuildingTerrainSource } from '../buildings/BuildingTerrainLayout.ts';
-import { getBuildingPadParams } from '../buildings/BuildingTerrainLayout.ts';
-import { buildingPlacementYaw } from '../buildings/buildingPlacement.ts';
+import { pointWithinBuildingSiteClearance } from '../buildings/BuildingTerrainLayout.ts';
 import type { Point2 } from '../utils/polygonGeometry.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RoadEdge } from '../roads/RoadEdge.ts';
@@ -309,7 +308,7 @@ export class ForestManager {
     }
 
     this.syncUndergrowthClearance(edges, buildings, burgageParcelPolygons, farmFieldPolygons);
-    this.syncRockClearance(farmFieldPolygons);
+    this.syncRockClearance(buildings, farmFieldPolygons);
     if (clearance.roadNetwork) {
       this.syncRoadStumps(clearance.roadNetwork);
     }
@@ -374,11 +373,17 @@ export class ForestManager {
     this.undergrowth.juniperShadowMesh.instanceMatrix.needsUpdate = true;
   }
 
-  private syncRockClearance(farmFieldPolygons: Point2[][]): void {
+  private syncRockClearance(
+    buildings: BuildingTerrainSource[],
+    farmFieldPolygons: Point2[][],
+  ): void {
     const nextRemoved = new Set<number>();
     for (let index = 0; index < this.rockInstances.length; index++) {
       const placement = this.rockInstances[index].placement;
-      if (this.isRockNearAnyFarmField(placement, farmFieldPolygons)) {
+      if (
+        this.isRockNearAnyBuilding(placement, buildings)
+        || this.isRockNearAnyFarmField(placement, farmFieldPolygons)
+      ) {
         nextRemoved.add(index);
       }
     }
@@ -436,7 +441,7 @@ export class ForestManager {
 
   private isUndergrowthNearAnyBuilding(x: number, z: number, buildings: BuildingTerrainSource[]): boolean {
     for (const building of buildings) {
-      if (pointWithinBuildingPad(x, z, building, 0)) return true;
+      if (pointWithinBuildingSiteClearance(x, z, building)) return true;
     }
     return false;
   }
@@ -459,6 +464,17 @@ export class ForestManager {
     const clearRadius = placement.scale * 1.35 + 0.35;
     for (const polygon of fieldPolygons) {
       if (distancePointToPolygon2(placement, polygon) <= clearRadius) return true;
+    }
+    return false;
+  }
+
+  private isRockNearAnyBuilding(
+    placement: RockObstacle,
+    buildings: BuildingTerrainSource[],
+  ): boolean {
+    const clearRadius = placement.scale * 1.35 + 0.35;
+    for (const building of buildings) {
+      if (pointWithinBuildingSiteClearance(placement.x, placement.z, building, clearRadius)) return true;
     }
     return false;
   }
@@ -591,31 +607,12 @@ function treeClearRadius(placement: TreePlacement, roadWidth: number): number {
 
 function treeWithinBuildingPad(placement: TreePlacement, building: BuildingTerrainSource): boolean {
   const canopyRadius = treeCanopyRadius(placement) + BUILDING_CLEAR_MARGIN;
-  return pointWithinBuildingPad(placement.x, placement.z, building, canopyRadius);
+  return pointWithinBuildingSiteClearance(placement.x, placement.z, building, canopyRadius);
 }
 
 function treeWithinBurgageParcel(placement: TreePlacement, polygon: Point2[]): boolean {
   const distance = distancePointToPolygon2({ x: placement.x, z: placement.z }, polygon);
   return distance <= treeCanopyRadius(placement) + BUILDING_CLEAR_MARGIN;
-}
-
-function pointWithinBuildingPad(
-  x: number,
-  z: number,
-  building: BuildingTerrainSource,
-  canopyRadius: number,
-): boolean {
-  const params = getBuildingPadParams(building.kind);
-  const rotation = buildingPlacementYaw(building.kind, building.x, building.z);
-  const dx = x - building.x;
-  const dz = z - building.z;
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
-  const localX = dx * cos + dz * sin;
-  const localZ = -dx * sin + dz * cos;
-  const normDist = Math.hypot(localX / params.radiusX, localZ / params.radiusZ);
-  const clearOuter = params.outerFade * 1.04 + canopyRadius / Math.min(params.radiusX, params.radiusZ);
-  return normDist <= clearOuter;
 }
 
 function undergrowthMeshFor(instances: UndergrowthInstances, kind: UndergrowthKind): THREE.InstancedMesh {

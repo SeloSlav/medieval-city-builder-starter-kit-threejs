@@ -15,15 +15,37 @@ const SHORE_WATER_THRESHOLD: f64 = 0.95;
 const MAX_ROAD_FRONTAGE_DISTANCE: f64 = 16.0;
 const SHORE_RADIAL_SAMPLE_STEP: f64 = 2.0;
 const SHORE_ARC_SAMPLE_SPACING: f64 = 4.0;
+const BUILDING_SITE_CLEAR_MARGIN: f64 = 0.75;
 
 struct BuildingPadParams {
     radius_x: f64,
     radius_z: f64,
     inner_fade: f64,
+    outer_fade: f64,
 }
 
 pub fn building_pick_radius(kind: &str) -> Option<f64> {
     building_def(kind).map(|def| def.pick_radius)
+}
+
+pub fn building_site_contains_point(
+    kind: &str,
+    building_x: f64,
+    building_z: f64,
+    point_x: f64,
+    point_z: f64,
+) -> bool {
+    let pad = building_pad_params(kind);
+    let yaw = building_placement_yaw(building_x, building_z);
+    let dx = point_x - building_x;
+    let dz = point_z - building_z;
+    let cos = yaw.cos();
+    let sin = yaw.sin();
+    let local_x = dx * cos + dz * sin;
+    let local_z = -dx * sin + dz * cos;
+    let normalized_distance = (local_x / pad.radius_x).hypot(local_z / pad.radius_z);
+    let margin = BUILDING_SITE_CLEAR_MARGIN / pad.radius_x.min(pad.radius_z);
+    normalized_distance <= pad.outer_fade * 1.04 + margin
 }
 
 pub fn is_open_water(x: f64, z: f64) -> bool {
@@ -213,64 +235,133 @@ fn building_pad_params(kind: &str) -> BuildingPadParams {
             radius_x: 10.2,
             radius_z: 4.8,
             inner_fade: 0.86,
+            outer_fade: 1.38,
         },
         "reforester" => BuildingPadParams {
             radius_x: 4.4,
             radius_z: 4.1,
             inner_fade: 0.88,
+            outer_fade: 1.32,
         },
         "woodcutters_lodge" => BuildingPadParams {
             radius_x: 4.6,
             radius_z: 4.3,
             inner_fade: 0.88,
+            outer_fade: 1.34,
         },
         "stone_quarry" => BuildingPadParams {
             radius_x: 10.5,
             radius_z: 10.5,
             inner_fade: 0.82,
+            outer_fade: 1.42,
         },
         "well" => BuildingPadParams {
             radius_x: 2.2,
             radius_z: 2.2,
             inner_fade: 0.9,
+            outer_fade: 1.2,
         },
         "hunters_hall" => BuildingPadParams {
             radius_x: 5.2,
             radius_z: 4.8,
             inner_fade: 0.88,
+            outer_fade: 1.34,
         },
         "foragers_shed" => BuildingPadParams {
             radius_x: 4.2,
             radius_z: 3.8,
             inner_fade: 0.88,
+            outer_fade: 1.3,
         },
         "chapel" => BuildingPadParams {
             radius_x: 3.4,
             radius_z: 4.2,
             inner_fade: 0.9,
+            outer_fade: 1.28,
         },
         "marketplace" => BuildingPadParams {
             radius_x: 4.2,
             radius_z: 3.4,
             inner_fade: 0.9,
+            outer_fade: 1.3,
+        },
+        "threshing_barn" => BuildingPadParams {
+            radius_x: 6.5,
+            radius_z: 5.0,
+            inner_fade: 0.88,
+            outer_fade: 1.3,
+        },
+        "monastery" => BuildingPadParams {
+            radius_x: 9.5,
+            radius_z: 6.8,
+            inner_fade: 0.86,
+            outer_fade: 1.35,
+        },
+        "brewery" => BuildingPadParams {
+            radius_x: 5.6,
+            radius_z: 4.7,
+            inner_fade: 0.88,
+            outer_fade: 1.3,
+        },
+        "smokehouse" => BuildingPadParams {
+            radius_x: 4.4,
+            radius_z: 4.0,
+            inner_fade: 0.88,
+            outer_fade: 1.28,
+        },
+        "granary" => BuildingPadParams {
+            radius_x: 5.8,
+            radius_z: 4.7,
+            inner_fade: 0.88,
+            outer_fade: 1.3,
+        },
+        "apiary" => BuildingPadParams {
+            radius_x: 5.3,
+            radius_z: 4.6,
+            inner_fade: 0.88,
+            outer_fade: 1.28,
+        },
+        "watermill" => BuildingPadParams {
+            radius_x: 6.7,
+            radius_z: 4.9,
+            inner_fade: 0.86,
+            outer_fade: 1.35,
+        },
+        "carpenter" => BuildingPadParams {
+            radius_x: 6.4,
+            radius_z: 4.8,
+            inner_fade: 0.88,
+            outer_fade: 1.32,
+        },
+        "ferry_landing" => BuildingPadParams {
+            radius_x: 6.8,
+            radius_z: 8.5,
+            inner_fade: 0.84,
+            outer_fade: 1.25,
+        },
+        "vineyard" => BuildingPadParams {
+            radius_x: 8.0,
+            radius_z: 6.8,
+            inner_fade: 0.88,
+            outer_fade: 1.24,
         },
         _ => BuildingPadParams {
             radius_x: 10.5,
             radius_z: 10.5,
             inner_fade: 0.82,
+            outer_fade: 1.42,
         },
     }
 }
 
 fn building_placement_yaw(x: f64, z: f64) -> f64 {
-    let degrees = (x * 0.017 + z * 0.013).sin().abs() * 6283.0;
-    let degrees = degrees.floor() % 360.0;
+    let degrees = ((x * 0.017 + z * 0.013).sin() * 6283.0).floor().abs() % 360.0;
     degrees.to_radians()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::any_open_water_near;
+    use super::{any_open_water_near, building_site_contains_point};
 
     #[test]
     fn close_shore_water_is_not_skipped_between_sparse_rings() {
@@ -282,5 +373,11 @@ mod tests {
     fn water_beyond_the_shore_limit_is_rejected() {
         let distant_water_patch = |x: f64, z: f64| (x - 30.0).hypot(z) <= 0.75;
         assert!(!any_open_water_near(0.0, 0.0, 24.0, distant_water_patch));
+    }
+
+    #[test]
+    fn building_site_clearance_uses_the_local_pad_not_the_work_radius() {
+        assert!(building_site_contains_point("watermill", 10.0, -6.0, 10.0, -6.0));
+        assert!(!building_site_contains_point("watermill", 10.0, -6.0, 40.0, -6.0));
     }
 }
