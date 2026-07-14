@@ -110,6 +110,19 @@
         line-height: 1.35;
       }
 
+      .app-loading-recovery-hint {
+        margin: 0;
+        color: #9a927d;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.45;
+      }
+
+      .app-loading-recovery-hint[hidden],
+      .app-loading-recovery[hidden] {
+        display: none !important;
+      }
+
       .app-loading-spinner.is-hidden {
         display: none;
       }
@@ -129,6 +142,23 @@
 
       .app-loading-retry:hover {
         background: rgba(215, 180, 99, 0.22);
+      }
+
+      .app-loading-recovery {
+        margin-top: 2px;
+        padding: 10px 18px;
+        border: 1px solid rgba(188, 178, 156, 0.28);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #d8d0c0;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .app-loading-recovery:hover {
+        background: rgba(255, 255, 255, 0.08);
       }
 
       .session-connection-overlay {
@@ -168,6 +198,7 @@
         <p class="app-loading-percent" data-loading-percent aria-hidden="true">0%</p>
         <p class="app-loading-label" data-loading-label>Starting world…</p>
         <p class="app-loading-detail" data-loading-detail>Preparing renderer</p>
+        <p class="app-loading-recovery-hint" data-loading-recovery-hint hidden></p>
         <div
           class="app-loading-progress"
           role="progressbar"
@@ -180,6 +211,7 @@
           <span class="app-loading-progress__fill" aria-hidden="true"></span>
         </div>
         <button type="button" class="app-loading-retry" data-loading-retry hidden>Retry connection</button>
+        <button type="button" class="app-loading-recovery" data-loading-recovery hidden>Start new world…</button>
       </div>
     </div>
     <div id="app"></div>

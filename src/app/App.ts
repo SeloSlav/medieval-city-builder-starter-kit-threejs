@@ -44,6 +44,7 @@ import {
 import { buildCrowdViewState } from '../settlement/crowdView.ts';
 import { syncPlacedBuildingTerrain } from './placedBuildingTerrainSync.ts';
 import { SessionLifecycleController } from './SessionLifecycleController.ts';
+import { beginNewWorld } from './worldBootstrapFlow.ts';
 import { clearAuthoritativeWorldGeneration } from '../world/worldGenerationContext.ts';
 import { createSmokeTestHooks, installSmokeTestHooks } from '../e2e/smokeTestHooks.ts';
 import { sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
@@ -189,6 +190,12 @@ export class App {
       farmFieldTool: session.farmFieldTool,
       firstPersonController: session.firstPersonController,
       recoverSession: () => this.gameRuntime?.recoverSession(),
+      beginNewWorld: () => {
+        void beginNewWorld(
+          () => this.spacetimeStore?.isConnected === true
+            && this.spacetimeStore?.snapshot.identityHex !== null,
+        );
+      },
     });
 
     session.spacetimeStore.setConnectErrorListener((error) => {

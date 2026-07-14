@@ -3,9 +3,15 @@ import { loadingPercentForPhase, type LoadingPhase } from './loadingProgress.ts'
 export type LoadingProgress = {
   label: string;
   detail?: string;
+  recoveryHint?: string;
   phase?: LoadingPhase;
   fraction?: number;
   percent?: number;
+};
+
+export type LoadingRecoveryAction = {
+  label: string;
+  handler: () => void;
 };
 
 const LOADING_ROOT_ID = 'app-loading';
@@ -18,8 +24,11 @@ export class LoadingScreen {
   private readonly progressBarEl: HTMLElement;
   private readonly spinnerEl: HTMLElement | null;
   private readonly retryButton: HTMLButtonElement;
+  private readonly recoveryHintEl: HTMLElement;
+  private readonly recoveryButton: HTMLButtonElement;
   private dismissed = false;
   private retryHandler: (() => void) | null = null;
+  private recoveryHandler: (() => void) | null = null;
   private displayedPercent = 0;
 
   constructor() {
@@ -33,8 +42,10 @@ export class LoadingScreen {
     const detailEl = root.querySelector<HTMLElement>('[data-loading-detail]');
     const progressBarEl = root.querySelector<HTMLElement>('[data-loading-bar]');
     const retryButton = root.querySelector<HTMLButtonElement>('[data-loading-retry]');
-    if (!percentEl || !labelEl || !detailEl || !progressBarEl || !retryButton) {
-      throw new Error('Loading screen markup is missing percent, label, detail, bar, or retry elements.');
+    const recoveryHintEl = root.querySelector<HTMLElement>('[data-loading-recovery-hint]');
+    const recoveryButton = root.querySelector<HTMLButtonElement>('[data-loading-recovery]');
+    if (!percentEl || !labelEl || !detailEl || !progressBarEl || !retryButton || !recoveryHintEl || !recoveryButton) {
+      throw new Error('Loading screen markup is missing percent, label, detail, bar, retry, or recovery elements.');
     }
 
     this.root = root;
@@ -44,8 +55,13 @@ export class LoadingScreen {
     this.progressBarEl = progressBarEl;
     this.spinnerEl = root.querySelector<HTMLElement>('.app-loading-spinner');
     this.retryButton = retryButton;
+    this.recoveryHintEl = recoveryHintEl;
+    this.recoveryButton = recoveryButton;
     this.retryButton.addEventListener('click', () => {
       this.retryHandler?.();
+    });
+    this.recoveryButton.addEventListener('click', () => {
+      this.recoveryHandler?.();
     });
     this.renderPercent(0);
   }
@@ -68,20 +84,33 @@ export class LoadingScreen {
     }
   }
 
-  setErrorState(progress: LoadingProgress, onRetry: () => void): void {
+  setErrorState(
+    progress: LoadingProgress,
+    onRetry: () => void,
+    recovery?: LoadingRecoveryAction,
+  ): void {
     if (this.dismissed) return;
     this.labelEl.textContent = progress.label;
     this.detailEl.textContent = progress.detail ?? '';
+    this.recoveryHintEl.textContent = progress.recoveryHint ?? '';
+    this.recoveryHintEl.hidden = !progress.recoveryHint;
     this.retryHandler = onRetry;
+    this.recoveryHandler = recovery?.handler ?? null;
+    this.recoveryButton.textContent = recovery?.label ?? 'Start new world…';
     this.spinnerEl?.classList.add('is-hidden');
     this.retryButton.hidden = false;
+    this.recoveryButton.hidden = recovery === undefined;
     this.root.setAttribute('aria-busy', 'false');
   }
 
   clearErrorState(): void {
     this.retryHandler = null;
+    this.recoveryHandler = null;
+    this.recoveryHintEl.textContent = '';
+    this.recoveryHintEl.hidden = true;
     this.spinnerEl?.classList.remove('is-hidden');
     this.retryButton.hidden = true;
+    this.recoveryButton.hidden = true;
     this.root.setAttribute('aria-busy', 'true');
   }
 

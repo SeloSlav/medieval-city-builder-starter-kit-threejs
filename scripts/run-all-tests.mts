@@ -13,6 +13,7 @@ const tests = [
   'test:marketplace-trade',
   'test:settlement-schedule',
   'test:world-config',
+  'test:connection-recovery',
   'test:chapel-bell-schedule',
   'test:expanded-settlement',
   'test:farming',

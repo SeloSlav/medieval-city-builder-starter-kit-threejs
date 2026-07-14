@@ -8,6 +8,11 @@ import type { BuildingTool } from '../buildings/BuildingTool.ts';
 import type { BurgageTool } from '../residences/BurgageTool.ts';
 import type { FarmFieldTool } from '../farming/FarmFieldTool.ts';
 import type { FirstPersonController } from '../camera/FirstPersonController.ts';
+import {
+  formatBootstrapFailure,
+  formatConnectionUnavailable,
+  formatWorldGenerationMismatch,
+} from './connectionRecoveryHints.ts';
 
 export type SessionLifecycleDeps = {
   sessionGate: SessionConnectionGate;
@@ -21,6 +26,7 @@ export type SessionLifecycleDeps = {
   farmFieldTool: FarmFieldTool | null;
   firstPersonController: FirstPersonController | null;
   recoverSession?: () => void;
+  beginNewWorld?: () => void;
 };
 
 const DISCONNECT_OVERLAY_DELAY_MS = 4_000;
@@ -65,18 +71,21 @@ export class SessionLifecycleController {
   }
 
   onBootstrapFailed(error: unknown, retry: () => void): void {
-    const message = error instanceof Error ? error.message : 'World bootstrap failed.';
+    const presentation = formatBootstrapFailure(error);
     this.deps.loadingScreen?.setErrorState(
-      { label: 'World bootstrap failed', detail: message },
+      presentation,
       retry,
+      this.newWorldRecoveryAction(presentation.showNewWorldAction),
     );
   }
 
   onWorldGenerationMismatch(message: string, retry: () => void): void {
     this.deps.sessionGate.markBlocked(message);
+    const presentation = formatWorldGenerationMismatch(message);
     this.deps.loadingScreen?.setErrorState(
-      { label: 'World settings mismatch', detail: message },
+      presentation,
       retry,
+      this.newWorldRecoveryAction(presentation.showNewWorldAction),
     );
   }
 
@@ -90,14 +99,27 @@ export class SessionLifecycleController {
       this.scheduleReconnect();
       return;
     }
+    const presentation = formatConnectionUnavailable();
     this.deps.loadingScreen?.setErrorState(
-      {
-        label: 'SpacetimeDB unavailable',
-        detail: 'Run `spacetime start` and `npm run deploy:local`, then retry.',
-      },
+      presentation,
       () => this.retryConnection(),
     );
     this.scheduleReconnect();
+  }
+
+  private newWorldRecoveryAction(enabled: boolean) {
+    if (!enabled || !this.canBeginNewWorld()) return undefined;
+    return {
+      label: 'Start new world…',
+      handler: () => {
+        this.deps.beginNewWorld?.();
+      },
+    };
+  }
+
+  private canBeginNewWorld(): boolean {
+    const snapshot = this.deps.spacetimeStore.snapshot;
+    return this.deps.spacetimeStore.isConnected && snapshot.identityHex !== null;
   }
 
   retryConnection(): void {
