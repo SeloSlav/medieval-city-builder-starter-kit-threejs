@@ -33,7 +33,6 @@ export function renderBuildingInspector(
     case 'hunters_hall':
     case 'foragers_shed':
       return renderHarvestBuildingInspector(target, context);
-    case 'grain_field':
     case 'threshing_barn':
     case 'monastery':
     case 'brewery':

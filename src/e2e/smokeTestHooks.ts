@@ -59,6 +59,7 @@ function findFirstValidRforesterSpot(deps: SmokeTestHookDeps): { x: number; z: n
     for (let z = -half; z <= half; z += GRID_STEP) {
       const validation = validateBuildingPlacement(REFORESTER_KIND, x, z, {
         buildings: state.buildings.values(),
+        residences: state.residences.values(),
         burgageZones: state.burgageZones.values(),
         quarries: state.quarries.values(),
         foragingNodes: state.foragingNodes.values(),

@@ -71,6 +71,32 @@ const SETTLEMENT_HUD_HTML = `
         <span class="settlement-hud__sub" data-stockpile="labor-sub">available</span>
       </div>
     </div>
+    <div class="settlement-hud__stores" aria-label="Specialty stores">
+      <div class="settlement-hud__stat settlement-hud__stat--store" tabindex="0" data-resource="grain" data-tooltip="Grain in treasury and farmstead storage.">
+        <span class="settlement-hud__label">Grain</span>
+        <strong class="settlement-hud__value" data-stockpile="grain">0</strong>
+      </div>
+      <div class="settlement-hud__stat settlement-hud__stat--store" tabindex="0" data-resource="flour" data-tooltip="Flour in treasury and mill or granary storage.">
+        <span class="settlement-hud__label">Flour</span>
+        <strong class="settlement-hud__value" data-stockpile="flour">0</strong>
+      </div>
+      <div class="settlement-hud__stat settlement-hud__stat--store" tabindex="0" data-resource="ale" data-tooltip="Ale in treasury, brewhouses, monasteries, and tier-3 homes.">
+        <span class="settlement-hud__label">Ale</span>
+        <strong class="settlement-hud__value" data-stockpile="ale">0</strong>
+      </div>
+      <div class="settlement-hud__stat settlement-hud__stat--store" tabindex="0" data-resource="preservedFood" data-tooltip="Preserved food in treasury, smokehouses, and tier-2 homes.">
+        <span class="settlement-hud__label">Preserved</span>
+        <strong class="settlement-hud__value" data-stockpile="preservedFood">0</strong>
+      </div>
+      <div class="settlement-hud__stat settlement-hud__stat--store" tabindex="0" data-resource="honey" data-tooltip="Honey in treasury and apiary storage.">
+        <span class="settlement-hud__label">Honey</span>
+        <strong class="settlement-hud__value" data-stockpile="honey">0</strong>
+      </div>
+      <div class="settlement-hud__stat settlement-hud__stat--store" tabindex="0" data-resource="wine" data-tooltip="Wine in treasury and vineyard storage.">
+        <span class="settlement-hud__label">Wine</span>
+        <strong class="settlement-hud__value" data-stockpile="wine">0</strong>
+      </div>
+    </div>
   </div>
 `;
 

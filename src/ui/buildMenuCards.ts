@@ -10,7 +10,7 @@ export type PlacementBuildMenuAction =
   | 'residences';
 
 export type BuildMenuAction = PlacementBuildMenuAction;
-type PlacementArtKey = BuildingKind | 'residences';
+type PlacementArtKey = BuildingKind | 'residences' | 'farm_field';
 export type BuildMenuEntry = { kind: 'placement'; action: PlacementBuildMenuAction; artKey: PlacementArtKey };
 
 const BUILD_CARD_ART: Record<PlacementArtKey, string> = {
@@ -19,7 +19,7 @@ const BUILD_CARD_ART: Record<PlacementArtKey, string> = {
   well: '/assets/ui/build-menu/water-well.png', hunters_hall: '/assets/ui/build-menu/hunter-hall.png',
   foragers_shed: '/assets/ui/build-menu/foragers-hut.png', chapel: '/assets/ui/build-menu/chapel.png',
   marketplace: '/assets/ui/build-menu/market.png', residences: '/assets/ui/build-menu/residence.png',
-  grain_field: '/assets/ui/build-menu/grain-field.png', threshing_barn: '/assets/ui/build-menu/threshing-barn.png',
+  farm_field: '/assets/ui/build-menu/grain-field.png', threshing_barn: '/assets/ui/build-menu/threshing-barn.png',
   monastery: '/assets/ui/build-menu/monastery.png', brewery: '/assets/ui/build-menu/brewery.png',
   smokehouse: '/assets/ui/build-menu/smokehouse.png', granary: '/assets/ui/build-menu/granary.png',
   apiary: '/assets/ui/build-menu/apiary.png', watermill: '/assets/ui/build-menu/watermill.png',
@@ -40,7 +40,7 @@ const DETAILS: Record<PlacementArtKey, [title: string, hotkey: string, descripti
   woodcutters_lodge: ["Woodcutter's lodge", 'W', 'Splits timber into firewood and supplies connected homes.'],
   hunters_hall: ["Hunter's hall", 'K', 'Hunts game and delivers fresh food along the road network.'],
   foragers_shed: ["Forager's shed", 'Y', 'Gathers berries and provisions homes from forest edges.'],
-  grain_field: ['Draw farm field', 'G', 'Draw rye, oat, or fallow land inside a farmstead working radius. Area, terrain, water, crop rotation, and labor determine yield.'],
+  farm_field: ['Draw farm field', 'G', 'Draw rye, oat, or fallow land inside a farmstead working radius. Area, terrain, water, crop rotation, and labor determine yield.'],
   threshing_barn: ['Farmstead', 'T', 'Road-linked labor hub that ploughs, sows, tends, harvests, and stores grain from surrounding fields.'],
   watermill: ['Grain watermill', 'M', 'Uses a river wheel to grind grain into flour. Must touch open water.'],
   granary: ['Village granary', 'N', 'Stores grain and flour, bakes staple food, and buffers shortages.'],
@@ -52,7 +52,11 @@ const DETAILS: Record<PlacementArtKey, [title: string, hotkey: string, descripti
 };
 
 const action = (kind: BuildingKind): PlacementBuildMenuAction => kind.replaceAll('_', '-') as PlacementBuildMenuAction;
-const entry = (artKey: PlacementArtKey): BuildMenuEntry => ({ kind: 'placement', action: artKey === 'residences' ? 'residences' : action(artKey), artKey });
+const entry = (artKey: PlacementArtKey): BuildMenuEntry => ({
+  kind: 'placement',
+  action: artKey === 'residences' ? 'residences' : artKey === 'farm_field' ? 'grain-field' : action(artKey),
+  artKey,
+});
 
 /** Housing, water, faith, trade, and transport. */
 export const BASIC_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
@@ -61,7 +65,7 @@ export const BASIC_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
 
 /** Agriculture, food processing, forestry, extraction, and rural craft. */
 export const INDUSTRY_BUILD_MENU_ENTRIES: readonly BuildMenuEntry[] = [
-  entry('grain_field'), entry('threshing_barn'), entry('watermill'), entry('granary'), entry('brewery'), entry('smokehouse'),
+  entry('farm_field'), entry('threshing_barn'), entry('watermill'), entry('granary'), entry('brewery'), entry('smokehouse'),
   entry('apiary'), entry('vineyard'), entry('hunters_hall'), entry('foragers_shed'), entry('woodcutters_lodge'),
   entry('lumber_mill'), entry('reforester'), entry('stone_quarry'), entry('carpenter'),
 ];
@@ -81,7 +85,7 @@ export function renderBuildMenuCards(entries: readonly BuildMenuEntry[] = BUILD_
       ? `${formatBuildingCost(residenceZoneCost(1))} per home`
       : entry.action === 'grain-field'
         ? 'Farmstead labor'
-      : formatBuildingCost(getBuildingCost(entry.artKey));
+        : formatBuildingCost(getBuildingCost(entry.artKey as BuildingKind));
     return `<button type="button" class="construction-card" data-action="${entry.action}" data-hotkey="${hotkey}" aria-label="${title} (${hotkey})">
       <img class="construction-card__art" src="${BUILD_CARD_ART[entry.artKey]}" alt="" draggable="false" />
       <span class="construction-card__hotkey" aria-hidden="true">${hotkey}</span>

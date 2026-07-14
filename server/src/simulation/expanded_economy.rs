@@ -4,7 +4,7 @@ use crate::balance_generated::{
     APIARY_FOOD_PER_CYCLE, APIARY_HONEY_PER_CYCLE, BREWERY_ALE_PER_CYCLE,
     BREWERY_GRAIN_PER_CYCLE, BREWERY_WATER_PER_CYCLE, FERRY_GOLD_PER_DAY,
     FARM_GROWTH_SECONDS, FARM_WORK_METERS_PER_WORKER_PER_SEC,
-    GRAIN_PER_FIELD_CYCLE, GRAIN_TRANSFER_PER_TRIP, GRANARY_FIREWOOD_PER_CYCLE,
+    GRAIN_TRANSFER_PER_TRIP, GRANARY_FIREWOOD_PER_CYCLE,
     GRANARY_FLOUR_PER_CYCLE, GRANARY_WATER_PER_CYCLE,
     GRANARY_FOOD_PER_CYCLE, MONASTERY_CHARITY_FOOD_PER_DELIVERY, MONASTERY_COVERAGE_RADIUS,
     MONASTERY_FOOD_PER_CYCLE, MONASTERY_GRAIN_PER_CYCLE,
@@ -39,29 +39,6 @@ use crate::simulation::residence_needs::{apply_need_delivery, load_needs, need_s
 use crate::simulation::tick_context::SimTickContext;
 use crate::simulation::water_logistics::ensure_building_water;
 use crate::tables::{farm_field, Building, FarmField, Residence};
-
-pub fn step_grain_field(
-    ctx: &ReducerContext,
-    tick: &SimTickContext,
-    clock: &GameClock,
-    building: Building,
-) {
-    let mut field = step_simple_producer(
-        ctx,
-        clock,
-        building,
-        &[(CommodityKind::Grain, GRAIN_PER_FIELD_CYCLE)],
-    );
-    dispatch_to_building(
-        ctx,
-        tick,
-        clock,
-        &mut field,
-        CommodityKind::Grain,
-        &["threshing_barn"],
-    );
-    ctx.db.building().id().update(field);
-}
 
 pub fn step_threshing_barn(
     ctx: &ReducerContext,

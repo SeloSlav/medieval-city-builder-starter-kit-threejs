@@ -359,6 +359,7 @@ export class BuildingTool {
     const totals = computeResourceTotals(state);
     return validateBuildingPlacement(kind, x, z, {
       buildings: state.buildings.values(),
+      residences: state.residences.values(),
       burgageZones: state.burgageZones.values(),
       farmFields: state.farmFields.values(),
       quarries: state.quarries.values(),

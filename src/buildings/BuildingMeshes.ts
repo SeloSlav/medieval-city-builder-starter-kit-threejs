@@ -18,7 +18,6 @@ import {
   createBreweryMesh,
   createCarpenterMesh,
   createFerryLandingMesh,
-  createGrainFieldMesh,
   createGranaryMesh,
   createMonasteryMesh,
   createSmokehouseMesh,
@@ -47,7 +46,6 @@ export function createBuildingMesh(kind: BuildingKind): THREE.Group {
       return createChapelMesh();
     case 'marketplace':
       return createMarketplaceMesh();
-    case 'grain_field': return createGrainFieldMesh();
     case 'threshing_barn': return createThreshingBarnMesh();
     case 'monastery': return createMonasteryMesh();
     case 'brewery': return createBreweryMesh();

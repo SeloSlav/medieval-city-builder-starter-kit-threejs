@@ -25,15 +25,6 @@ function addChimney(group: THREE.Group, x: number, z: number, height = 4.8): voi
   addMesh(group, new THREE.BoxGeometry(0.92, 0.18, 0.92), stoneMaterial('light'), new THREE.Vector3(x, height + 0.02, z));
 }
 
-function addFence(group: THREE.Group, width: number, depth: number): void {
-  for (const z of [-depth * 0.5, depth * 0.5]) {
-    for (let x = -width * 0.5; x <= width * 0.5; x += 2.2) {
-      addMesh(group, new THREE.BoxGeometry(0.13, 1.05, 0.13), timberMaterial('dark'), new THREE.Vector3(x, 0.52, z));
-    }
-    for (const y of [0.38, 0.82]) addMesh(group, new THREE.BoxGeometry(width, 0.1, 0.1), timberMaterial('weathered'), new THREE.Vector3(0, y, z));
-  }
-}
-
 function addRaisedStore(group: THREE.Group, width: number, depth: number, centerX = 0): void {
   for (const x of [-width * 0.38, width * 0.38]) for (const z of [-depth * 0.35, depth * 0.35]) {
     addMesh(group, new THREE.BoxGeometry(0.42, 1.2, 0.42), stoneMaterial('mid'), new THREE.Vector3(centerX + x, 0.6, z));
@@ -64,21 +55,6 @@ function addCross(group: THREE.Group, x: number, y: number, z: number, scale = 1
   addMesh(group, new THREE.BoxGeometry(0.64 * scale, 0.12 * scale, 0.12 * scale), metalMaterial('iron'), new THREE.Vector3(x, y + 0.18 * scale, z));
 }
 
-export function createGrainFieldMesh(): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'Grain field';
-  addMesh(group, new THREE.BoxGeometry(13.5, 0.12, 9.5), earth, new THREE.Vector3(0, 0.04, 0));
-  for (let row = -4; row <= 4; row++) for (let i = -10; i <= 10; i++) {
-    const x = i * 0.58 + ((row & 1) ? 0.2 : 0);
-    const z = row * 0.88;
-    addMesh(group, new THREE.CylinderGeometry(0.025, 0.035, 0.82 + ((i + row) & 1) * 0.12, 4), crop, new THREE.Vector3(x, 0.45, z));
-  }
-  addFence(group, 14.4, 10.2);
-  // A tiny red-roofed field shelter makes the parcel read as a Croatian farm rather than a texture patch.
-  const shell = addGableShell(group, { width: 3.5, depth: 2.8, stoneHeight: 0.38, wallHeight: 1.55, ridgeHeight: 1.25, wallMaterial: timberMaterial('weathered'), roofMaterial: tileMaterial(1), centerX: -5.1, centerZ: -2.9 });
-  addPlankDoor(group, -5.1, 0.4, shell.frontZ + 0.02, 0.72, 1.35);
-  return group;
-}
 
 export function createThreshingBarnMesh(): THREE.Group {
   const group = new THREE.Group();

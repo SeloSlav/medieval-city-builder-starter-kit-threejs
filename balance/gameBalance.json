@@ -425,24 +425,6 @@
       "requiresGame": false,
       "requiresBerries": false
     },
-    "grain_field": {
-      "label": "Rye and oat field",
-      "cost": { "timber": 14, "stone": 4 },
-      "storage": { "timber": 0, "firewood": 0, "stone": 0, "grain": 120 },
-      "workRadius": 0,
-      "pickRadius": 11,
-      "harvestInterval": 12,
-      "regrowRatePerSecond": 0,
-      "maxLabor": 2,
-      "acceptsLabor": true,
-      "requiresRoad": true,
-      "facesRoad": false,
-      "requiresMatureTrees": false,
-      "requiresQuarryStone": false,
-      "requiresGame": false,
-      "requiresBerries": false,
-      "requiresWaterShore": false
-    },
     "threshing_barn": {
       "label": "Farmstead and threshing barn",
       "cost": { "timber": 44, "stone": 16 },

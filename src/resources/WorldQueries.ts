@@ -16,8 +16,13 @@ import {
   WellDeliveryClaimQueries,
 } from '../logistics/deliveryClaimQueries.ts';
 import { findNearestResourceNodeWithRemaining } from './depletableNodes.ts';
-import { findActiveTripForBuilding, findInboundTimberTripForBuilding, tripPathDistance, tripRemainingSeconds } from '../logistics/deliveryTrips.ts';
+import { findActiveTripForBuilding, findInboundSupplyTripForBuilding, findInboundTimberTripForBuilding, tripPathDistance, tripRemainingSeconds } from '../logistics/deliveryTrips.ts';
 import type { DeliveryTripState } from '../logistics/deliveryTrips.ts';
+import {
+  ALE_SUPPLIER_KINDS,
+  findRoadLinkedSupplierForResidence,
+  PRESERVED_FOOD_SUPPLIER_KINDS,
+} from '../logistics/specialtyLogistics.ts';
 import {
   foodLaborSplit,
   foodSupplierDeliveryTripSeconds,
@@ -333,6 +338,10 @@ export class WorldQueries {
     return roadPathDistance(this.getRoadNetwork(), ax, az, bx, bz);
   }
 
+  getRoadNetworkSnapshot(): RoadNetwork {
+    return this.getRoadNetwork();
+  }
+
   hasRoadPathToBuildingKind(ax: number, az: number, kind: BuildingKind): boolean {
     return landmarkHasRoadPathToBuildingKind(
       this.getGameState().buildings.values(),
@@ -447,6 +456,73 @@ export class WorldQueries {
     return this.getGameState().buildings.get(supplierId) ?? null;
   }
 
+  getServingPreservedFoodSupplierForResidence(residence: ResidenceState): BuildingState | null {
+    return findRoadLinkedSupplierForResidence(
+      residence,
+      this.getGameState().buildings.values(),
+      this.getRoadNetwork(),
+      PRESERVED_FOOD_SUPPLIER_KINDS,
+    );
+  }
+
+  getServingAleSupplierForResidence(residence: ResidenceState): BuildingState | null {
+    return findRoadLinkedSupplierForResidence(
+      residence,
+      this.getGameState().buildings.values(),
+      this.getRoadNetwork(),
+      ALE_SUPPLIER_KINDS,
+    );
+  }
+
+  getBuilding(buildingId: string): BuildingState | null {
+    return this.getGameState().buildings.get(buildingId) ?? null;
+  }
+
+  findNearestRoadLinkedBuilding(
+    origin: BuildingState,
+    targetKinds: readonly BuildingKind[],
+  ): BuildingState | null {
+    if (targetKinds.length === 0) return null;
+    const network = this.getRoadNetwork();
+    let best: BuildingState | null = null;
+    let bestDistance = Infinity;
+    for (const candidate of this.getGameState().buildings.values()) {
+      if (candidate.id === origin.id || !targetKinds.includes(candidate.kind)) continue;
+      const distance = roadPathDistance(network, origin.x, origin.z, candidate.x, candidate.z);
+      if (distance == null) continue;
+      if (
+        distance + 1e-6 < bestDistance
+        || (Math.abs(distance - bestDistance) <= 1e-6 && best != null && candidate.id < best.id)
+      ) {
+        bestDistance = distance;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  findNearestRoadLinkedResidence(
+    origin: BuildingState,
+    minTier: 1 | 2 | 3 = 1,
+  ): ResidenceState | null {
+    const network = this.getRoadNetwork();
+    let best: ResidenceState | null = null;
+    let bestDistance = Infinity;
+    for (const residence of this.getGameState().residences.values()) {
+      if (residence.abandoned || residence.tier < minTier) continue;
+      const distance = roadPathDistance(network, origin.x, origin.z, residence.x, residence.z);
+      if (distance == null) continue;
+      if (
+        distance + 1e-6 < bestDistance
+        || (Math.abs(distance - bestDistance) <= 1e-6 && best != null && residence.id < best.id)
+      ) {
+        bestDistance = distance;
+        best = residence;
+      }
+    }
+    return best;
+  }
+
   getClaimedResidencesForFoodSupplier(supplier: BuildingState): ResidenceState[] {
     return this.foodClaims().getClaimedResidences(supplier);
   }
@@ -489,6 +565,10 @@ export class WorldQueries {
 
   getInboundTimberTrip(lodge: BuildingState): DeliveryTripState | null {
     return findInboundTimberTripForBuilding(this.getGameState().deliveryTrips.values(), lodge.id);
+  }
+
+  getInboundSupplyTrip(building: BuildingState): DeliveryTripState | null {
+    return findInboundSupplyTripForBuilding(this.getGameState().deliveryTrips.values(), building.id);
   }
 
   getActiveTripRemainingSeconds(building: BuildingState): number | null {

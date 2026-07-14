@@ -49,6 +49,12 @@ export type ResourceTotals = {
   water: number;
   food: number;
   gold: number;
+  grain: number;
+  flour: number;
+  ale: number;
+  preservedFood: number;
+  honey: number;
+  wine: number;
 };
 
 export type PopulationStats = {
@@ -91,6 +97,12 @@ export function computeResourceTotals(state: GameState): ResourceTotals {
   let firewood = state.stockpile.firewood;
   let water = state.stockpile.water;
   let food = state.stockpile.food;
+  let grain = state.stockpile.grain;
+  let flour = state.stockpile.flour;
+  let ale = state.stockpile.ale;
+  let preservedFood = state.stockpile.preservedFood;
+  let honey = state.stockpile.honey;
+  let wine = state.stockpile.wine;
 
   for (const building of state.buildings.values()) {
     timber += building.timber;
@@ -98,12 +110,20 @@ export function computeResourceTotals(state: GameState): ResourceTotals {
     firewood += building.firewood;
     water += building.water;
     food += building.food;
+    grain += building.grain;
+    flour += building.flour;
+    ale += building.ale;
+    preservedFood += building.preservedFood;
+    honey += building.honey;
+    wine += building.wine;
   }
 
   for (const residence of state.residences.values()) {
     firewood += getNeedStock(residence.needs, 'firewood');
     water += getNeedStock(residence.needs, 'water');
     food += getNeedStock(residence.needs, 'food');
+    ale += getNeedStock(residence.needs, 'ale');
+    preservedFood += getNeedStock(residence.needs, 'preservedFood');
   }
 
   cachedTotals = {
@@ -113,6 +133,12 @@ export function computeResourceTotals(state: GameState): ResourceTotals {
     water,
     food,
     gold: state.stockpile.gold,
+    grain,
+    flour,
+    ale,
+    preservedFood,
+    honey,
+    wine,
   };
   cachedState = state;
   return cachedTotals;

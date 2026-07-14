@@ -226,7 +226,6 @@ function workExtentColor(kind: BuildingKind): number {
       return 0xe8e2d8;
     case 'marketplace':
       return 0xd4a85a;
-    case 'grain_field': return 0xc6a34b;
     case 'threshing_barn': return 0xb8894c;
     case 'monastery': return 0xe4dfd2;
     case 'brewery': return 0xb56b42;

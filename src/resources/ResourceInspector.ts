@@ -52,7 +52,10 @@ export class ResourceInspector {
   private readonly status: HTMLElement;
   private readonly detailList: HTMLElement;
   private readonly stockpileRoot: HTMLElement;
-  private readonly stockpileValues: Record<'timber' | 'stone' | 'firewood' | 'water' | 'food' | 'gold', HTMLElement>;
+  private readonly stockpileValues: Record<
+    'timber' | 'stone' | 'firewood' | 'water' | 'food' | 'gold' | 'grain' | 'flour' | 'ale' | 'preservedFood' | 'honey' | 'wine',
+    HTMLElement
+  >;
   private readonly populationValue: HTMLElement;
   private readonly housingValue: HTMLElement;
   private readonly housingSub: HTMLElement;
@@ -138,6 +141,12 @@ export class ResourceInspector {
       water: this.mustElement(options.uiRoot, '[data-stockpile="water"]'),
       food: this.mustElement(options.uiRoot, '[data-stockpile="food"]'),
       gold: this.mustElement(options.uiRoot, '[data-stockpile="gold"]'),
+      grain: this.mustElement(options.uiRoot, '[data-stockpile="grain"]'),
+      flour: this.mustElement(options.uiRoot, '[data-stockpile="flour"]'),
+      ale: this.mustElement(options.uiRoot, '[data-stockpile="ale"]'),
+      preservedFood: this.mustElement(options.uiRoot, '[data-stockpile="preservedFood"]'),
+      honey: this.mustElement(options.uiRoot, '[data-stockpile="honey"]'),
+      wine: this.mustElement(options.uiRoot, '[data-stockpile="wine"]'),
     };
     this.populationValue = this.mustElement(options.uiRoot, '[data-stockpile="population"]');
     this.housingValue = this.mustElement(options.uiRoot, '[data-stockpile="housing"]');
@@ -235,6 +244,12 @@ export class ResourceInspector {
     this.stockpileValues.water.textContent = Math.round(totals.water).toString();
     this.stockpileValues.food.textContent = Math.round(totals.food).toString();
     this.stockpileValues.gold.textContent = totals.gold.toFixed(1);
+    this.stockpileValues.grain.textContent = Math.round(totals.grain).toString();
+    this.stockpileValues.flour.textContent = Math.round(totals.flour).toString();
+    this.stockpileValues.ale.textContent = Math.round(totals.ale).toString();
+    this.stockpileValues.preservedFood.textContent = Math.round(totals.preservedFood).toString();
+    this.stockpileValues.honey.textContent = Math.round(totals.honey).toString();
+    this.stockpileValues.wine.textContent = Math.round(totals.wine).toString();
     this.populationValue.textContent = population.total.toString();
     this.housingValue.textContent = `${population.housed}/${population.housingCapacity}`;
     this.housingSub.textContent = population.vacant === 1

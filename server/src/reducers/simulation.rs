@@ -6,7 +6,7 @@ use crate::simulation::{
     step_chapels, step_chapel_parish, step_delivery_trips, step_foragers_shed, step_foraging_respawn,
     step_household_market_orders, step_hunters_hall, step_lumber_mill, step_marketplace_caravans,
     step_reforester, step_residence, step_stone_quarry, step_well, step_woodcutters_lodge,
-    step_apiary, step_brewery, step_carpenter, step_ferry_landing, step_grain_field,
+    step_apiary, step_brewery, step_carpenter, step_ferry_landing,
     step_granary, step_monastery, step_smokehouse, step_threshing_barn, step_vineyard,
     step_watermill,
     SimTickContext,
@@ -67,8 +67,7 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
             crate::building_defs::BuildingSimKind::ForagersShed => {
                 foragers_shed_ids.push(building.id)
             }
-            crate::building_defs::BuildingSimKind::GrainField
-            | crate::building_defs::BuildingSimKind::ThreshingBarn
+            crate::building_defs::BuildingSimKind::ThreshingBarn
             | crate::building_defs::BuildingSimKind::Monastery
             | crate::building_defs::BuildingSimKind::Brewery
             | crate::building_defs::BuildingSimKind::Smokehouse
@@ -137,9 +136,6 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
             continue;
         };
         match sim_kind {
-            crate::building_defs::BuildingSimKind::GrainField => {
-                step_grain_field(ctx, &tick, &clock, building)
-            }
             crate::building_defs::BuildingSimKind::ThreshingBarn => {
                 step_threshing_barn(ctx, &tick, &clock, building)
             }

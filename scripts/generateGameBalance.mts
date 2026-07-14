@@ -283,7 +283,6 @@ const simKindByKind: Record<string, string | null> = {
   foragers_shed: 'ForagersShed',
   chapel: null,
   marketplace: null,
-  grain_field: 'GrainField',
   threshing_barn: 'ThreshingBarn',
   monastery: 'Monastery',
   brewery: 'Brewery',
@@ -488,7 +487,6 @@ function generateRust(): string {
   lines.push('    Well,');
   lines.push('    HuntersHall,');
   lines.push('    ForagersShed,');
-  lines.push('    GrainField,');
   lines.push('    ThreshingBarn,');
   lines.push('    Monastery,');
   lines.push('    Brewery,');

@@ -24,6 +24,8 @@ export const TOAST_MESSAGES = {
   'building.placement.no_road_access': 'Building must be placed near a road',
   'building.placement.on_road': 'Cannot build on a road',
   'building.placement.insufficient_resources': 'Not enough timber or stone',
+  'building.placement.requires_staffed_chapel': 'A staffed chapel is required before founding a monastery',
+  'building.placement.requires_parish_population': 'The parish needs at least 12 residents before founding a monastery',
   'burgage.placement.water': 'Cannot place residences on water',
   'burgage.placement.too_steep': 'The slope is too steep here',
   'burgage.placement.invalid_shape': 'Invalid residence plot shape',
@@ -130,6 +132,10 @@ export function buildingPlacementReasonToToastId(reason: BuildingPlacementFailur
       return 'building.placement.on_road';
     case 'insufficient_resources':
       return 'building.placement.insufficient_resources';
+    case 'requires_staffed_chapel':
+      return 'building.placement.requires_staffed_chapel';
+    case 'requires_parish_population':
+      return 'building.placement.requires_parish_population';
     default: {
       const unhandled: never = reason;
       return unhandled;

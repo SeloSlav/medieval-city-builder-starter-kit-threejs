@@ -1,9 +1,10 @@
-import type { BuildingKind, BuildingState, BurgageZoneState, FarmFieldState, ForagingNodeState, ResourceNodeState } from '../resources/types.ts';
+import type { BuildingKind, BuildingState, BurgageZoneState, FarmFieldState, ForagingNodeState, ResidenceState, ResourceNodeState } from '../resources/types.ts';
 import type { ResourceTotals } from '../resources/resourceTotals.ts';
 import { canAffordBuilding } from '../resources/buildingEconomy.ts';
 import { buildingRequiresRoad } from '../resources/buildingPlacementPolicy.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
 import { MONASTERY_MIN_FOOTPRINT_SLOPE } from '../generated/gameBalance.ts';
+import { hasStaffedChapel, MONASTERY_MIN_PARISH_POPULATION, parishPopulation } from '../logistics/specialtyLogistics.ts';
 import { sampleBuildingFootprintHeights } from './BuildingTerrainLayout.ts';
 import { sampleBuildingFootprintPoints } from './BuildingTerrainLayout.ts';
 import { buildingFootprintPolygon, buildingOverlapsResidenceZone } from '../placement/placementConflicts.ts';
@@ -27,7 +28,9 @@ export type BuildingPlacementFailureReason =
   | 'no_trees_in_range'
   | 'no_road_access'
   | 'on_road'
-  | 'insufficient_resources';
+  | 'insufficient_resources'
+  | 'requires_staffed_chapel'
+  | 'requires_parish_population';
 
 export type BuildingPlacementResult =
   | { ok: true }
@@ -37,6 +40,7 @@ const MAX_FOOTPRINT_HEIGHT_DELTA = 9.5;
 
 type BuildingPlacementContext = {
   buildings: Iterable<BuildingState>;
+  residences: Iterable<ResidenceState>;
   burgageZones: Iterable<BurgageZoneState>;
   farmFields?: Iterable<FarmFieldState>;
   quarries: Iterable<ResourceNodeState>;
@@ -115,6 +119,15 @@ export function validateBuildingPlacement(
     const matureTrees = context.countMatureTreesInRadius?.(x, z, workRadius) ?? 0;
     if (matureTrees <= 0) {
       return { ok: false, reason: 'no_trees_in_range' };
+    }
+  }
+
+  if (kind === 'monastery') {
+    if (!hasStaffedChapel(context.buildings)) {
+      return { ok: false, reason: 'requires_staffed_chapel' };
+    }
+    if (parishPopulation(context.residences) < MONASTERY_MIN_PARISH_POPULATION) {
+      return { ok: false, reason: 'requires_parish_population' };
     }
   }
 

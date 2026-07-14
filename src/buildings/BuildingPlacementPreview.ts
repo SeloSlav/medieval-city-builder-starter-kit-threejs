@@ -21,7 +21,6 @@ const PREVIEW_HEIGHT: Record<BuildingKind, number> = {
   foragers_shed: 4.9,
   chapel: 8.6,
   marketplace: 5.3,
-  grain_field: 3.3,
   threshing_barn: 7.1,
   monastery: 9.8,
   brewery: 6.7,
@@ -98,7 +97,6 @@ function createPreviewFootprintGeometry(
     case 'foragers_shed':
     case 'chapel':
     case 'marketplace':
-    case 'grain_field':
     case 'threshing_barn':
     case 'monastery':
     case 'brewery':

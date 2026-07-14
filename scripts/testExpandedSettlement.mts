@@ -15,7 +15,7 @@ import { createBuildingMesh } from '../src/buildings/BuildingMeshes.ts';
 import { createResidenceMesh } from '../src/residences/ResidenceMarkers.ts';
 
 const expanded = [
-  'grain_field', 'threshing_barn', 'monastery', 'brewery', 'smokehouse', 'granary',
+  'threshing_barn', 'monastery', 'brewery', 'smokehouse', 'granary',
   'apiary', 'watermill', 'carpenter', 'ferry_landing', 'vineyard',
 ] as const;
 for (const kind of expanded) {
@@ -27,7 +27,7 @@ assert.equal(BUILDING_DEFINITIONS.ferry_landing.requiresWaterShore, true);
 assert.equal(BUILDING_DEFINITIONS.monastery.acceptsLabor, false);
 assert.equal(BUILDING_DEFINITIONS.monastery.requiresHillside, true);
 assert.equal(BUILDING_DEFINITIONS.monastery.workRadius, 520);
-assert.ok(BUILDING_STORAGE_CAPS.granary.grain > BUILDING_STORAGE_CAPS.grain_field.grain);
+assert.ok(BUILDING_STORAGE_CAPS.granary.grain > BUILDING_STORAGE_CAPS.threshing_barn.grain);
 assert.deepEqual([RESIDENCE_TIER1_CAPACITY, RESIDENCE_TIER2_CAPACITY, RESIDENCE_TIER3_CAPACITY], [3, 6, 10]);
 
 const residence = (tier: 1 | 2 | 3): ResidenceState => ({

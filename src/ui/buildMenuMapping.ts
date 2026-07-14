@@ -11,7 +11,6 @@ export const BUILDING_KIND_TO_MENU_ACTION: Record<BuildingKind, PlacementBuildMe
   foragers_shed: 'foragers-shed',
   chapel: 'chapel',
   marketplace: 'marketplace',
-  grain_field: 'grain-field',
   threshing_barn: 'threshing-barn',
   monastery: 'monastery',
   brewery: 'brewery',

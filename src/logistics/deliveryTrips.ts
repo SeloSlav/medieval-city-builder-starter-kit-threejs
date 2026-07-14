@@ -5,7 +5,19 @@ import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 export const DELIVERY_TRIP_PHASES = ['outbound', 'unloading', 'inbound'] as const;
 export type DeliveryTripPhase = (typeof DELIVERY_TRIP_PHASES)[number];
 
-export const DELIVERY_CARGO_KINDS = ['firewood', 'water', 'food', 'timber'] as const;
+/** Mirrors server `CommodityKind::as_u8` / residence need cargo ids on delivery trips. */
+export const DELIVERY_CARGO_KINDS = [
+  'firewood',
+  'water',
+  'food',
+  'timber',
+  'grain',
+  'flour',
+  'ale',
+  'preservedFood',
+  'honey',
+  'wine',
+] as const;
 export type DeliveryCargoKind = (typeof DELIVERY_CARGO_KINDS)[number];
 
 export const DELIVERY_DESTINATION_KINDS = ['residence', 'building'] as const;
@@ -45,6 +57,18 @@ export function cargoKindFromId(value: number): DeliveryCargoKind | null {
       return 'food';
     case 3:
       return 'timber';
+    case 4:
+      return 'grain';
+    case 5:
+      return 'flour';
+    case 6:
+      return 'ale';
+    case 7:
+      return 'preservedFood';
+    case 8:
+      return 'honey';
+    case 9:
+      return 'wine';
     default:
       return null;
   }
@@ -69,6 +93,35 @@ export function phaseFromId(value: number): DeliveryTripPhase {
       return 'inbound';
     default:
       return 'outbound';
+  }
+}
+
+export function cargoKindLabel(kind: DeliveryCargoKind): string {
+  switch (kind) {
+    case 'firewood':
+      return 'Firewood';
+    case 'water':
+      return 'Water';
+    case 'food':
+      return 'Food';
+    case 'timber':
+      return 'Timber';
+    case 'grain':
+      return 'Grain';
+    case 'flour':
+      return 'Flour';
+    case 'ale':
+      return 'Ale';
+    case 'preservedFood':
+      return 'Preserved food';
+    case 'honey':
+      return 'Honey';
+    case 'wine':
+      return 'Wine';
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
   }
 }
 
@@ -121,6 +174,18 @@ export function formatTripDestinationLabel(
   return `Parcel #${residence.parcelIndex + 1}`;
 }
 
+export function formatTripBuildingDestinationLabel(
+  trip: DeliveryTripState | null,
+  getBuildingLabel: (kind: BuildingState['kind']) => string,
+  getBuilding: (id: string) => BuildingState | null,
+  fallback: string,
+): string {
+  if (!trip || trip.destinationKind !== 'building' || !trip.targetBuildingId) return fallback;
+  const target = getBuilding(trip.targetBuildingId);
+  if (!target) return fallback;
+  return getBuildingLabel(target.kind);
+}
+
 export function findActiveTripForBuilding(
   trips: Iterable<DeliveryTripState>,
   buildingId: string,
@@ -141,6 +206,18 @@ export function findInboundTimberTripForBuilding(
       && trip.destinationKind === 'building'
       && trip.targetBuildingId === buildingId
     ) {
+      return trip;
+    }
+  }
+  return null;
+}
+
+export function findInboundSupplyTripForBuilding(
+  trips: Iterable<DeliveryTripState>,
+  buildingId: string,
+): DeliveryTripState | null {
+  for (const trip of trips) {
+    if (trip.destinationKind === 'building' && trip.targetBuildingId === buildingId) {
       return trip;
     }
   }
@@ -199,6 +276,18 @@ export function cargoColor(kind: DeliveryCargoKind): number {
       return 0x5f9f4a;
     case 'timber':
       return 0x8a684c;
+    case 'grain':
+      return 0xc9a227;
+    case 'flour':
+      return 0xe8dcc8;
+    case 'ale':
+      return 0xb8860b;
+    case 'preservedFood':
+      return 0x8b5a3c;
+    case 'honey':
+      return 0xd4a017;
+    case 'wine':
+      return 0x6b2d5c;
     default: {
       const _exhaustive: never = kind;
       return _exhaustive;

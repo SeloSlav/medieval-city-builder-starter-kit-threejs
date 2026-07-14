@@ -26,6 +26,11 @@ import {
   formatFoodRunwayDays,
   residenceFoodRunwayDays,
 } from '../../logistics/foodLogistics.ts';
+import {
+  formatSpecialtyRunwayDays,
+  residenceAleRunwayDays,
+  residencePreservedFoodRunwayDays,
+} from '../../logistics/specialtyLogistics.ts';
 import { formatWaterRunwayDays, residenceWaterRunwayDays } from '../../logistics/waterLogistics.ts';
 import { effectiveResidenceSettleTicks } from '../../economy/chapelCommunity.ts';
 import { formatHouseholdWealth } from '../../economy/householdWealth.ts';
@@ -57,6 +62,12 @@ export function renderResidenceInspector(
   const servingLodge = context.worldQueries.getServingLodgeForResidence(residence);
   const servingWell = context.worldQueries.getServingWellForResidence(residence);
   const servingFoodSupplier = context.worldQueries.getServingFoodSupplierForResidence(residence);
+  const servingPreservedFoodSupplier = residence.tier >= 2
+    ? context.worldQueries.getServingPreservedFoodSupplierForResidence(residence)
+    : null;
+  const servingAleSupplier = residence.tier >= 3
+    ? context.worldQueries.getServingAleSupplierForResidence(residence)
+    : null;
   const servingChapel = context.worldQueries.getServingChapelForResidence(residence);
   const parishPolicy = context.getParishPolicy?.() ?? DEFAULT_PARISH_POLICY;
   const hasMonasteryCoverage = context.worldQueries.isResidenceInMonasteryCoverage(residence);
@@ -88,6 +99,14 @@ export function renderResidenceInspector(
   const foodRunwayLabel = foodRunwayDays == null
     ? '—'
     : formatFoodRunwayDays(foodRunwayDays);
+  const preservedFoodRunwayDays = residence.tier >= 2 ? residencePreservedFoodRunwayDays(residence) : null;
+  const preservedFoodRunwayLabel = preservedFoodRunwayDays == null
+    ? '—'
+    : formatSpecialtyRunwayDays(preservedFoodRunwayDays);
+  const aleRunwayDays = residence.tier >= 3 ? residenceAleRunwayDays(residence) : null;
+  const aleRunwayLabel = aleRunwayDays == null
+    ? '—'
+    : formatSpecialtyRunwayDays(aleRunwayDays);
   const lodgeLabel = servingLodge
     ? context.worldQueries.getBuildingLabel(servingLodge.kind)
     : 'None on branch';
@@ -96,6 +115,12 @@ export function renderResidenceInspector(
     : 'None on branch';
   const foodSupplierLabel = servingFoodSupplier
     ? context.worldQueries.getBuildingLabel(servingFoodSupplier.kind)
+    : 'None on branch';
+  const preservedFoodSupplierLabel = servingPreservedFoodSupplier
+    ? context.worldQueries.getBuildingLabel(servingPreservedFoodSupplier.kind)
+    : 'None on branch';
+  const aleSupplierLabel = servingAleSupplier
+    ? context.worldQueries.getBuildingLabel(servingAleSupplier.kind)
     : 'None on branch';
   const capacity = residence.populationCapacity;
   const settlersRemaining = Math.max(0, capacity - residence.population);
@@ -142,10 +167,14 @@ export function renderResidenceInspector(
       <li><span>Food stock</span><span>${Math.round(getNeedStock(residence.needs, 'food'))} / ${RESIDENCE_FOOD_CAPACITY}</span></li>
       <li><span>Food runway</span><span>${foodRunwayLabel}</span></li>
       ${residence.tier >= 2 ? `<li><span>Preserved food</span><span>${Math.round(getNeedStock(residence.needs, 'preservedFood'))} / ${RESIDENCE_PRESERVED_FOOD_CAPACITY}</span></li>` : ''}
+      ${residence.tier >= 2 ? `<li><span>Preserved food runway</span><span>${preservedFoodRunwayLabel}</span></li>` : ''}
       ${residence.tier >= 3 ? `<li><span>Ale</span><span>${Math.round(getNeedStock(residence.needs, 'ale'))} / ${RESIDENCE_ALE_CAPACITY}</span></li>` : ''}
+      ${residence.tier >= 3 ? `<li><span>Ale runway</span><span>${aleRunwayLabel}</span></li>` : ''}
       <li><span>Serving lodge</span><span>${lodgeLabel}</span></li>
       <li><span>Serving well</span><span>${wellLabel}</span></li>
       <li><span>Serving food supplier</span><span>${foodSupplierLabel}</span></li>
+      ${residence.tier >= 2 ? `<li><span>Preserved food supplier</span><span>${preservedFoodSupplierLabel}</span></li>` : ''}
+      ${residence.tier >= 3 ? `<li><span>Ale supplier</span><span>${aleSupplierLabel}</span></li>` : ''}
       <li><span>Chapel link</span><span>${community.hasChapelAccess ? 'Staffed parish on the road' : 'None on branch'}</span></li>
       <li><span>Monastery coverage</span><span>${community.hasMonasteryCoverage ? 'Linked Pauline house within parish radius' : 'None'}</span></li>
       <li><span>Road access</span><span>${roadAccess}</span></li>

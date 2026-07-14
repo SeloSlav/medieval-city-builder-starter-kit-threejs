@@ -121,9 +121,6 @@ fn has_foraging_in_radius(
 
 #[reducer]
 pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Result<(), String> {
-    if kind == "grain_field" {
-        return Err("Use the field-drawing tool to cultivate land around a farmstead.".to_string());
-    }
     let def = building_def_or_err(&kind)?;
     let owner = ctx.sender();
     ensure_player_resources(ctx, owner);

@@ -85,6 +85,7 @@ assert.equal(MONASTERY_CHARITY_FOOD_PER_DELIVERY, 4);
 
 const flatResult = validateBuildingPlacement('monastery', 0, 0, {
   buildings: [],
+  residences: [],
   burgageZones: [],
   quarries: [],
   foragingNodes: [],
@@ -98,8 +99,13 @@ if (!flatResult.ok) {
 }
 
 const hillsideHeight = (x: number, z: number) => x * 0.4 + z * 0.25;
+const staffedChapelBuilding = building({ id: 'chapel-1', kind: 'chapel', x: 50, z: 50, assignedLabor: 1 });
+const populatedResidences = Array.from({ length: 4 }, (_, index) =>
+  residence({ id: `res-${index}`, population: 3 }),
+);
 const hillsideResult = validateBuildingPlacement('monastery', 0, 0, {
-  buildings: [],
+  buildings: [staffedChapelBuilding],
+  residences: populatedResidences,
   burgageZones: [],
   quarries: [],
   foragingNodes: [],
@@ -108,5 +114,35 @@ const hillsideResult = validateBuildingPlacement('monastery', 0, 0, {
   getNaturalHeightAt: hillsideHeight,
 });
 assert.equal(hillsideResult.ok, true);
+
+const noChapelResult = validateBuildingPlacement('monastery', 0, 0, {
+  buildings: [],
+  residences: populatedResidences,
+  burgageZones: [],
+  quarries: [],
+  foragingNodes: [],
+  stockpile: { timber: 999, stone: 999 },
+  isWaterAt: () => false,
+  getNaturalHeightAt: hillsideHeight,
+});
+assert.equal(noChapelResult.ok, false);
+if (!noChapelResult.ok) {
+  assert.equal(noChapelResult.reason, 'requires_staffed_chapel');
+}
+
+const smallParishResult = validateBuildingPlacement('monastery', 0, 0, {
+  buildings: [staffedChapelBuilding],
+  residences: [residence({ population: 8 })],
+  burgageZones: [],
+  quarries: [],
+  foragingNodes: [],
+  stockpile: { timber: 999, stone: 999 },
+  isWaterAt: () => false,
+  getNaturalHeightAt: hillsideHeight,
+});
+assert.equal(smallParishResult.ok, false);
+if (!smallParishResult.ok) {
+  assert.equal(smallParishResult.reason, 'requires_parish_population');
+}
 
 console.log('monastery polish tests passed');
