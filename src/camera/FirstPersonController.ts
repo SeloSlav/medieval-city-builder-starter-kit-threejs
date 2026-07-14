@@ -101,6 +101,10 @@ export class FirstPersonController {
     return this.active;
   }
 
+  isCrouching(): boolean {
+    return this.active && this.crouchToggle;
+  }
+
   toggle(spawn?: FirstPersonSpawn): void {
     if (this.active) this.deactivate();
     else this.activate(spawn ?? this.config.getOrbitSpawn?.());

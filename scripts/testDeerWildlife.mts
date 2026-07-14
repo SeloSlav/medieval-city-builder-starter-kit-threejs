@@ -6,6 +6,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import {
   DEER_FLEE_TRIGGER_DISTANCE,
   DEER_ROAM_RADIUS,
+  canDeerDetectObserver,
   createHerdSexDistribution,
   type DeerMotionState,
   updateDeerMotion,
@@ -44,6 +45,41 @@ function createMotion(overrides: Partial<DeerMotionState> = {}): DeerMotionState
 }
 
 {
+  const facingPositiveZ = createMotion({ heading: 0 });
+  const behind = { x: 0, z: -8, crouching: true };
+  const inFront = { x: 0, z: 8, crouching: true };
+  assert.equal(
+    canDeerDetectObserver(facingPositiveZ, behind),
+    false,
+    'a crouching player directly behind a deer should be hidden from its awareness cone',
+  );
+  assert.equal(
+    canDeerDetectObserver(facingPositiveZ, inFront),
+    true,
+    'a crouching player in front of a deer should be detected',
+  );
+  assert.equal(
+    canDeerDetectObserver(facingPositiveZ, { ...behind, crouching: false }),
+    true,
+    'a standing player behind a deer should still be detected',
+  );
+}
+
+{
+  const motion = createMotion({ heading: 0 });
+  updateDeerMotion(motion, 1 / 60, {
+    observer: { x: 0, z: -8, crouching: true },
+    random: fixedRandom([0.4]),
+  });
+  assert.notEqual(motion.mode, 'flee', 'crouch-sneaking from behind should not scare the deer');
+  updateDeerMotion(motion, 1 / 60, {
+    observer: { x: 0, z: -8, crouching: false },
+    random: fixedRandom([0.4]),
+  });
+  assert.equal(motion.mode, 'flee', 'standing up behind the deer should scare it immediately');
+}
+
+{
   const motion = createMotion({ modeTimer: 0.01 });
   const random = fixedRandom([0.15, 0.2, 0.72, 0.4, 0.65, 0.3]);
   for (let frame = 0; frame < 600; frame++) {
@@ -59,7 +95,7 @@ function createMotion(overrides: Partial<DeerMotionState> = {}): DeerMotionState
 
 {
   const motion = createMotion();
-  const observer = { x: DEER_FLEE_TRIGGER_DISTANCE * 0.4, z: 0 };
+  const observer = { x: DEER_FLEE_TRIGGER_DISTANCE * 0.4, z: 0, crouching: false };
   const initialDistance = Math.hypot(motion.x - observer.x, motion.z - observer.z);
   const random = fixedRandom([0.2, 0.7, 0.4, 0.8]);
   for (let frame = 0; frame < 120; frame++) {

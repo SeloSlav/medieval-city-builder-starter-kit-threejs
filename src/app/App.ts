@@ -343,7 +343,12 @@ export class App {
       this.updateBuildButtonPosition();
       this.worldMapUi?.quarry.update();
       this.worldMapUi?.foraging.update();
-      this.sceneManager?.render(dt, 12, true);
+      this.sceneManager?.render(
+        dt,
+        12,
+        true,
+        this.firstPersonController?.isCrouching() ?? false,
+      );
     } else {
       this.cameraController?.update(dt);
       this.toolbar?.setFirstPersonMode(false);

@@ -5,6 +5,7 @@ export type DeerSex = 'doe' | 'stag';
 export type DeerObserver = {
   x: number;
   z: number;
+  crouching: boolean;
 };
 
 export type DeerMotionState = {
@@ -31,6 +32,7 @@ export const DEER_FLEE_TRIGGER_DISTANCE = 19;
 export const DEER_FLEE_RELEASE_DISTANCE = 32;
 export const DEER_ROAM_RADIUS = 27;
 export const DEER_FLEE_BOUNDARY_RADIUS = 52;
+export const DEER_CROUCH_DETECTION_HALF_ANGLE = Math.PI * (65 / 180);
 
 const TAU = Math.PI * 2;
 const WALK_SPEED = 1.25;
@@ -50,7 +52,7 @@ export function updateDeerMotion(
     ? Math.hypot(state.x - context.observer.x, state.z - context.observer.z)
     : Number.POSITIVE_INFINITY;
 
-  if (context.observer && observerDistance <= DEER_FLEE_TRIGGER_DISTANCE) {
+  if (context.observer && canDeerDetectObserver(state, context.observer, observerDistance)) {
     if (state.mode !== 'flee') beginFlee(state);
     state.modeTimer = Math.max(state.modeTimer, 1.15);
   }
@@ -77,6 +79,32 @@ export function chooseInitialDeerMode(random: () => number): DeerBehaviorMode {
 
 export function chooseRestDuration(random: () => number): number {
   return lerp(MIN_REST_SECONDS, MAX_REST_SECONDS, random());
+}
+
+/**
+ * Standing players alert deer from any direction inside the awareness radius.
+ * Crouching limits awareness to a forward cone, leaving a true blind approach
+ * behind the animal until it turns enough to see the player.
+ */
+export function canDeerDetectObserver(
+  state: Pick<DeerMotionState, 'x' | 'z' | 'heading'>,
+  observer: DeerObserver,
+  knownDistance?: number,
+): boolean {
+  const dx = observer.x - state.x;
+  const dz = observer.z - state.z;
+  const distance = knownDistance ?? Math.hypot(dx, dz);
+  if (distance > DEER_FLEE_TRIGGER_DISTANCE) return false;
+  if (!observer.crouching) return true;
+  if (distance < 0.001) return true;
+
+  const inverseDistance = 1 / distance;
+  const directionToObserverX = dx * inverseDistance;
+  const directionToObserverZ = dz * inverseDistance;
+  const forwardX = Math.sin(state.heading);
+  const forwardZ = Math.cos(state.heading);
+  const facingDot = forwardX * directionToObserverX + forwardZ * directionToObserverZ;
+  return facingDot >= Math.cos(DEER_CROUCH_DETECTION_HALF_ANGLE);
 }
 
 /**

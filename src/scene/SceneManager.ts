@@ -101,6 +101,7 @@ export class SceneManager {
   private rockSpatialIndex: RockSpatialIndex | null = null;
   private buildInteractionActive = false;
   private renderFrame = 0;
+  private readonly firstPersonDeerObserver = { x: 0, z: 0, crouching: false };
   private lastShadowTargetX = Number.NaN;
   private lastShadowTargetZ = Number.NaN;
   private lastShadowDistance = Number.NaN;
@@ -395,7 +396,12 @@ export class SceneManager {
     this.rockSpatialIndex = rocks.length > 0 ? new RockSpatialIndex(rocks) : null;
   }
 
-  render(dt: number, orbitDistance?: number, firstPersonActive = false): void {
+  render(
+    dt: number,
+    orbitDistance?: number,
+    firstPersonActive = false,
+    firstPersonCrouching = false,
+  ): void {
     const elapsed = performance.now() * 0.001;
     const cameraDistance = orbitDistance ?? this.camera.position.distanceTo(this.cameraTarget);
     updateTerrainZoomBlend(this.terrain, cameraDistance, firstPersonActive);
@@ -415,9 +421,14 @@ export class SceneManager {
     this.sky.updateSun(this.sunDirection);
     this.sky.updateTime(this.skyAnimationTime);
     this.riverSystem.tick(dt, elapsed);
+    if (firstPersonActive) {
+      this.firstPersonDeerObserver.x = this.camera.position.x;
+      this.firstPersonDeerObserver.z = this.camera.position.z;
+      this.firstPersonDeerObserver.crouching = firstPersonCrouching;
+    }
     this.deerWildlifeVisuals?.update(
       dt,
-      firstPersonActive ? this.camera.position : null,
+      firstPersonActive ? this.firstPersonDeerObserver : null,
       cameraDistance,
     );
     this.renderFrame++;
