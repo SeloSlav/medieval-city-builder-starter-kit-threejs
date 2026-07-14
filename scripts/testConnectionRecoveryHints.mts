@@ -22,7 +22,7 @@ assert.match(generic.recoveryHint, /retry/i);
 
 const mismatch = formatWorldGenerationMismatch('Settings differ.');
 assert.equal(mismatch.showNewWorldAction, true);
-assert.match(mismatch.recoveryHint, /saved map settings/i);
+assert.match(mismatch.recoveryHint, /already running/i);
 
 const offline = formatConnectionUnavailable();
 assert.equal(offline.showNewWorldAction, false);
