@@ -8,7 +8,7 @@ import {
   buildingLaborView,
   buildingRoadAccessRow,
   buildingStorageRows,
-  buildingWorkRadiusRow,
+  buildingExtentRow,
   treeCountRows,
 } from './buildingCommon.ts';
 import { getBuildingProcessorStatus } from './buildingProcessorStatus.ts';
@@ -34,7 +34,7 @@ export function renderLumberMillInspector(
       ${buildingCostRows(building.kind, cost)}
       ${buildingRoadAccessRow(context.worldQueries, building)}
       ${processorStatus?.waterDetailHtml ?? ''}
-      ${buildingWorkRadiusRow(building.kind)}
+      ${buildingExtentRow(building.kind)}
       <li><span>Harvest interval</span><span>${building.assignedLabor > 0 ? `${cycleSeconds.toFixed(1)}s` : `${definition.harvestInterval}s`} (${building.assignedLabor} workers)</span></li>
       ${treeCountRows(matureTrees, stumpTrees, growingTrees)}
       ${buildingStorageRows(building, building.kind)}

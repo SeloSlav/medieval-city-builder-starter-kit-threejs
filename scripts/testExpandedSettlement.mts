@@ -3,6 +3,7 @@ import {
   BUILDING_DEFINITIONS,
   BUILDING_KINDS,
   BUILDING_STORAGE_CAPS,
+  MONASTERY_COVERAGE_RADIUS,
   RESIDENCE_TIER1_CAPACITY,
   RESIDENCE_TIER2_CAPACITY,
   RESIDENCE_TIER3_CAPACITY,
@@ -12,6 +13,7 @@ import { evaluateResidenceNeedRecovery } from '../src/residences/residenceNeeds.
 import type { ResidenceState } from '../src/resources/types.ts';
 import * as THREE from 'three';
 import { createBuildingMesh } from '../src/buildings/BuildingMeshes.ts';
+import { getBuildingExtent } from '../src/buildings/buildingExtents.ts';
 import { createResidenceMesh } from '../src/residences/ResidenceMarkers.ts';
 
 const expanded = [
@@ -26,7 +28,20 @@ assert.equal(BUILDING_DEFINITIONS.watermill.requiresWaterShore, true);
 assert.equal(BUILDING_DEFINITIONS.ferry_landing.requiresWaterShore, true);
 assert.equal(BUILDING_DEFINITIONS.monastery.acceptsLabor, false);
 assert.equal(BUILDING_DEFINITIONS.monastery.requiresHillside, true);
-assert.equal(BUILDING_DEFINITIONS.monastery.workRadius, 520);
+assert.equal(BUILDING_DEFINITIONS.monastery.workRadius, 0);
+assert.equal(MONASTERY_COVERAGE_RADIUS, 520);
+assert.deepEqual(
+  getBuildingExtent('threshing_barn', BUILDING_DEFINITIONS.threshing_barn.workRadius),
+  { type: 'work', label: 'Field work extent', radius: 150 },
+);
+assert.deepEqual(
+  getBuildingExtent('monastery', BUILDING_DEFINITIONS.monastery.workRadius),
+  { type: 'coverage', label: 'Faith coverage', radius: 520 },
+);
+for (const kind of ['brewery', 'smokehouse', 'granary', 'apiary', 'watermill', 'carpenter', 'ferry_landing'] as const) {
+  assert.equal(BUILDING_DEFINITIONS[kind].workRadius, 0, `${kind} has no spatial work extent`);
+  assert.equal(getBuildingExtent(kind, BUILDING_DEFINITIONS[kind].workRadius), null, `${kind} must not render an extent ring`);
+}
 assert.ok(BUILDING_STORAGE_CAPS.granary.grain > BUILDING_STORAGE_CAPS.threshing_barn.grain);
 assert.deepEqual([RESIDENCE_TIER1_CAPACITY, RESIDENCE_TIER2_CAPACITY, RESIDENCE_TIER3_CAPACITY], [3, 6, 10]);
 

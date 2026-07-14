@@ -29,7 +29,6 @@ import { computePopulationStats, computeResourceTotals } from '../resources/reso
 import { WorldLayoutRegistry } from '../resources/WorldLayoutRegistry.ts';
 import type { TreeRegistry } from '../resources/TreeRegistry.ts';
 import { WorldQueries } from '../resources/WorldQueries.ts';
-import { getBuildingWorkExtentHighlight } from '../resources/inspector/buildingProcessorStatus.ts';
 import { RoadMaterialFactory } from '../roads/RoadMaterialFactory.ts';
 import { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { RoadSelection } from '../roads/RoadSelection.ts';
@@ -423,7 +422,7 @@ export async function bootstrapAppSession(
       case 'too_large': return 'Draw a smaller field.';
       case 'edge_too_short': return 'Each field edge must be at least 6 metres.';
       case 'too_steep': return 'This ground is too steep to cultivate.';
-      case 'no_farmstead': return 'Place a farmstead first, then draw inside its working radius.';
+      case 'no_farmstead': return "Place a farmstead first, then draw inside its work extent.";
       case 'water': return 'Fields cannot cover open water.';
       case 'quarry': return 'Fields cannot cover a quarry pit.';
       case 'building': return 'Field overlaps a building.';
@@ -636,15 +635,10 @@ export async function bootstrapAppSession(
     ...inspectorActions,
     onSelectionChange: (target) => {
       if (target?.kind === 'building') {
-        buildingMarkers.setSelectedWorkExtent(
-          target.building,
-          getBuildingWorkExtentHighlight(target.building, worldQueries, {
-            matureTrees: target.matureTrees,
-          }),
-        );
+        buildingMarkers.setBuildingExtentOverlay(target.building);
         return;
       }
-      buildingMarkers.setSelectedWorkExtent(null);
+      buildingMarkers.setBuildingExtentOverlay(null);
     },
     isBlocked: () => isWorldInspectionBlocked(placementGate),
   });

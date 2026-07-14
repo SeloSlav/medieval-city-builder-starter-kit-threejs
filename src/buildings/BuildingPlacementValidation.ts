@@ -18,7 +18,7 @@ export type BuildingPlacementFailureReason =
   | 'requires_hillside'
   | 'too_steep'
   | 'too_close'
-  | 'within_work_radius'
+  | 'overlapping_work_extent'
   | 'within_residence_zone'
   | 'within_farm_field'
   | 'on_quarry_pit'
@@ -98,8 +98,8 @@ export function validateBuildingPlacement(
     }
   }
 
-  if (isWithinSameKindWorkRadius(kind, x, z, context.buildings)) {
-    return { ok: false, reason: 'within_work_radius' };
+  if (overlapsSameKindWorkExtent(kind, x, z, context.buildings)) {
+    return { ok: false, reason: 'overlapping_work_extent' };
   }
 
   if (kind === 'stone_quarry' && !hasQuarryStoneInRadius(x, z, getBuildingDefinition(kind).workRadius, context.quarries)) {
@@ -201,7 +201,7 @@ function footprintHeightDelta(
   return maxHeight - minHeight;
 }
 
-function isWithinSameKindWorkRadius(
+function overlapsSameKindWorkExtent(
   kind: BuildingKind,
   x: number,
   z: number,

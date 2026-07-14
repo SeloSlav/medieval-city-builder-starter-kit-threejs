@@ -8,7 +8,7 @@ import {
   buildingLaborView,
   buildingRoadAccessRow,
   buildingStorageRows,
-  buildingWorkRadiusRow,
+  buildingExtentRow,
 } from './buildingCommon.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
 import { formatTripDestinationLabel, formatTripPhaseLabel } from '../../logistics/deliveryTrips.ts';
@@ -125,7 +125,7 @@ export function renderHarvestBuildingInspector(
     statusState,
     detailsHtml: `
       ${buildingCostRows(building.kind, cost)}
-      ${buildingWorkRadiusRow(building.kind)}
+      ${buildingExtentRow(building.kind)}
       ${buildingRoadAccessRow(context.worldQueries, building)}
       <li><span>Crew split</span><span>${formatFoodCrewSplit(building.assignedLabor)}</span></li>
       <li><span>Harvest interval</span><span>${building.assignedLabor > 0 ? `${cycleSeconds.toFixed(1)}s` : `${definition.harvestInterval}s`} (${building.assignedLabor} workers)</span></li>

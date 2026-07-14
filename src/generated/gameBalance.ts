@@ -348,7 +348,7 @@ export const BUILDING_DEFINITIONS = {
   monastery: {
     kind: 'monastery',
     label: "Pauline monastery",
-    workRadius: 520,
+    workRadius: 0,
     pickRadius: 15,
     harvestInterval: 12,
     regrowRatePerSecond: 0,
@@ -362,7 +362,7 @@ export const BUILDING_DEFINITIONS = {
   brewery: {
     kind: 'brewery',
     label: "Brewhouse",
-    workRadius: 120,
+    workRadius: 0,
     pickRadius: 9,
     harvestInterval: 7,
     regrowRatePerSecond: 0,
@@ -376,7 +376,7 @@ export const BUILDING_DEFINITIONS = {
   smokehouse: {
     kind: 'smokehouse',
     label: "Smokehouse",
-    workRadius: 110,
+    workRadius: 0,
     pickRadius: 8,
     harvestInterval: 6,
     regrowRatePerSecond: 0,
@@ -390,7 +390,7 @@ export const BUILDING_DEFINITIONS = {
   granary: {
     kind: 'granary',
     label: "Village granary",
-    workRadius: 150,
+    workRadius: 0,
     pickRadius: 9,
     harvestInterval: 5,
     regrowRatePerSecond: 0,
@@ -404,7 +404,7 @@ export const BUILDING_DEFINITIONS = {
   apiary: {
     kind: 'apiary',
     label: "Forest apiary",
-    workRadius: 72,
+    workRadius: 0,
     pickRadius: 7,
     harvestInterval: 18,
     regrowRatePerSecond: 0,
@@ -418,7 +418,7 @@ export const BUILDING_DEFINITIONS = {
   watermill: {
     kind: 'watermill',
     label: "Grain watermill",
-    workRadius: 130,
+    workRadius: 0,
     pickRadius: 10,
     harvestInterval: 7,
     regrowRatePerSecond: 0,
@@ -432,7 +432,7 @@ export const BUILDING_DEFINITIONS = {
   carpenter: {
     kind: 'carpenter',
     label: "Carpenter and wheelwright",
-    workRadius: 180,
+    workRadius: 0,
     pickRadius: 9,
     harvestInterval: 8,
     regrowRatePerSecond: 0,
@@ -446,7 +446,7 @@ export const BUILDING_DEFINITIONS = {
   ferry_landing: {
     kind: 'ferry_landing',
     label: "Ferry landing",
-    workRadius: 120,
+    workRadius: 0,
     pickRadius: 9,
     harvestInterval: 0,
     regrowRatePerSecond: 0,

@@ -135,7 +135,7 @@ pub fn owner_wells(ctx: &spacetimedb::ReducerContext, owner: Identity) -> Vec<Bu
         .collect()
 }
 
-fn within_work_radius(well: &Building, x: f64, z: f64) -> bool {
+fn within_well_service_extent(well: &Building, x: f64, z: f64) -> bool {
     if well.work_radius <= 0.0 {
         return false;
     }
@@ -145,7 +145,7 @@ fn within_work_radius(well: &Building, x: f64, z: f64) -> bool {
     dx * dx + dz * dz <= radius_sq
 }
 
-/// Each residence is claimed by the nearest road-connected well within work radius.
+/// Each residence is claimed by the nearest road-connected well within its service extent.
 pub fn claim_residences_for_wells(
     network: &RoadNetwork,
     wells: &[Building],
@@ -156,7 +156,7 @@ pub fn claim_residences_for_wells(
         let mut best_well: Option<&Building> = None;
         let mut best_distance = f64::INFINITY;
         for well in wells {
-            if well.kind != "well" || !within_work_radius(well, residence.x, residence.z) {
+            if well.kind != "well" || !within_well_service_extent(well, residence.x, residence.z) {
                 continue;
             }
             let Some(distance) =

@@ -30,7 +30,6 @@ export type BuildingProcessorStatus = {
   statusText: string;
   statusState: 'active' | 'idle' | 'warning';
   waterDetailHtml: string;
-  showWorkExtentWarning: boolean;
 };
 
 type StockKey = 'timber' | 'firewood' | 'stone' | 'water' | 'food' | 'grain' | 'flour' | 'ale' | 'preservedFood';
@@ -99,7 +98,6 @@ const PROCESSOR_PROFILES: Partial<Record<BuildingKind, ProcessorProfile>> = {
 function stockAmount(building: BuildingState, key: StockKey): number {
   return building[key];
 }
-
 function isOutputFull(building: BuildingState, kind: BuildingKind, output: StockKey): boolean {
   const caps = buildingStorageCaps(kind);
   const cap = caps[output];
@@ -126,7 +124,6 @@ function buildProcessorStatus(
   profile: ProcessorProfile,
   waterAssessment: WellWaterAssessment | null,
 ): BuildingProcessorStatus {
-  const staffed = !profile.requiresLabor || building.assignedLabor > 0;
   const waterDetailHtml = formatWellWaterDetailRows(
     waterAssessment,
     profile.waterPerCycle <= 0 ? 'None — uses river power or dry process' : undefined,
@@ -137,7 +134,6 @@ function buildProcessorStatus(
       statusText: profile.idleNoWorkersLabel,
       statusState: 'idle',
       waterDetailHtml,
-      showWorkExtentWarning: false,
     };
   }
 
@@ -147,7 +143,6 @@ function buildProcessorStatus(
       statusText: waterIssue,
       statusState: 'warning',
       waterDetailHtml,
-      showWorkExtentWarning: true,
     };
   }
 
@@ -156,7 +151,6 @@ function buildProcessorStatus(
       statusText: 'Storage full — not producing',
       statusState: 'idle',
       waterDetailHtml,
-      showWorkExtentWarning: staffed,
     };
   }
 
@@ -166,7 +160,6 @@ function buildProcessorStatus(
       statusText: formatMissingInput(missingInput),
       statusState: 'warning',
       waterDetailHtml,
-      showWorkExtentWarning: true,
     };
   }
 
@@ -174,7 +167,6 @@ function buildProcessorStatus(
     statusText: profile.operatingLabel,
     statusState: 'active',
     waterDetailHtml,
-    showWorkExtentWarning: false,
   };
 }
 
@@ -197,7 +189,6 @@ function getLumberMillStatus(
       statusText: 'Idle — assign labor to harvest timber',
       statusState: 'idle',
       waterDetailHtml,
-      showWorkExtentWarning: false,
     };
   }
 
@@ -207,7 +198,6 @@ function getLumberMillStatus(
       statusText: waterIssue,
       statusState: 'warning',
       waterDetailHtml,
-      showWorkExtentWarning: true,
     };
   }
 
@@ -216,7 +206,6 @@ function getLumberMillStatus(
       statusText: `Storage full — not harvesting (${matureTrees} mature trees in range)`,
       statusState: 'idle',
       waterDetailHtml,
-      showWorkExtentWarning: true,
     };
   }
 
@@ -225,7 +214,6 @@ function getLumberMillStatus(
       statusText: `Harvesting — ${matureTrees} mature trees in range`,
       statusState: 'active',
       waterDetailHtml,
-      showWorkExtentWarning: false,
     };
   }
 
@@ -233,7 +221,6 @@ function getLumberMillStatus(
     statusText: 'Idle — no mature trees in range',
     statusState: 'idle',
     waterDetailHtml,
-    showWorkExtentWarning: true,
   };
 }
 
@@ -247,7 +234,6 @@ function getMonasteryStatus(building: BuildingState, worldQueries: WorldQueries)
       statusText: 'Reduced output — link to a staffed chapel by road',
       statusState: 'warning',
       waterDetailHtml: '',
-      showWorkExtentWarning: true,
     };
   }
 
@@ -256,7 +242,6 @@ function getMonasteryStatus(building: BuildingState, worldQueries: WorldQueries)
       statusText: 'Storage full — charity hauls paused',
       statusState: 'idle',
       waterDetailHtml: '',
-      showWorkExtentWarning: true,
     };
   }
 
@@ -265,7 +250,6 @@ function getMonasteryStatus(building: BuildingState, worldQueries: WorldQueries)
       statusText: `Waiting for grain — needs ${grainNeeded.toFixed(1)} per cycle`,
       statusState: 'warning',
       waterDetailHtml: '',
-      showWorkExtentWarning: true,
     };
   }
 
@@ -275,7 +259,6 @@ function getMonasteryStatus(building: BuildingState, worldQueries: WorldQueries)
       statusText: 'Serving parish — connect marketplace by road for pilgrim income',
       statusState: 'active',
       waterDetailHtml: '',
-      showWorkExtentWarning: false,
     };
   }
 
@@ -283,7 +266,6 @@ function getMonasteryStatus(building: BuildingState, worldQueries: WorldQueries)
     statusText: 'Serving parish — charity, feasts, and pilgrimages',
     statusState: 'active',
     waterDetailHtml: '',
-    showWorkExtentWarning: false,
   };
 }
 
@@ -293,7 +275,6 @@ function getFerryStatus(building: BuildingState, worldQueries: WorldQueries): Bu
       statusText: 'Idle — assign workers to operate the ferry',
       statusState: 'idle',
       waterDetailHtml: '',
-      showWorkExtentWarning: false,
     };
   }
 
@@ -303,7 +284,6 @@ function getFerryStatus(building: BuildingState, worldQueries: WorldQueries): Bu
       statusText: 'Idle — needs a road link to the marketplace',
       statusState: 'warning',
       waterDetailHtml: '',
-      showWorkExtentWarning: true,
     };
   }
 
@@ -311,7 +291,6 @@ function getFerryStatus(building: BuildingState, worldQueries: WorldQueries): Bu
     statusText: 'Operating river crossing — regional trade income',
     statusState: 'active',
     waterDetailHtml: '',
-    showWorkExtentWarning: false,
   };
 }
 
@@ -325,7 +304,6 @@ function getSimpleLaborStatus(
     statusText: staffed ? operatingLabel : idleLabel,
     statusState: staffed ? 'active' : 'idle',
     waterDetailHtml: '',
-    showWorkExtentWarning: false,
   };
 }
 
@@ -381,13 +359,4 @@ export function getBuildingProcessorStatus(
       );
     }
   }
-}
-
-export function getBuildingWorkExtentHighlight(
-  building: BuildingState,
-  worldQueries: WorldQueries,
-  context: BuildingProcessorContext = {},
-): 'normal' | 'warning' {
-  const status = getBuildingProcessorStatus(building, worldQueries, context);
-  return status?.showWorkExtentWarning ? 'warning' : 'normal';
 }

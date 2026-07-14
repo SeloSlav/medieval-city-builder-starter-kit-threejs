@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { BuildingState, GameState } from '../src/resources/types.ts';
 import { createEmptyStockpile } from '../src/resources/types.ts';
-import { getBuildingProcessorStatus, getBuildingWorkExtentHighlight } from '../src/resources/inspector/buildingProcessorStatus.ts';
+import { getBuildingProcessorStatus } from '../src/resources/inspector/buildingProcessorStatus.ts';
 import { WorldQueries } from '../src/resources/WorldQueries.ts';
 import type { RoadNetwork } from '../src/roads/RoadNetwork.ts';
 
@@ -119,7 +119,6 @@ assert.equal(
   getBuildingProcessorStatus(granary, noWellQueries)?.statusState,
   'warning',
 );
-assert.equal(getBuildingWorkExtentHighlight(granary, noWellQueries), 'warning');
 
 assert.equal(
   getBuildingProcessorStatus(granary, dryWellQueries)?.statusText,
@@ -134,7 +133,6 @@ assert.equal(
   getBuildingProcessorStatus(readyGranary, readyQueries)?.statusState,
   'active',
 );
-assert.equal(getBuildingWorkExtentHighlight(readyGranary, readyQueries), 'normal');
 
 const brewery = makeBuilding({
   id: 'brewery-1',

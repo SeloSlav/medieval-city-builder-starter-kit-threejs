@@ -6,6 +6,7 @@ import type { Terrain } from '../terrain/Terrain.ts';
 import { areBuildingShadowsEnabled } from '../scene/shadowPreference.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { buildingPlacementYaw } from './buildingPlacement.ts';
+import { getBuildingExtent } from './buildingExtents.ts';
 import { createBuildingShadowProxy } from './buildingShadowProxy.ts';
 import { createBuildingMesh } from './BuildingMeshes.ts';
 import {
@@ -25,9 +26,8 @@ export class BuildingMarkers {
   private readonly getRoadNetwork?: () => RoadNetwork | null;
   private readonly group = new THREE.Group();
   private readonly buildingMeshes = new Map<string, THREE.Group>();
-  private selectedWorkExtentMesh: THREE.Mesh | null = null;
-  private selectedWorkExtentKind: BuildingKind | null = null;
-  private selectedWorkExtentHighlight: 'normal' | 'warning' = 'normal';
+  private extentOverlayMesh: THREE.Mesh | null = null;
+  private extentOverlayKind: BuildingKind | null = null;
   private previewMesh: THREE.Mesh | null = null;
   private previewBuilding: THREE.Group | null = null;
   private previewKind: BuildingKind | null = null;
@@ -41,37 +41,30 @@ export class BuildingMarkers {
     options.parent.add(this.group);
   }
 
-  setSelectedWorkExtent(
-    building: BuildingState | null,
-    highlight: 'normal' | 'warning' = 'normal',
-  ): void {
-    if (!building || building.workRadius <= 0) {
-      if (this.selectedWorkExtentMesh) this.selectedWorkExtentMesh.visible = false;
-      this.selectedWorkExtentHighlight = 'normal';
+  setBuildingExtentOverlay(building: BuildingState | null): void {
+    const extent = building
+      ? getBuildingExtent(building.kind, building.workRadius)
+      : null;
+    if (!building || !extent) {
+      if (this.extentOverlayMesh) this.extentOverlayMesh.visible = false;
       return;
     }
 
-    const color = workExtentRingColor(building.kind, highlight);
-    if (!this.selectedWorkExtentMesh || this.selectedWorkExtentKind !== building.kind) {
-      if (this.selectedWorkExtentMesh) {
-        disposeObject3D(this.selectedWorkExtentMesh);
-        this.selectedWorkExtentMesh.removeFromParent();
+    const color = buildingExtentColor(building.kind);
+    if (!this.extentOverlayMesh || this.extentOverlayKind !== building.kind) {
+      if (this.extentOverlayMesh) {
+        disposeObject3D(this.extentOverlayMesh);
+        this.extentOverlayMesh.removeFromParent();
       }
-      this.selectedWorkExtentMesh = createRadiusRing(color, 0.14);
-      this.selectedWorkExtentKind = building.kind;
-      this.group.add(this.selectedWorkExtentMesh);
-    } else if (this.selectedWorkExtentHighlight !== highlight) {
-      const material = this.selectedWorkExtentMesh.material;
-      if (material instanceof THREE.MeshBasicMaterial) {
-        material.color.set(color);
-      }
+      this.extentOverlayMesh = createRadiusRing(color, 0.14);
+      this.extentOverlayKind = building.kind;
+      this.group.add(this.extentOverlayMesh);
     }
 
-    this.selectedWorkExtentHighlight = highlight;
     const y = this.terrain.getHeightAt(building.x, building.z);
-    this.selectedWorkExtentMesh.visible = true;
-    this.selectedWorkExtentMesh.position.set(building.x, y + 0.15, building.z);
-    this.selectedWorkExtentMesh.scale.set(building.workRadius, 1, building.workRadius);
+    this.extentOverlayMesh.visible = true;
+    this.extentOverlayMesh.position.set(building.x, y + 0.15, building.z);
+    this.extentOverlayMesh.scale.set(extent.radius, 1, extent.radius);
   }
 
   syncBuildings(buildings: Iterable<BuildingState>): void {
@@ -98,11 +91,11 @@ export class BuildingMarkers {
     kind: BuildingKind,
     x: number,
     z: number,
-    radius: number,
+    extentRadius: number,
     valid: boolean,
     visible: boolean,
   ): void {
-    const signature = `${kind}|${x.toFixed(2)}|${z.toFixed(2)}|${valid ? 1 : 0}|${visible ? 1 : 0}|${radius.toFixed(1)}`;
+    const signature = `${kind}|${x.toFixed(2)}|${z.toFixed(2)}|${valid ? 1 : 0}|${visible ? 1 : 0}|${extentRadius.toFixed(1)}`;
     if (signature === this.lastPreviewSignature) return;
     this.lastPreviewSignature = signature;
     if (!visible) {
@@ -136,9 +129,9 @@ export class BuildingMarkers {
 
     const y = this.terrain.getHeightAt(x, z);
     const yaw = buildingPlacementYaw(kind, x, z, this.getRoadNetwork?.() ?? null);
-    this.previewMesh.visible = radius > 0;
+    this.previewMesh.visible = extentRadius > 0;
     this.previewMesh.position.set(x, y + 0.2, z);
-    this.previewMesh.scale.set(radius, 1, radius);
+    this.previewMesh.scale.set(extentRadius, 1, extentRadius);
 
     this.previewBuilding.visible = true;
     this.previewBuilding.rotation.y = yaw;
@@ -155,10 +148,10 @@ export class BuildingMarkers {
       this.previewBuilding = null;
       this.previewKind = null;
     }
-    if (this.selectedWorkExtentMesh) {
-      disposeObject3D(this.selectedWorkExtentMesh);
-      this.selectedWorkExtentMesh = null;
-      this.selectedWorkExtentKind = null;
+    if (this.extentOverlayMesh) {
+      disposeObject3D(this.extentOverlayMesh);
+      this.extentOverlayMesh = null;
+      this.extentOverlayKind = null;
     }
     for (const id of [...this.buildingMeshes.keys()]) {
       this.removeBuilding(id);
@@ -217,47 +210,19 @@ function syncBuildingVisualState(marker: THREE.Group, building: BuildingState): 
   });
 }
 
-const WORK_EXTENT_WARNING_COLOR = 0xf97316;
+const BUILDING_EXTENT_COLORS: Partial<Record<BuildingKind, number>> = {
+  lumber_mill: 0xd7b463,
+  reforester: 0x00cc66,
+  stone_quarry: 0xa8a29e,
+  well: 0x4f9fd4,
+  hunters_hall: 0x8a6d45,
+  foragers_shed: 0xb05c76,
+  threshing_barn: 0xb8894c,
+  monastery: 0xe4dfd2,
+};
 
-function workExtentRingColor(kind: BuildingKind, highlight: 'normal' | 'warning'): number {
-  return highlight === 'warning' ? WORK_EXTENT_WARNING_COLOR : workExtentColor(kind);
-}
-
-function workExtentColor(kind: BuildingKind): number {
-  switch (kind) {
-    case 'lumber_mill':
-      return 0xd7b463;
-    case 'reforester':
-      return 0x00cc66;
-    case 'stone_quarry':
-      return 0xa8a29e;
-    case 'woodcutters_lodge':
-      return 0xd7b463;
-    case 'well':
-      return 0x4f9fd4;
-    case 'hunters_hall':
-      return 0x8a6d45;
-    case 'foragers_shed':
-      return 0xb05c76;
-    case 'chapel':
-      return 0xe8e2d8;
-    case 'marketplace':
-      return 0xd4a85a;
-    case 'threshing_barn': return 0xb8894c;
-    case 'monastery': return 0xe4dfd2;
-    case 'brewery': return 0xb56b42;
-    case 'smokehouse': return 0x806451;
-    case 'granary': return 0xc19b58;
-    case 'apiary': return 0xd3b84d;
-    case 'watermill': return 0x4f91ae;
-    case 'carpenter': return 0x9b7046;
-    case 'ferry_landing': return 0x4d7f93;
-    case 'vineyard': return 0x7b7040;
-    default: {
-      const unreachable: never = kind;
-      return unreachable;
-    }
-  }
+function buildingExtentColor(kind: BuildingKind): number {
+  return BUILDING_EXTENT_COLORS[kind] ?? 0xd7b463;
 }
 
 function createRadiusRing(color: number, opacity: number): THREE.Mesh {

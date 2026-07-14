@@ -6,7 +6,7 @@ import {
   buildingDemolishHint,
   buildingLaborView,
   buildingStorageRows,
-  buildingWorkRadiusRow,
+  buildingExtentRow,
   treeCountRows,
 } from './buildingCommon.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
@@ -34,7 +34,7 @@ export function renderReforesterInspector(
     statusState: regrowing ? 'active' : building.assignedLabor === 0 ? 'idle' : 'draft',
     detailsHtml: `
       ${buildingCostRows(building.kind, cost)}
-      ${buildingWorkRadiusRow(building.kind)}
+      ${buildingExtentRow(building.kind)}
       <li><span>Regrowth rate</span><span>${building.assignedLabor > 0 ? `${(definition.regrowRatePerSecond * building.assignedLabor).toFixed(3)}/s` : `${definition.regrowRatePerSecond}/s per worker`}</span></li>
       ${treeCountRows(matureTrees, stumpTrees, growingTrees)}
       ${buildingStorageRows(building, building.kind)}

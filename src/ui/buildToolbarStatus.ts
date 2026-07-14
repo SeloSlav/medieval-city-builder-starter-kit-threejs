@@ -109,7 +109,7 @@ export function describeToolbarStatus(stats: ToolbarStats): string {
     return stats.statusDetail ?? 'Click along a road to start the frontage, then set depth behind it';
   }
   if (stats.mode === 'farm-fields') {
-    return stats.statusDetail ?? 'Draw a field inside a farmstead working radius';
+    return stats.statusDetail ?? "Draw a field inside a farmstead's work extent";
   }
   if (stats.mode !== 'road') return 'Road tool off';
   if (stats.canBuild) return 'Ready to build';

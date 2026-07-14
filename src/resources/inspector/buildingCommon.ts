@@ -1,4 +1,5 @@
 import type { BuildingResourceCost } from '../buildingEconomy.ts';
+import { getBuildingExtent } from '../../buildings/buildingExtents.ts';
 import {
   buildingSalvageRefund,
   formatBuildingCost,
@@ -78,9 +79,11 @@ export function buildingCostRows(kind: BuildingKind, cost: BuildingResourceCost)
   `;
 }
 
-export function buildingWorkRadiusRow(kind: BuildingKind): string {
+export function buildingExtentRow(kind: BuildingKind): string {
   const definition = getBuildingDefinition(kind);
-  return `<li><span>Work radius</span><span>${definition.workRadius} m</span></li>`;
+  const extent = getBuildingExtent(kind, definition.workRadius);
+  if (!extent) return '';
+  return `<li><span>${extent.label}</span><span>${extent.radius} m</span></li>`;
 }
 
 export function treeCountRows(matureTrees: number, stumpTrees: number, growingTrees: number): string {

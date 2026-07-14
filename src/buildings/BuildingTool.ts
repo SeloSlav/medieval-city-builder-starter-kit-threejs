@@ -8,6 +8,7 @@ import { validateBuildingPlacement } from './BuildingPlacementValidation.ts';
 import type { BuildingMarkers } from './BuildingMarkers.ts';
 import type { BuildingTerrainSource } from './BuildingTerrainLayout.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
+import { getBuildingExtent } from './buildingExtents.ts';
 
 export type BuildingToolMode = BuildingKind | 'off';
 
@@ -307,13 +308,14 @@ export class BuildingTool {
     if (this.mode === 'off') return;
     const kind = this.mode;
     const definition = getBuildingDefinition(kind);
+    const extent = getBuildingExtent(kind, definition.workRadius);
     const validation = this.validateAt(point.x, point.z);
     this.updateTerrainPreview(point.x, point.z);
     this.options.markers.setPlacementPreview(
       kind,
       point.x,
       point.z,
-      definition.workRadius,
+      extent?.radius ?? 0,
       validation.ok,
       true,
     );

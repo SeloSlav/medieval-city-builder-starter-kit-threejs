@@ -7,7 +7,7 @@ import {
   buildingDemolishHint,
   buildingLaborView,
   buildingStorageRows,
-  buildingWorkRadiusRow,
+  buildingExtentRow,
 } from './buildingCommon.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
 
@@ -38,7 +38,7 @@ export function renderStoneQuarryInspector(
     statusState: active ? 'active' : 'idle',
     detailsHtml: `
       ${buildingCostRows(building.kind, cost)}
-      ${buildingWorkRadiusRow(building.kind)}
+      ${buildingExtentRow(building.kind)}
       <li><span>Harvest interval</span><span>${building.assignedLabor > 0 ? `${cycleSeconds.toFixed(1)}s` : `${definition.harvestInterval}s`} (${building.assignedLabor} workers)</span></li>
       ${buildingStorageRows(building, building.kind)}
     `,

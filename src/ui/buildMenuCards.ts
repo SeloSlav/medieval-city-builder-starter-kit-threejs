@@ -40,7 +40,7 @@ const DETAILS: Record<PlacementArtKey, [title: string, hotkey: string, descripti
   woodcutters_lodge: ["Woodcutter's lodge", 'W', 'Splits timber into firewood and supplies connected homes.'],
   hunters_hall: ["Hunter's hall", 'K', 'Hunts game and delivers fresh food along the road network.'],
   foragers_shed: ["Forager's shed", 'Y', 'Gathers berries and provisions homes from forest edges.'],
-  farm_field: ['Draw farm field', 'G', 'Draw rye, oat, or fallow land inside a farmstead working radius. Area, terrain, water, crop rotation, and labor determine yield.'],
+  farm_field: ['Draw farm field', 'G', "Draw rye, oat, or fallow land inside a farmstead's work extent. Area, terrain, water, crop rotation, and labor determine yield."],
   threshing_barn: ['Farmstead', 'T', 'Road-linked labor hub that ploughs, sows, tends, harvests, and stores grain from surrounding fields.'],
   watermill: ['Grain watermill', 'M', 'Uses a river wheel to grind grain into flour. Must touch open water.'],
   granary: ['Village granary', 'N', 'Stores grain and flour, bakes staple food, and buffers shortages.'],

@@ -9,7 +9,7 @@ import {
   buildingDemolishHint,
   buildingLaborView,
   buildingRoadAccessRow,
-  buildingWorkRadiusRow,
+  buildingExtentRow,
 } from './buildingCommon.ts';
 import type { InspectorRenderContext, InspectorView } from './renderInspectableTarget.ts';
 import { formatTripDestinationLabel, formatTripPhaseLabel } from '../../logistics/deliveryTrips.ts';
@@ -109,7 +109,7 @@ export function renderWellInspector(
       <li><span>Hydrology</span><span>${hydrologyGradeLabel(hydrology)} (${Math.round(hydrology * 100)}%)</span></li>
       <li><span>Stored water</span><span>${Math.round(building.water)} / ${Math.round(capacity)}</span></li>
       <li><span>Refill rate</span><span>${refillPerSec.toFixed(2)} / sec</span></li>
-      ${buildingWorkRadiusRow(building.kind)}
+      ${buildingExtentRow(building.kind)}
       <li><span>Road-linked homes</span><span>${claimedResidences.length === 0 ? 'None in range' : `${claimedResidences.length} claimed`}</span></li>
       <li><span>Workshop demand</span><span>${industrialConsumers.length === 0 ? 'None' : `${industrialConsumers.filter((item) => item.kind === 'brewery').length} brewhouse · ${industrialConsumers.filter((item) => item.kind === 'granary').length} granary`}</span></li>
       <li><span>Supplies</span><span>Homes, brewhouses, and granary bakeries</span></li>

@@ -343,7 +343,7 @@ export class FarmFieldTool {
       case 'too_large': return `Field too large · maximum ${FARM_MAX_FIELD_AREA} m²`;
       case 'edge_too_short': return `Each edge must be at least ${FARM_MIN_FIELD_EDGE} m`;
       case 'too_steep': return `Ground too steep · maximum ${FARM_MAX_ACCEPTED_SLOPE_DEGREES}° average`;
-      case 'no_farmstead': return 'Field center must lie within a farmstead working radius';
+      case 'no_farmstead': return "Field center must lie within a farmstead's work extent";
       case 'water': return 'Field cannot cover open water';
       case 'quarry': return 'Field cannot cover a quarry pit';
       case 'building': return 'Field overlaps a building';
