@@ -252,39 +252,35 @@ export class App {
       fraction: 0.35,
     });
     session.sceneManager.render(0, session.cameraController.getOrbitDistance());
-    if (new URLSearchParams(window.location.search).get('construction') === '1') {
-      this.sessionLifecycle?.onPresentationReady();
-    } else {
-      window.setTimeout(() => {
-        void (async () => {
-          try {
-            session.loadingScreen?.setProgress({
-              label: 'Growing forest…',
-              detail: 'Building trees and ground cover',
-              phase: 'vegetation',
-              fraction: 0,
-            });
-            await session.sceneManager.finishVegetation();
-            session.loadingScreen?.setProgress({
-              label: 'Growing forest…',
-              detail: 'Building trees and ground cover',
-              phase: 'vegetation',
-              fraction: 1,
-            });
-            if (this.roadNetwork) session.sceneManager.syncRoadNetwork(this.roadNetwork);
-            this.onForestReady();
-            // Prime a frame so WebGPU tree materials compile before the overlay clears.
-            session.sceneManager.render(0, session.cameraController.getOrbitDistance());
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-            this.sessionLifecycle?.onPresentationReady();
-          } catch (error) {
-            console.error('Vegetation build failed:', error);
-            this.toastManager?.show('Forest vegetation failed to load. Try refreshing the page.', { variant: 'error' });
-            this.sessionLifecycle?.onPresentationReady();
-          }
-        })();
-      }, 0);
-    }
+    window.setTimeout(() => {
+      void (async () => {
+        try {
+          session.loadingScreen?.setProgress({
+            label: 'Growing forest…',
+            detail: 'Building trees and ground cover',
+            phase: 'vegetation',
+            fraction: 0,
+          });
+          await session.sceneManager.finishVegetation();
+          session.loadingScreen?.setProgress({
+            label: 'Growing forest…',
+            detail: 'Building trees and ground cover',
+            phase: 'vegetation',
+            fraction: 1,
+          });
+          if (this.roadNetwork) session.sceneManager.syncRoadNetwork(this.roadNetwork);
+          this.onForestReady();
+          // Prime a frame so WebGPU tree materials compile before the overlay clears.
+          session.sceneManager.render(0, session.cameraController.getOrbitDistance());
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          this.sessionLifecycle?.onPresentationReady();
+        } catch (error) {
+          console.error('Vegetation build failed:', error);
+          this.toastManager?.show('Forest vegetation failed to load. Try refreshing the page.', { variant: 'error' });
+          this.sessionLifecycle?.onPresentationReady();
+        }
+      })();
+    }, 0);
     this.animationId = requestAnimationFrame(this.tick);
   }
 
