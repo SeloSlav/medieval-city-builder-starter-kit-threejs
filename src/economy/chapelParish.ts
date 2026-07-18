@@ -104,7 +104,7 @@ export function payableParishExpensePerDay(
 export function sumPayableParishExpensePerDay(chapels: Iterable<BuildingState>): number {
   let total = 0;
   for (const chapel of chapels) {
-    if (chapel.kind !== 'chapel') {
+    if (chapel.kind !== 'chapel' || chapel.constructionComplete === false) {
       continue;
     }
     total += payableParishExpensePerDay(chapel.assignedLabor, chapelCofferGold(chapel)).total;
@@ -145,7 +145,7 @@ export function sumPayableAutoSweepPerDay(
 
   let total = 0;
   for (const chapel of chapels) {
-    if (chapel.kind !== 'chapel') {
+    if (chapel.kind !== 'chapel' || chapel.constructionComplete === false) {
       continue;
     }
     total += payableAutoSweepPerDay(

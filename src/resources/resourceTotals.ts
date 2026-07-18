@@ -2,6 +2,7 @@ import {
   ABANDON_AFTER_DEFICIT_TICKS,
   BUILDING_DEFINITIONS,
   BUILDING_STORAGE_CAPS,
+  CONSTRUCTION_MAX_BUILDERS,
   POPULATION_PER_RESIDENCE,
   RESIDENCE_FIREWOOD_CAPACITY,
   RESIDENCE_FIREWOOD_PER_PERSON_PER_SEC,
@@ -116,6 +117,10 @@ export function computeResourceTotals(state: GameState): ResourceTotals {
     preservedFood += building.preservedFood;
     honey += building.honey;
     wine += building.wine;
+    if (building.constructionComplete === false) {
+      timber -= building.constructionReservedTimber;
+      stone -= building.constructionReservedStone;
+    }
   }
 
   for (const residence of state.residences.values()) {
@@ -186,5 +191,8 @@ export function maxAssignableLabor(
 ): number {
   const assignedElsewhere = stats.assigned - building.assignedLabor;
   const fromPool = Math.max(0, stats.total - assignedElsewhere);
-  return Math.min(fromPool, buildingMaxLabor(building.kind));
+  const buildingCap = building.constructionComplete !== false
+    ? buildingMaxLabor(building.kind)
+    : CONSTRUCTION_MAX_BUILDERS;
+  return Math.min(fromPool, buildingCap);
 }

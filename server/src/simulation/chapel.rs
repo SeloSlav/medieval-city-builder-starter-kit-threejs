@@ -88,7 +88,7 @@ fn transfer_monastery_tithe(
         .building()
         .owner()
         .filter(&chapel.owner)
-        .filter(|building| building.kind == "monastery")
+        .filter(|building| building.kind == "monastery" && building.construction_complete)
         .filter(|building| {
             network
                 .road_path_distance(chapel.x, chapel.z, building.x, building.z)

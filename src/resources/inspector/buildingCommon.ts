@@ -18,6 +18,7 @@ import {
 } from '../resourceTotals.ts';
 import type { WorldQueries } from '../WorldQueries.ts';
 import type { InspectorLaborView } from './renderInspectableTarget.ts';
+import { CONSTRUCTION_MAX_BUILDERS } from '../../generated/gameBalance.ts';
 
 export function buildingStorageRows(building: BuildingState, kind: BuildingKind): string {
   const caps = buildingStorageCaps(kind);
@@ -51,7 +52,7 @@ export function buildingLaborView(
   building: BuildingState,
   populationStats: PopulationStats,
 ): InspectorLaborView {
-  if (!buildingAcceptsLabor(building.kind)) {
+  if (building.constructionComplete !== false && !buildingAcceptsLabor(building.kind)) {
     return {
       visible: false,
       count: 0,
@@ -62,11 +63,15 @@ export function buildingLaborView(
   }
 
   const maxLabor = maxAssignableLabor(building, populationStats);
-  const buildingCap = buildingMaxLabor(building.kind);
+  const buildingCap = building.constructionComplete !== false
+    ? buildingMaxLabor(building.kind)
+    : CONSTRUCTION_MAX_BUILDERS;
   return {
     visible: true,
     count: building.assignedLabor,
-    hint: `${building.assignedLabor}/${buildingCap} workers here · ${populationStats.available} available (${populationStats.total} population, ${populationStats.assigned} assigned).`,
+    hint: building.constructionComplete !== false
+      ? `${building.assignedLabor}/${buildingCap} workers here · ${populationStats.available} available (${populationStats.total} population, ${populationStats.assigned} assigned).`
+      : `${building.assignedLabor}/${buildingCap} builders · ${populationStats.available} available. Builders handle the founding reserve and turn delivered materials into the finished building.`,
     decreaseDisabled: building.assignedLabor <= 0,
     increaseDisabled: building.assignedLabor >= maxLabor,
   };

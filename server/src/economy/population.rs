@@ -5,6 +5,7 @@ use crate::constants::{
     NARROW_PARCEL_FRONTAGE_MAX, POPULATION_PER_RESIDENCE, RESIDENCE_POPULATION_NARROW,
     RESIDENCE_POPULATION_WIDE, STARTING_POPULATION, WIDE_PARCEL_FRONTAGE_MIN,
 };
+use crate::balance_generated::CONSTRUCTION_MAX_BUILDERS;
 use crate::db::*;
 use crate::tables::Building;
 
@@ -64,11 +65,15 @@ pub fn assign_building_labor(
     if building.owner != owner {
         return Err("You do not own this building.".to_string());
     }
-    if !building_accepts_labor(&building.kind) {
+    if building.construction_complete && !building_accepts_labor(&building.kind) {
         return Err("This building does not use labor.".to_string());
     }
 
-    let building_cap = building_max_labor(&building.kind);
+    let building_cap = if building.construction_complete {
+        building_max_labor(&building.kind)
+    } else {
+        CONSTRUCTION_MAX_BUILDERS
+    };
     if requested_labor > building_cap {
         return Err(format!(
             "This building supports at most {} workers.",

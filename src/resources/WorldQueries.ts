@@ -290,7 +290,9 @@ export class WorldQueries {
     const state = this.getGameState();
     return {
       network: this.getRoadNetwork(),
-      buildings: [...state.buildings.values()],
+      buildings: [...state.buildings.values()].filter(
+        (building) => building.constructionComplete !== false,
+      ),
       residences: [...state.residences.values()],
     };
   }
@@ -328,6 +330,7 @@ export class WorldQueries {
     const wells = [...state.buildings.values()].filter(
       (candidate) =>
         candidate.kind === 'well'
+        && candidate.constructionComplete !== false
         && roadPathDistance(network, building.x, building.z, candidate.x, candidate.z) != null,
     );
     return sortByRoadPathDistance(network, building, wells);
@@ -338,7 +341,8 @@ export class WorldQueries {
     const network = this.getRoadNetwork();
     return [...state.buildings.values()].filter(
       (candidate) =>
-        (candidate.kind === 'brewery' || candidate.kind === 'granary')
+        candidate.constructionComplete !== false
+        && (candidate.kind === 'brewery' || candidate.kind === 'granary')
         && roadPathDistance(network, well.x, well.z, candidate.x, candidate.z) != null,
     );
   }
@@ -405,7 +409,7 @@ export class WorldQueries {
 
   getServingChapelForResidence(residence: ResidenceState): BuildingState | null {
     const chapels = [...this.getGameState().buildings.values()].filter(
-      (building) => building.kind === 'chapel',
+      (building) => building.kind === 'chapel' && building.constructionComplete !== false,
     );
     return findServingChapel(
       residence,
@@ -452,10 +456,10 @@ export class WorldQueries {
   isResidenceInMonasteryCoverage(residence: ResidenceState): boolean {
     const state = this.getGameState();
     const monasteries = [...state.buildings.values()].filter(
-      (building) => building.kind === 'monastery',
+      (building) => building.kind === 'monastery' && building.constructionComplete !== false,
     );
     const chapels = [...state.buildings.values()].filter(
-      (building) => building.kind === 'chapel',
+      (building) => building.kind === 'chapel' && building.constructionComplete !== false,
     );
     return isResidenceInMonasteryCoverage(
       residence,
@@ -467,7 +471,9 @@ export class WorldQueries {
 
   isMonasteryLinkedToChapel(monastery: BuildingState): boolean {
     const state = this.getGameState();
-    const chapels = [...state.buildings.values()].filter((building) => building.kind === 'chapel');
+    const chapels = [...state.buildings.values()].filter(
+      (building) => building.kind === 'chapel' && building.constructionComplete !== false,
+    );
     return monasteryLinkedToChapel(
       monastery,
       chapels,
@@ -481,6 +487,7 @@ export class WorldQueries {
     const mills = [...state.buildings.values()].filter(
       (building) =>
         building.kind === 'lumber_mill'
+        && building.constructionComplete !== false
         && roadPathDistance(network, lodge.x, lodge.z, building.x, building.z) != null,
     );
     return sortByRoadPathDistance(network, lodge, mills);
@@ -537,7 +544,11 @@ export class WorldQueries {
     let best: BuildingState | null = null;
     let bestDistance = Infinity;
     for (const candidate of this.getGameState().buildings.values()) {
-      if (candidate.id === origin.id || !targetKinds.includes(candidate.kind)) continue;
+      if (
+        candidate.id === origin.id
+        || candidate.constructionComplete === false
+        || !targetKinds.includes(candidate.kind)
+      ) continue;
       const distance = roadPathDistance(network, origin.x, origin.z, candidate.x, candidate.z);
       if (distance == null) continue;
       if (

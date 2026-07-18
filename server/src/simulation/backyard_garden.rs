@@ -19,7 +19,7 @@ pub fn step_backyard_gardens(ctx: &ReducerContext, tick: &SimTickContext, clock:
         .db
         .building()
         .iter()
-        .filter(|building| building.kind == "marketplace")
+        .filter(|building| building.kind == "marketplace" && building.construction_complete)
         .collect();
 
     for garden in ctx.db.backyard_garden().iter() {

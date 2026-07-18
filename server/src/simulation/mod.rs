@@ -1,4 +1,5 @@
 mod game_calendar;
+mod construction;
 mod labor_schedule;
 mod landmark_access;
 mod chapel;
@@ -30,6 +31,7 @@ mod village_storehouse;
 pub mod spatial;
 
 pub use backyard_garden::{clear_backyard_garden_for_residence, step_backyard_gardens};
+pub use construction::step_construction_sites;
 pub use delivery_trips::{
     cancel_trips_for_residence, drain_trips_for_building, step_delivery_trips,
 };

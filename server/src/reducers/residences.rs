@@ -268,7 +268,8 @@ fn has_connected_supplier(
         return false;
     };
     ctx.db.building().owner().filter(&residence.owner).any(|building| {
-        kinds.contains(&building.kind.as_str())
+        building.construction_complete
+            && kinds.contains(&building.kind.as_str())
             && network
                 .road_path_distance(building.x, building.z, residence.x, residence.z)
                 .is_some()

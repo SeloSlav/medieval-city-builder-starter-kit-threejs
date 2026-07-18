@@ -199,6 +199,14 @@
     "timberDeliverySpeedMps": 0.85,
     "timberDeliveryUnloadSec": 8
   },
+  "construction": {
+    "maxBuilders": 4,
+    "workPerWorkerPerSecond": 0.75,
+    "haulPerWorker": 8,
+    "deliverySpeedMps": 0.9,
+    "deliveryUnloadSec": 6,
+    "treasuryTransferPerSecond": 2
+  },
   "production": {
     "lodgeTimberPerCycle": 3,
     "lodgeTimberPerDelivery": 3,

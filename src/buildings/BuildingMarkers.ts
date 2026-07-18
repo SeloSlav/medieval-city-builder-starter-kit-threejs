@@ -10,6 +10,10 @@ import { getBuildingExtent } from './buildingExtents.ts';
 import { createBuildingShadowProxy } from './buildingShadowProxy.ts';
 import { createBuildingMesh } from './BuildingMeshes.ts';
 import {
+  constructionVisualSignature,
+  createConstructionSiteMesh,
+} from './ConstructionSiteMesh.ts';
+import {
   createBuildingPreviewMesh,
   disposeBuildingPreviewMesh,
   updateBuildingPreviewAppearance,
@@ -161,11 +165,39 @@ export class BuildingMarkers {
 
   private upsertBuilding(building: BuildingState): void {
     let marker = this.buildingMeshes.get(building.id);
+    const timberRatio = ratio(
+      building.constructionDeliveredTimber,
+      building.constructionRequiredTimber,
+    );
+    const stoneRatio = ratio(
+      building.constructionDeliveredStone,
+      building.constructionRequiredStone,
+    );
+    const operational = building.constructionComplete !== false;
+    const visualSignature = operational
+      ? `complete:${building.kind}`
+      : constructionVisualSignature(building.constructionProgress, timberRatio, stoneRatio);
+    if (marker && marker.userData.visualSignature !== visualSignature) {
+      this.group.remove(marker);
+      disposeObject3D(marker);
+      this.buildingMeshes.delete(building.id);
+      marker = undefined;
+    }
     if (!marker) {
-      marker = createBuildingMesh(building.kind);
-      const shadowProxy = createBuildingShadowProxy(building.kind);
-      shadowProxy.castShadow = areBuildingShadowsEnabled();
-      marker.add(shadowProxy);
+      marker = operational
+        ? createBuildingMesh(building.kind)
+        : createConstructionSiteMesh(
+            building.kind,
+            building.constructionProgress,
+            timberRatio,
+            stoneRatio,
+          );
+      marker.userData.visualSignature = visualSignature;
+      if (operational) {
+        const shadowProxy = createBuildingShadowProxy(building.kind);
+        shadowProxy.castShadow = areBuildingShadowsEnabled();
+        marker.add(shadowProxy);
+      }
       marker.rotation.y = buildingPlacementYaw(
         building.kind,
         building.x,
@@ -178,8 +210,8 @@ export class BuildingMarkers {
 
     const y = this.terrain.getHeightAt(building.x, building.z);
     marker.position.set(building.x, y, building.z);
-    syncBuildingVisualState(marker, building);
-    if (!marker.getObjectByName('Building shadow proxy')) {
+    if (operational) syncBuildingVisualState(marker, building);
+    if (operational && !marker.getObjectByName('Building shadow proxy')) {
       const shadowProxy = createBuildingShadowProxy(building.kind);
       shadowProxy.castShadow = areBuildingShadowsEnabled();
       marker.add(shadowProxy);
@@ -195,6 +227,10 @@ export class BuildingMarkers {
     disposeObject3D(marker);
     this.buildingMeshes.delete(id);
   }
+}
+
+function ratio(value: number, required: number): number {
+  return required <= 1e-6 ? 1 : THREE.MathUtils.clamp(value / required, 0, 1);
 }
 
 function syncBuildingVisualState(marker: THREE.Group, building: BuildingState): void {

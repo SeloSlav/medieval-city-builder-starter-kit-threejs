@@ -129,6 +129,9 @@ fn validate_marketplace(
     if building.kind != "marketplace" {
         return Err("Only marketplaces can broker foreign trade.".to_string());
     }
+    if !building.construction_complete {
+        return Err("The marketplace is still under construction.".to_string());
+    }
     Ok(())
 }
 

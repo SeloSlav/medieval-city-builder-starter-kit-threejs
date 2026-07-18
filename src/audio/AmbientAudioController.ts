@@ -110,7 +110,7 @@ export class AmbientAudioController {
 
 function hasPlacedChapel(buildings: Iterable<BuildingState>): boolean {
   for (const building of buildings) {
-    if (building.kind === 'chapel') return true;
+    if (building.kind === 'chapel' && building.constructionComplete !== false) return true;
   }
   return false;
 }

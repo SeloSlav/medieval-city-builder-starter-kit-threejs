@@ -165,7 +165,11 @@ fn try_chapel_poor_relief(
         .db
         .building()
         .iter()
-        .filter(|building| building.kind == "marketplace" && building.owner == chapel.owner)
+        .filter(|building| {
+            building.kind == "marketplace"
+                && building.construction_complete
+                && building.owner == chapel.owner
+        })
         .collect();
 
     if marketplaces.is_empty() {

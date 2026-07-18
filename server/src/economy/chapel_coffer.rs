@@ -108,6 +108,9 @@ fn validate_chapel_owner(chapel: &Building, owner: spacetimedb::Identity) -> Res
     if chapel.kind != "chapel" {
         return Err("Building is not a chapel.".to_string());
     }
+    if !chapel.construction_complete {
+        return Err("The chapel is still under construction.".to_string());
+    }
     Ok(())
 }
 
@@ -138,6 +141,16 @@ mod tests {
             wine: 0.0,
             water_capacity: 0.0,
             assigned_labor: 1,
+            construction_complete: true,
+            construction_progress: 1.0,
+            construction_required_timber: 0.0,
+            construction_required_stone: 0.0,
+            construction_delivered_timber: 0.0,
+            construction_delivered_stone: 0.0,
+            construction_reserved_timber: 0.0,
+            construction_reserved_stone: 0.0,
+            construction_treasury_timber: 0.0,
+            construction_treasury_stone: 0.0,
             gold,
             storehouse_accepts_timber: true,
             storehouse_accepts_stone: true,

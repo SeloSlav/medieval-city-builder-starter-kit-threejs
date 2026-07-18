@@ -121,5 +121,7 @@ function emptyReadout(taxRate: number, parishPolicy: ParishPolicyState): Village
 }
 
 export function filterChapels(buildings: Iterable<BuildingState>): BuildingState[] {
-  return [...buildings].filter((building) => building.kind === 'chapel');
+  return [...buildings].filter(
+    (building) => building.kind === 'chapel' && building.constructionComplete !== false,
+  );
 }

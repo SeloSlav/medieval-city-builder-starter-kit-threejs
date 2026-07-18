@@ -206,6 +206,14 @@ export type GameBalance = {
     timberDeliverySpeedMps: number;
     timberDeliveryUnloadSec: number;
   };
+  construction: {
+    maxBuilders: number;
+    workPerWorkerPerSecond: number;
+    haulPerWorker: number;
+    deliverySpeedMps: number;
+    deliveryUnloadSec: number;
+    treasuryTransferPerSecond: number;
+  };
   production: {
     lodgeTimberPerCycle: number;
     lodgeTimberPerDelivery: number;
@@ -443,6 +451,13 @@ function generateRust(): string {
     `pub const FOOD_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.roads.foodDeliveryUnloadSec)};`,
     `pub const TIMBER_DELIVERY_SPEED_MPS: f64 = ${rustF64(b.roads.timberDeliverySpeedMps)};`,
     `pub const TIMBER_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.roads.timberDeliveryUnloadSec)};`,
+    '',
+    `pub const CONSTRUCTION_MAX_BUILDERS: u32 = ${b.construction.maxBuilders};`,
+    `pub const CONSTRUCTION_WORK_PER_WORKER_PER_SEC: f64 = ${rustF64(b.construction.workPerWorkerPerSecond)};`,
+    `pub const CONSTRUCTION_HAUL_PER_WORKER: f64 = ${rustF64(b.construction.haulPerWorker)};`,
+    `pub const CONSTRUCTION_DELIVERY_SPEED_MPS: f64 = ${rustF64(b.construction.deliverySpeedMps)};`,
+    `pub const CONSTRUCTION_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.construction.deliveryUnloadSec)};`,
+    `pub const CONSTRUCTION_TREASURY_TRANSFER_PER_SEC: f64 = ${rustF64(b.construction.treasuryTransferPerSecond)};`,
     '',
     `pub const LODGE_TIMBER_PER_CYCLE: f64 = ${rustF64(b.production.lodgeTimberPerCycle)};`,
     `pub const LODGE_TIMBER_PER_DELIVERY: f64 = ${rustF64(b.production.lodgeTimberPerDelivery)};`,
@@ -855,6 +870,13 @@ function generateTypeScript(): string {
     `export const FOOD_DELIVERY_UNLOAD_SEC = ${b.roads.foodDeliveryUnloadSec};`,
     `export const TIMBER_DELIVERY_SPEED_MPS = ${b.roads.timberDeliverySpeedMps};`,
     `export const TIMBER_DELIVERY_UNLOAD_SEC = ${b.roads.timberDeliveryUnloadSec};`,
+    '',
+    `export const CONSTRUCTION_MAX_BUILDERS = ${b.construction.maxBuilders};`,
+    `export const CONSTRUCTION_WORK_PER_WORKER_PER_SEC = ${b.construction.workPerWorkerPerSecond};`,
+    `export const CONSTRUCTION_HAUL_PER_WORKER = ${b.construction.haulPerWorker};`,
+    `export const CONSTRUCTION_DELIVERY_SPEED_MPS = ${b.construction.deliverySpeedMps};`,
+    `export const CONSTRUCTION_DELIVERY_UNLOAD_SEC = ${b.construction.deliveryUnloadSec};`,
+    `export const CONSTRUCTION_TREASURY_TRANSFER_PER_SEC = ${b.construction.treasuryTransferPerSecond};`,
     '',
     `export const LODGE_TIMBER_PER_CYCLE = ${b.production.lodgeTimberPerCycle};`,
     `export const LODGE_TIMBER_PER_DELIVERY = ${b.production.lodgeTimberPerDelivery};`,

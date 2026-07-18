@@ -7,7 +7,10 @@ use crate::constants::{
     TIMBER_DELIVERY_SPEED_MPS, TIMBER_DELIVERY_UNLOAD_SEC, TICK_DT,
 };
 use crate::db::*;
-use crate::economy::{building_storage_caps, deposit_building, withdraw_building};
+use crate::economy::{
+    available_unreserved_building_timber, building_storage_caps, deposit_building,
+    withdraw_building,
+};
 use crate::simulation::delivery_cargo::{any_target_needs_delivery, collect_claimed_delivery_targets};
 use crate::simulation::delivery_supplier::{
     delivery_work_ready, dispatch_delivery_if_ready, should_alternate_single_worker,
@@ -69,7 +72,7 @@ pub fn step_woodcutters_lodge(ctx: &ReducerContext, tick: &SimTickContext, clock
 
     if do_process {
         lodge = dispatch_timber_supply_if_needed(ctx, clock, network, lodge, split.processing);
-        lodge = process_timber_to_firewood(lodge, split.processing);
+        lodge = process_timber_to_firewood(ctx, lodge, split.processing);
         lodge.action_cooldown = def.action_interval;
     }
     if do_deliver {
@@ -172,6 +175,7 @@ fn dispatch_timber_supply_if_needed(
 }
 
 fn process_timber_to_firewood(
+    ctx: &ReducerContext,
     lodge: Building,
     processing_workers: u32,
 ) -> Building {
@@ -188,7 +192,9 @@ fn process_timber_to_firewood(
     let timber_needed = LODGE_TIMBER_PER_CYCLE * labor;
     let firewood_output = LODGE_FIREWOOD_PER_CYCLE * labor;
 
-    if lodge.timber + 1e-6 < timber_needed {
+    if lodge.timber + 1e-6 < timber_needed
+        || available_unreserved_building_timber(ctx, lodge.owner) + 1e-6 < timber_needed
+    {
         return lodge;
     }
 

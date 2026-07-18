@@ -14,6 +14,7 @@ pub fn residence_has_road_landmark(
     landmarks.iter().any(|landmark| {
         landmark.owner == owner
             && landmark.kind == kind
+            && landmark.construction_complete
             && tick.road_connected(owner, residence.x, residence.z, landmark.x, landmark.z)
     })
 }
@@ -28,7 +29,7 @@ pub fn residence_has_marketplace_access(
 }
 
 pub fn is_chapel_staffed(chapel: &Building) -> bool {
-    chapel.kind == "chapel" && chapel.assigned_labor > 0
+    chapel.kind == "chapel" && chapel.construction_complete && chapel.assigned_labor > 0
 }
 
 pub fn find_serving_chapel<'a>(
@@ -90,6 +91,7 @@ pub fn find_linked_monastery_in_coverage<'a>(
         .filter(|monastery| {
             monastery.owner == owner
                 && monastery.kind == "monastery"
+                && monastery.construction_complete
                 && monastery_linked_to_chapel(tick, monastery, chapels)
                 && network
                     .road_path_distance(residence.x, residence.z, monastery.x, monastery.z)

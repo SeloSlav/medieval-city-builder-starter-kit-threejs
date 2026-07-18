@@ -36,12 +36,98 @@ pub fn residence_food_capacity() -> f64 {
 }
 
 pub fn total_timber(ctx: &ReducerContext, owner: spacetimedb::Identity) -> f64 {
-    treasury_timber(ctx, owner)
+    (treasury_timber(ctx, owner)
         + building_sum(ctx, owner, |building| building.timber)
+        - reserved_construction_total(ctx, owner, |building| building.construction_reserved_timber))
+        .max(0.0)
 }
 
 pub fn total_stone(ctx: &ReducerContext, owner: spacetimedb::Identity) -> f64 {
-    treasury_stone(ctx, owner) + building_sum(ctx, owner, |building| building.stone)
+    (treasury_stone(ctx, owner)
+        + building_sum(ctx, owner, |building| building.stone)
+        - reserved_construction_total(ctx, owner, |building| building.construction_reserved_stone))
+        .max(0.0)
+}
+
+pub(crate) fn available_unreserved_building_timber(
+    ctx: &ReducerContext,
+    owner: spacetimedb::Identity,
+) -> f64 {
+    let stock = building_sum(ctx, owner, |building| building.timber);
+    let reserved = reserved_construction_total(ctx, owner, |building| {
+        (building.construction_reserved_timber - building.construction_treasury_timber).max(0.0)
+    });
+    (stock - reserved).max(0.0)
+}
+
+pub(crate) fn available_unreserved_building_stone(
+    ctx: &ReducerContext,
+    owner: spacetimedb::Identity,
+) -> f64 {
+    let stock = building_sum(ctx, owner, |building| building.stone);
+    let reserved = reserved_construction_total(ctx, owner, |building| {
+        (building.construction_reserved_stone - building.construction_treasury_stone).max(0.0)
+    });
+    (stock - reserved).max(0.0)
+}
+
+pub(crate) fn available_unreserved_treasury_timber(
+    ctx: &ReducerContext,
+    owner: spacetimedb::Identity,
+) -> f64 {
+    let reserved = reserved_construction_total(ctx, owner, |building| {
+        building.construction_treasury_timber
+    });
+    (treasury_timber(ctx, owner) - reserved).max(0.0)
+}
+
+pub(crate) fn available_unreserved_treasury_stone(
+    ctx: &ReducerContext,
+    owner: spacetimedb::Identity,
+) -> f64 {
+    let reserved = reserved_construction_total(ctx, owner, |building| {
+        building.construction_treasury_stone
+    });
+    (treasury_stone(ctx, owner) - reserved).max(0.0)
+}
+
+/// Splits a new construction reservation between inventories held at buildings
+/// and the abstract founding treasury. Building stock is preferred so completed
+/// storehouses and producers remain the physical source of later cart loads.
+pub fn construction_treasury_reservation(
+    ctx: &ReducerContext,
+    owner: spacetimedb::Identity,
+    timber: f64,
+    stone: f64,
+) -> (f64, f64) {
+    let timber_from_treasury =
+        (timber - available_unreserved_building_timber(ctx, owner)).clamp(
+            0.0,
+            available_unreserved_treasury_timber(ctx, owner),
+        );
+    let stone_from_treasury =
+        (stone - available_unreserved_building_stone(ctx, owner)).clamp(
+            0.0,
+            available_unreserved_treasury_stone(ctx, owner),
+        );
+    (timber_from_treasury, stone_from_treasury)
+}
+
+fn reserved_construction_total<F>(
+    ctx: &ReducerContext,
+    owner: spacetimedb::Identity,
+    pick: F,
+) -> f64
+where
+    F: Fn(&Building) -> f64,
+{
+    ctx.db
+        .building()
+        .owner()
+        .filter(&owner)
+        .filter(|building| !building.construction_complete)
+        .map(|building| pick(&building))
+        .sum()
 }
 
 pub fn deposit_building(

@@ -7,7 +7,9 @@ use crate::lifecycle::ensure_player_resources;
 fn require_owned_building(ctx: &ReducerContext, kind: &str, staffed: bool) -> Result<(), String> {
     let owner = ctx.sender();
     let found = ctx.db.building().owner().filter(&owner).any(|building| {
-        building.kind == kind && (!staffed || building.assigned_labor > 0)
+        building.kind == kind
+            && building.construction_complete
+            && (!staffed || building.assigned_labor > 0)
     });
     if found {
         Ok(())

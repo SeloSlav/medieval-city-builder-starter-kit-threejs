@@ -4,6 +4,10 @@ use spacetimedb::ReducerContext;
 
 use crate::constants::TICK_DT;
 use crate::balance_generated::CARPENTER_DELIVERY_SPEED_MULTIPLIER;
+use crate::balance_generated::{
+    CONSTRUCTION_DELIVERY_SPEED_MPS, CONSTRUCTION_DELIVERY_UNLOAD_SEC,
+    CONSTRUCTION_HAUL_PER_WORKER,
+};
 use crate::db::*;
 use crate::economy::{
     building_commodity_room, building_commodity_stock, credit_treasury_commodity,
@@ -145,16 +149,48 @@ pub fn building_has_inbound_supply_trip(ctx: &ReducerContext, building_id: u64) 
 
 /// Delete trips and return cart cargo totals without touching the building.
 pub fn drain_trips_for_building(ctx: &ReducerContext, building_id: u64) -> DeliveryCargoTotals {
-    let trips: Vec<DeliveryTrip> = ctx
+    let mut trips: Vec<DeliveryTrip> = ctx
         .db
         .delivery_trip()
         .building_id()
         .filter(&building_id)
         .collect();
+    for trip in ctx
+        .db
+        .delivery_trip()
+        .target_building_id()
+        .filter(&building_id)
+    {
+        if trips.iter().all(|candidate| candidate.id != trip.id) {
+            trips.push(trip);
+        }
+    }
     let mut totals = DeliveryCargoTotals::default();
     for trip in trips {
         if let Some(kind) = CommodityKind::from_u8(trip.cargo_kind) {
             totals.add_commodity(kind, trip.amount);
+            if trip.building_id == building_id
+                && trip.destination_kind == DELIVERY_DESTINATION_BUILDING
+            {
+                if let Some(mut site) =
+                    ctx.db.building().id().find(&trip.target_building_id)
+                {
+                    if !site.construction_complete {
+                        match kind {
+                            CommodityKind::Timber => {
+                                site.construction_reserved_timber += trip.amount;
+                                site.construction_treasury_timber += trip.amount;
+                            }
+                            CommodityKind::Stone => {
+                                site.construction_reserved_stone += trip.amount;
+                                site.construction_treasury_stone += trip.amount;
+                            }
+                            _ => {}
+                        }
+                        ctx.db.building().id().update(site);
+                    }
+                }
+            }
         }
         ctx.db.delivery_trip().id().delete(trip.id);
     }
@@ -316,6 +352,104 @@ pub fn try_start_building_supply_trip(
     )
 }
 
+/// Loads reserved construction stock from a completed source and sends it to a
+/// construction site. The reservation is reduced at loading time; if the trip
+/// is cancelled, `return_trip_cargo_to_building` restores it.
+pub fn try_start_construction_supply_trip(
+    ctx: &ReducerContext,
+    clock: &GameClock,
+    network: &RoadNetwork,
+    origin: &mut Building,
+    site: &mut Building,
+    commodity: CommodityKind,
+    allow_offroad: bool,
+) -> bool {
+    if !origin.construction_complete
+        || site.construction_complete
+        || origin.owner != site.owner
+        || origin.assigned_labor == 0
+        || building_has_active_trip(ctx, origin.id)
+    {
+        return false;
+    }
+    if labor_and_logistics_paused(ctx, origin.owner, clock) {
+        return false;
+    }
+
+    let reserved_physical = match commodity {
+        CommodityKind::Timber => {
+            (site.construction_reserved_timber - site.construction_treasury_timber).max(0.0)
+        }
+        CommodityKind::Stone => {
+            (site.construction_reserved_stone - site.construction_treasury_stone).max(0.0)
+        }
+        _ => 0.0,
+    };
+    let workers = origin.assigned_labor.min(2).max(1);
+    let load = building_commodity_stock(origin, commodity)
+        .min(reserved_physical)
+        .min(CONSTRUCTION_HAUL_PER_WORKER * workers as f64);
+    if load <= 1e-6 {
+        return false;
+    }
+
+    let route = network
+        .road_path_route(origin.x, origin.z, site.x, site.z)
+        .or_else(|| {
+            if !allow_offroad {
+                return None;
+            }
+            let distance = ((site.x - origin.x).powi(2) + (site.z - origin.z).powi(2)).sqrt();
+            (distance > 1e-6).then_some(RoadPathRoute {
+                distance,
+                polyline: vec![[origin.x, origin.z], [site.x, site.z]],
+            })
+        });
+    let Some(route) = route else {
+        return false;
+    };
+
+    let mut source = origin.clone();
+    let withdrawn = withdraw_building_commodity(&mut source, commodity, load);
+    if withdrawn <= 1e-6 {
+        return false;
+    }
+    match commodity {
+        CommodityKind::Timber => {
+            site.construction_reserved_timber =
+                (site.construction_reserved_timber - withdrawn).max(0.0)
+        }
+        CommodityKind::Stone => {
+            site.construction_reserved_stone =
+                (site.construction_reserved_stone - withdrawn).max(0.0)
+        }
+        _ => return false,
+    }
+    *origin = source.clone();
+    ctx.db.building().id().update(source.clone());
+    ctx.db.building().id().update(site.clone());
+
+    insert_trip(
+        ctx,
+        network,
+        StartTripSpec {
+            origin: source,
+            destination: TripDestination::Building {
+                id: site.id,
+                x: site.x,
+                z: site.z,
+            },
+            cargo_kind: commodity.as_u8(),
+            delivery_workers: workers,
+            speed_mps: CONSTRUCTION_DELIVERY_SPEED_MPS,
+            unload_seconds: CONSTRUCTION_DELIVERY_UNLOAD_SEC,
+            load_amount: withdrawn,
+        },
+        route,
+    );
+    true
+}
+
 fn try_start_road_trip(
     ctx: &ReducerContext,
     clock: &GameClock,
@@ -336,27 +470,46 @@ fn try_start_road_trip(
         return false;
     }
 
-    let mut origin = spec.origin;
+    let mut origin = spec.origin.clone();
     let withdrawn = withdraw(&mut origin, spec.load_amount);
     if withdrawn <= 1e-6 {
         return false;
     }
     write_origin(&origin);
+    let load_amount = withdrawn;
+    insert_trip(
+        ctx,
+        network,
+        StartTripSpec {
+            origin,
+            load_amount,
+            ..spec
+        },
+        route,
+    );
+    true
+}
 
+fn insert_trip(
+    ctx: &ReducerContext,
+    network: &RoadNetwork,
+    spec: StartTripSpec,
+    route: RoadPathRoute,
+) {
     let (destination_kind, residence_id, target_building_id) = spec.destination.to_row_fields();
     let (start_x, start_z) = RoadNetwork::sample_polyline_xz(&route.polyline, 0.0);
     let travel_speed_multiplier =
-        carpenter_delivery_multiplier_for_origin(ctx, network, &origin, origin.owner);
+        carpenter_delivery_multiplier_for_origin(ctx, network, &spec.origin, spec.origin.owner);
 
     ctx.db.delivery_trip().insert(DeliveryTrip {
         id: 0,
-        owner: origin.owner,
-        building_id: origin.id,
+        owner: spec.origin.owner,
+        building_id: spec.origin.id,
         residence_id,
         destination_kind,
         target_building_id,
         cargo_kind: spec.cargo_kind,
-        amount: withdrawn,
+        amount: spec.load_amount,
         phase: DeliveryTripPhase::Outbound.as_u8(),
         x: start_x,
         z: start_z,
@@ -369,8 +522,6 @@ fn try_start_road_trip(
         travel_speed_multiplier,
         route_polyline_json: serialize_route_polyline(&route.polyline),
     });
-
-    true
 }
 
 fn step_one_trip(ctx: &ReducerContext, tick: &SimTickContext, clock: &GameClock, mut trip: DeliveryTrip) {
@@ -479,6 +630,7 @@ fn carpenter_delivery_multiplier_for_origin(
 ) -> f64 {
     let supported = ctx.db.building().owner().filter(&owner).any(|shop| {
         shop.kind == "carpenter"
+            && shop.construction_complete
             && shop.assigned_labor > 0
             && network
                 .road_path_distance(origin.x, origin.z, shop.x, shop.z)
@@ -499,6 +651,32 @@ fn unload_commodity_to_building(
     let Some(mut target) = ctx.db.building().id().find(&trip.target_building_id) else {
         return;
     };
+    if !target.construction_complete {
+        let deposited = match commodity {
+            CommodityKind::Timber => {
+                let room = (target.construction_required_timber
+                    - target.construction_delivered_timber)
+                    .max(0.0);
+                let amount = trip.amount.min(room);
+                target.construction_delivered_timber += amount;
+                amount
+            }
+            CommodityKind::Stone => {
+                let room =
+                    (target.construction_required_stone - target.construction_delivered_stone)
+                        .max(0.0);
+                let amount = trip.amount.min(room);
+                target.construction_delivered_stone += amount;
+                amount
+            }
+            _ => 0.0,
+        };
+        if deposited > 1e-6 {
+            trip.amount = (trip.amount - deposited).max(0.0);
+            ctx.db.building().id().update(target);
+        }
+        return;
+    }
     let deposited = deposit_building_commodity(&mut target, commodity, trip.amount);
     if deposited > 1e-6 {
         trip.amount = (trip.amount - deposited).max(0.0);
@@ -540,6 +718,22 @@ fn return_trip_cargo_to_building(ctx: &ReducerContext, trip: &DeliveryTrip) {
     }
     match TripCargoKind::from_trip(trip) {
         Some(TripCargoKind::Commodity(commodity)) => {
+            if trip.destination_kind == DELIVERY_DESTINATION_BUILDING {
+                if let Some(mut site) = ctx.db.building().id().find(&trip.target_building_id) {
+                    if !site.construction_complete {
+                        match commodity {
+                            CommodityKind::Timber => {
+                                site.construction_reserved_timber += trip.amount
+                            }
+                            CommodityKind::Stone => {
+                                site.construction_reserved_stone += trip.amount
+                            }
+                            _ => {}
+                        }
+                        ctx.db.building().id().update(site);
+                    }
+                }
+            }
             return_commodity_to_building(ctx, trip.building_id, commodity, trip.amount)
         }
         None => {}

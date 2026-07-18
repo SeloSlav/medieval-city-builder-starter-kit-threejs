@@ -3,6 +3,7 @@ import { createBuildingMesh } from '../buildings/BuildingMeshes.ts';
 import { initializeBuildingMaterialLibrary } from '../buildings/buildingMaterials.ts';
 import { BUILDING_KINDS } from '../generated/gameBalance.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
+import { createConstructionSiteMesh } from '../buildings/ConstructionSiteMesh.ts';
 
 declare global {
   interface Window {
@@ -11,7 +12,7 @@ declare global {
 }
 
 const COLS = 7;
-const ROWS = 3;
+const ROWS = 4;
 const root = document.querySelector<HTMLElement>('#lineup-root');
 const labels = document.querySelector<HTMLElement>('#labels');
 if (!root || !labels) throw new Error('Building lineup host is missing.');
@@ -25,12 +26,23 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 root.prepend(renderer.domElement);
 
-const views = BUILDING_KINDS.map((kind) => {
+const viewSpecs = [
+  ...BUILDING_KINDS.map((kind) => ({
+    mesh: createBuildingMesh(kind),
+    label: getBuildingDefinition(kind).label,
+  })),
+  {
+    mesh: createConstructionSiteMesh('village_storehouse', 0.55, 0.72, 1),
+    label: 'Storehouse construction · 55%',
+  },
+];
+
+const views = viewSpecs.map((spec) => {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xa6b29a);
   scene.fog = new THREE.Fog(0xa6b29a, 32, 74);
 
-  const building = createBuildingMesh(kind);
+  const building = spec.mesh;
   building.rotation.y = -0.1;
   building.traverse((object) => {
     const mesh = object as THREE.Mesh;
@@ -87,7 +99,7 @@ const views = BUILDING_KINDS.map((kind) => {
   cell.className = 'cell';
   const label = document.createElement('div');
   label.className = 'label';
-  label.textContent = getBuildingDefinition(kind).label;
+  label.textContent = spec.label;
   cell.append(label);
   labels.append(cell);
   return { scene, camera };

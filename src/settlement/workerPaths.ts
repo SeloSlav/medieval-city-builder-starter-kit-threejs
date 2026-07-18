@@ -58,7 +58,8 @@ export type WorkerTargetKind =
   | 'game'
   | 'berries'
   | 'field'
-  | 'pasture';
+  | 'pasture'
+  | 'construction';
 
 export type WorkerTarget = PointXZ & {
   id: string;
@@ -103,7 +104,8 @@ export function allocateProductionWorkers(
 
   const workplaces = buildings
     .filter((building) =>
-      building.assignedLabor > 0 && isProductionWorkplaceKind(building.kind)
+      building.assignedLabor > 0
+        && (building.constructionComplete === false || isProductionWorkplaceKind(building.kind))
     )
     .sort((a, b) => a.id.localeCompare(b.id));
 
@@ -157,6 +159,20 @@ export function collectWorkerTargets(
   const definition = getBuildingDefinition(building.kind);
   const radius = Math.max(0, building.workRadius || definition.workRadius);
   const targets: WorkerTarget[] = [];
+
+  if (building.constructionComplete === false) {
+    const workRadius = Math.max(3.4, definition.pickRadius * 0.62);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index / 8 * Math.PI * 2;
+      targets.push({
+        id: `${building.id}:construction:${index}`,
+        kind: 'construction',
+        x: building.x + Math.sin(angle) * workRadius,
+        z: building.z + Math.cos(angle) * workRadius,
+      });
+    }
+    return targets;
+  }
 
   if (building.kind === 'lumber_mill' || building.kind === 'swineherd') {
     collectTreeTargets(building, radius, inputs, (phase) => phase === 'mature', targets);

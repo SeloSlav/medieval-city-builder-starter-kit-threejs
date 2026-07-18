@@ -45,6 +45,9 @@ pub fn step_village_storehouse(
 
     let mut candidates = Vec::new();
     for source in ctx.db.building().owner().filter(&storehouse.owner) {
+        if !source.construction_complete {
+            continue;
+        }
         let commodity = match source.kind.as_str() {
             "lumber_mill" if storehouse.storehouse_accepts_timber => CommodityKind::Timber,
             "stone_quarry" if storehouse.storehouse_accepts_stone => CommodityKind::Stone,

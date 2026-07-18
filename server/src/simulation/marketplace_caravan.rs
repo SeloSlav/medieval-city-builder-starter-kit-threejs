@@ -127,7 +127,9 @@ pub fn step_marketplace_caravans(ctx: &ReducerContext, clock: &GameClock, tick: 
         .building()
         .iter()
         .filter(|building| {
-            building.kind == "marketplace" && (building.food > 1e-6 || building.water > 1e-6)
+            building.kind == "marketplace"
+                && building.construction_complete
+                && (building.food > 1e-6 || building.water > 1e-6)
         })
         .map(|building| building.id)
         .collect();

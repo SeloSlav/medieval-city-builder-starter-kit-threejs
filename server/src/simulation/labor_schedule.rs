@@ -11,7 +11,12 @@ pub fn owner_has_staffed_chapel(ctx: &ReducerContext, owner: Identity) -> bool {
     ctx.db
         .building()
         .iter()
-        .any(|building| building.owner == owner && building.kind == "chapel" && building.assigned_labor > 0)
+        .any(|building| {
+            building.owner == owner
+                && building.kind == "chapel"
+                && building.construction_complete
+                && building.assigned_labor > 0
+        })
 }
 
 pub fn owner_sabbath_observance_enabled(ctx: &ReducerContext, owner: Identity) -> bool {

@@ -54,7 +54,11 @@ pub fn town_hall_tax_collection_multiplier(
         .building()
         .owner()
         .filter(&owner)
-        .any(|building| building.kind == "town_hall" && building.assigned_labor > 0)
+        .any(|building| {
+            building.kind == "town_hall"
+                && building.construction_complete
+                && building.assigned_labor > 0
+        })
     {
         1.0
     } else {

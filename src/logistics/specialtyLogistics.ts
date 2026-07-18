@@ -24,7 +24,7 @@ export function findRoadLinkedSupplierForResidence(
   let bestDistance = Infinity;
 
   for (const building of buildings) {
-    if (!supplierKinds.includes(building.kind)) continue;
+    if (building.constructionComplete === false || !supplierKinds.includes(building.kind)) continue;
     const distance = roadPathDistance(network, residence.x, residence.z, building.x, building.z);
     if (distance == null) continue;
     if (
@@ -49,7 +49,11 @@ export function parishPopulation(residences: Iterable<ResidenceState>): number {
 
 export function hasStaffedChapel(buildings: Iterable<BuildingState>): boolean {
   for (const building of buildings) {
-    if (building.kind === 'chapel' && building.assignedLabor > 0) return true;
+    if (
+      building.kind === 'chapel'
+      && building.constructionComplete !== false
+      && building.assignedLabor > 0
+    ) return true;
   }
   return false;
 }

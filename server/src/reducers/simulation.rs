@@ -3,7 +3,7 @@ use spacetimedb::ReducerContext;
 use crate::db::*;
 use crate::simulation::{
     step_backyard_gardens,
-    step_chapels, step_chapel_parish, step_delivery_trips, step_foragers_shed, step_foraging_respawn,
+    step_chapels, step_chapel_parish, step_construction_sites, step_delivery_trips, step_foragers_shed, step_foraging_respawn,
     step_household_market_orders, step_hunters_hall, step_lumber_mill, step_marketplace_caravans,
     step_reforester, step_residence, step_stone_quarry, step_well, step_woodcutters_lodge,
     step_apiary, step_brewery, step_carpenter, step_ferry_landing,
@@ -42,6 +42,7 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
 
     let tick = SimTickContext::new(ctx);
     step_delivery_trips(ctx, &tick, &clock);
+    step_construction_sites(ctx, &tick, &clock);
     step_household_market_orders(ctx, &tick, &clock, sim_tick);
     step_marketplace_caravans(ctx, &clock, &tick);
     step_regional_markets(ctx, sim_tick);
@@ -56,6 +57,9 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
     let mut expanded_ids: Vec<(crate::building_defs::BuildingSimKind, u64)> = Vec::new();
 
     for building in ctx.db.building().iter() {
+        if !building.construction_complete {
+            continue;
+        }
         let Some(sim_kind) =
             crate::building_defs::building_def(&building.kind).and_then(|def| def.sim_kind)
         else {
@@ -194,13 +198,13 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
         .db
         .building()
         .iter()
-        .filter(|building| building.kind == "chapel")
+        .filter(|building| building.kind == "chapel" && building.construction_complete)
         .collect();
     let monasteries: Vec<Building> = ctx
         .db
         .building()
         .iter()
-        .filter(|building| building.kind == "monastery")
+        .filter(|building| building.kind == "monastery" && building.construction_complete)
         .collect();
 
     step_chapels(ctx, &tick, sim_tick, &clock, &chapels, &monasteries);

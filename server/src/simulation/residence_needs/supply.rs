@@ -81,7 +81,8 @@ fn has_specialty_route(
         return false;
     };
     ctx.db.building().owner().filter(&residence.owner).any(|building| {
-        supplier_kinds.contains(&building.kind.as_str())
+        building.construction_complete
+            && supplier_kinds.contains(&building.kind.as_str())
             && network.road_connected(building.x, building.z, residence.x, residence.z)
     })
 }

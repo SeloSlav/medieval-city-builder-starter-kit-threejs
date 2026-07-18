@@ -14,7 +14,9 @@ export function isRoadPathConnected(
 }
 
 export function isChapelStaffed(building: BuildingState): boolean {
-  return building.kind === 'chapel' && building.assignedLabor > 0;
+  return building.kind === 'chapel'
+    && building.constructionComplete !== false
+    && building.assignedLabor > 0;
 }
 
 export function hasStaffedChapel(buildings: Iterable<BuildingState>): boolean {
@@ -40,7 +42,7 @@ export function hasRoadPathToBuildingKind(
   requireStaff = false,
 ): boolean {
   for (const building of buildings) {
-    if (building.kind !== kind) {
+    if (building.kind !== kind || building.constructionComplete === false) {
       continue;
     }
     if (requireStaff && building.assignedLabor <= 0) {
@@ -115,7 +117,7 @@ export function findLinkedMonasteryInCoverage(
 
   let best: BuildingState | null = null;
   for (const monastery of monasteries) {
-    if (monastery.kind !== 'monastery') {
+    if (monastery.kind !== 'monastery' || monastery.constructionComplete === false) {
       continue;
     }
     if (!monasteryLinkedToChapel(monastery, chapels, probe)) {

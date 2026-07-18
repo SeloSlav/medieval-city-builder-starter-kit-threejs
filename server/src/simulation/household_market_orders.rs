@@ -30,7 +30,7 @@ pub fn step_household_market_orders(
         .db
         .building()
         .iter()
-        .filter(|building| building.kind == "marketplace")
+        .filter(|building| building.kind == "marketplace" && building.construction_complete)
         .collect();
 
     if marketplaces.is_empty() {

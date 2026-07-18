@@ -8,7 +8,7 @@ use crate::economy::{
     assign_building_labor as set_building_labor, building_cost, building_salvage_refund,
     chapel_coffer_gold, collect_chapel_coffer as sweep_chapel_coffer, credit_treasury_firewood,
     credit_treasury_food, credit_treasury_gold, credit_treasury_stone, credit_treasury_timber,
-    credit_treasury_water, spend_aggregate_stone, spend_aggregate_timber, total_stone, total_timber,
+    credit_treasury_water, construction_treasury_reservation, total_stone, total_timber,
     credit_treasury_commodity, CommodityKind,
 };
 use crate::lifecycle::ensure_player_resources;
@@ -20,7 +20,6 @@ use crate::placement_validation::{
 use crate::roads::load_owner_road_network;
 use crate::simulation::drain_trips_for_building;
 use crate::tables::{farm_field, livestock_herd, pasture, Building, WorldConfig};
-use crate::reducers::livestock::{starter_herd, SPECIES_CATTLE, SPECIES_SWINE};
 
 fn overlaps_same_kind_functional_extent(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
     let Some(def) = building_def(kind) else {
@@ -164,7 +163,9 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
 
     if kind == "monastery" {
         let staffed_chapel = ctx.db.building().owner().filter(&owner).any(|building| {
-            building.kind == "chapel" && building.assigned_labor > 0
+            building.kind == "chapel"
+                && building.construction_complete
+                && building.assigned_labor > 0
         });
         if !staffed_chapel {
             return Err("A staffed chapel is required before founding a monastery.".to_string());
@@ -208,14 +209,14 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
             .building()
             .owner()
             .filter(&owner)
-            .find(|building| building.kind == "chapel")
+            .find(|building| building.kind == "chapel" && building.construction_complete)
             .ok_or_else(|| "Build a chapel before founding the Town Hall.".to_string())?;
         let marketplace = ctx
             .db
             .building()
             .owner()
             .filter(&owner)
-            .find(|building| building.kind == "marketplace")
+            .find(|building| building.kind == "marketplace" && building.construction_complete)
             .ok_or_else(|| "Build a marketplace before founding the Town Hall.".to_string())?;
         let network = load_owner_road_network(ctx, owner)
             .ok_or_else(|| "The Town Hall requires a road network.".to_string())?;
@@ -268,7 +269,8 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
 
     let cost = building_cost(&kind)?;
     let carpenter_discount = load_owner_road_network(ctx, owner).map(|network| {
-        ctx.db.building().owner().filter(&owner).any(|shop| shop.kind == "carpenter" && shop.assigned_labor > 0
+        ctx.db.building().owner().filter(&owner).any(|shop| shop.kind == "carpenter"
+            && shop.construction_complete && shop.assigned_labor > 0
             && network.road_path_distance(x, z, shop.x, shop.z).is_some())
     }).unwrap_or(false);
     let timber_cost = cost.timber * if carpenter_discount { CARPENTER_TIMBER_COST_MULTIPLIER } else { 1.0 };
@@ -284,8 +286,8 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
             cost.stone.round() as i64
         ));
     }
-    spend_aggregate_timber(ctx, owner, timber_cost)?;
-    spend_aggregate_stone(ctx, owner, cost.stone)?;
+    let (treasury_timber, treasury_stone) =
+        construction_treasury_reservation(ctx, owner, timber_cost, cost.stone);
 
     let config = ctx
         .db
@@ -317,7 +319,7 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     }
 
     let building_id = config.next_building_id;
-    let inserted = ctx.db.building().insert(Building {
+    ctx.db.building().insert(Building {
         id: 0,
         owner,
         kind,
@@ -338,21 +340,21 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         wine: 0.0,
         water_capacity,
         assigned_labor: 0,
+        construction_complete: false,
+        construction_progress: 0.0,
+        construction_required_timber: timber_cost,
+        construction_required_stone: cost.stone,
+        construction_delivered_timber: 0.0,
+        construction_delivered_stone: 0.0,
+        construction_reserved_timber: timber_cost,
+        construction_reserved_stone: cost.stone,
+        construction_treasury_timber: treasury_timber,
+        construction_treasury_stone: treasury_stone,
         storehouse_accepts_timber: true,
         storehouse_accepts_stone: true,
         storehouse_accepts_firewood: true,
         gold: 0.0,
     });
-
-    if inserted.kind == "pastoral_farmstead" {
-        ctx.db
-            .livestock_herd()
-            .insert(starter_herd(inserted.id, owner, SPECIES_CATTLE));
-    } else if inserted.kind == "swineherd" {
-        ctx.db
-            .livestock_herd()
-            .insert(starter_herd(inserted.id, owner, SPECIES_SWINE));
-    }
 
     ctx.db.world_config().id().update(WorldConfig {
         next_building_id: building_id + 1,
@@ -388,7 +390,10 @@ pub fn set_storehouse_policy(
         .id()
         .find(&building_id)
         .ok_or_else(|| "Storehouse not found.".to_string())?;
-    if building.owner != owner || building.kind != "village_storehouse" {
+    if building.owner != owner
+        || building.kind != "village_storehouse"
+        || !building.construction_complete
+    {
         return Err("You do not own this village storehouse.".to_string());
     }
     building.storehouse_accepts_timber = accepts_timber;
@@ -433,7 +438,18 @@ pub fn demolish_building(ctx: &ReducerContext, building_id: u64) -> Result<(), S
 
     let trip_cargo = drain_trips_for_building(ctx, building_id);
 
-    let refund = building_salvage_refund(&building.kind)?;
+    let refund = if building.construction_complete {
+        building_salvage_refund(&building.kind)?
+    } else {
+        crate::economy::ResourceAmount {
+            timber: (building.construction_delivered_timber
+                * crate::balance_generated::TIMBER_SALVAGE_FRACTION)
+                .round(),
+            stone: (building.construction_delivered_stone
+                * crate::balance_generated::STONE_SALVAGE_FRACTION)
+                .round(),
+        }
+    };
     credit_treasury_timber(ctx, owner, refund.timber + building.timber + trip_cargo.timber);
     credit_treasury_stone(ctx, owner, refund.stone + building.stone + trip_cargo.stone);
     credit_treasury_firewood(ctx, owner, building.firewood + trip_cargo.firewood);

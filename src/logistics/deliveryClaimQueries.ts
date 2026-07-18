@@ -30,7 +30,11 @@ export class DeliveryClaimQueries {
   ) {
     this.network = network;
     this.residences = residences;
-    this.claims = claimFn(network, buildings, residences);
+    this.claims = claimFn(
+      network,
+      buildings.filter((building) => building.constructionComplete !== false),
+      residences,
+    );
   }
 
   getClaimedResidences(supplier: BuildingState): ResidenceState[] {

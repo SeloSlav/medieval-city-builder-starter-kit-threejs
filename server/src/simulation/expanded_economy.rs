@@ -812,6 +812,7 @@ fn owner_has_connected_marketplace(
     };
     ctx.db.building().owner().filter(&building.owner).any(|market| {
         market.kind == "marketplace"
+            && market.construction_complete
             && network
                 .road_path_distance(building.x, building.z, market.x, market.z)
                 .is_some()
@@ -828,7 +829,7 @@ fn monastery_has_parish_link(
         .building()
         .owner()
         .filter(&monastery.owner)
-        .filter(|building| building.kind == "chapel")
+        .filter(|building| building.kind == "chapel" && building.construction_complete)
         .collect();
     monastery_linked_to_chapel(tick, monastery, &chapels)
 }

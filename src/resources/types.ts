@@ -77,10 +77,24 @@ export type BuildingState = {
   gold: number;
   waterCapacity: number;
   assignedLabor: number;
+  constructionComplete: boolean;
+  constructionProgress: number;
+  constructionRequiredTimber: number;
+  constructionRequiredStone: number;
+  constructionDeliveredTimber: number;
+  constructionDeliveredStone: number;
+  constructionReservedTimber: number;
+  constructionReservedStone: number;
+  constructionTreasuryTimber: number;
+  constructionTreasuryStone: number;
   storehouseAcceptsTimber: boolean;
   storehouseAcceptsStone: boolean;
   storehouseAcceptsFirewood: boolean;
 };
+
+export function isBuildingOperational(building: BuildingState): boolean {
+  return building.constructionComplete !== false;
+}
 
 export const FARM_CROPS = ['rye', 'oats', 'fallow'] as const;
 export type FarmCrop = (typeof FARM_CROPS)[number];

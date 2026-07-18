@@ -167,6 +167,30 @@ pub struct Building {
     /// Chapel coffer gold (tithes); other buildings keep this at zero.
     #[default(0.0)]
     pub gold: f64,
+    /// False while this row is a construction site rather than an operating building.
+    #[default(true)]
+    pub construction_complete: bool,
+    /// Normalized builder work completed (0-1), capped by materials delivered.
+    #[default(1.0)]
+    pub construction_progress: f64,
+    #[default(0.0)]
+    pub construction_required_timber: f64,
+    #[default(0.0)]
+    pub construction_required_stone: f64,
+    #[default(0.0)]
+    pub construction_delivered_timber: f64,
+    #[default(0.0)]
+    pub construction_delivered_stone: f64,
+    /// Reserved stock that still needs to be loaded or transferred to this site.
+    #[default(0.0)]
+    pub construction_reserved_timber: f64,
+    #[default(0.0)]
+    pub construction_reserved_stone: f64,
+    /// Reserved portions backed by the abstract founding treasury instead of a building store.
+    #[default(0.0)]
+    pub construction_treasury_timber: f64,
+    #[default(0.0)]
+    pub construction_treasury_stone: f64,
 }
 
 /// A player-drawn arable parcel worked by a nearby farmstead (`threshing_barn`).

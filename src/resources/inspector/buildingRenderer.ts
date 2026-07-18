@@ -12,12 +12,16 @@ import { renderExpandedBuildingInspector } from './expandedBuildingRenderer.ts';
 import { renderLivestockBuildingInspector } from './livestockBuildingRenderer.ts';
 import { renderTownHallInspector } from './townHallRenderer.ts';
 import { renderStorehouseInspector } from './storehouseRenderer.ts';
+import { renderConstructionInspector } from './constructionRenderer.ts';
 
 export function renderBuildingInspector(
   target: Extract<InspectableTarget, { kind: 'building' }>,
   context: InspectorRenderContext,
 ): InspectorView {
   const { building } = target;
+  if (building.constructionComplete === false) {
+    return renderConstructionInspector(target, context);
+  }
   switch (building.kind) {
     case 'chapel':
       return renderChapelInspector(target, context);

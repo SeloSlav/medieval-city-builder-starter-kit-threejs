@@ -42,10 +42,12 @@ pub use population::{assign_building_labor, residence_population_for_parcel};
 pub use storage::{
     building_food_storage_cap, building_storage_caps, building_water_storage_cap, credit_treasury_firewood,
     credit_treasury_food, credit_treasury_gold, credit_treasury_stone, credit_treasury_timber, credit_treasury_water,
+    construction_treasury_reservation,
     deposit_building, deposit_building_food, deposit_building_water, residence_firewood_capacity, residence_food_capacity,
     residence_water_capacity, spend_treasury_gold, total_stone, total_timber,
     withdraw_building, withdraw_building_food, withdraw_building_water,
 };
+pub(crate) use storage::available_unreserved_building_timber;
 pub use village_economy::{
     clamp_economic_activity_tax_rate, player_economic_activity_tax_rate, taxed_economic_activity,
     town_hall_tax_collection_multiplier,
