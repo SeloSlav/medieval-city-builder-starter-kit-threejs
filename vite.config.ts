@@ -15,6 +15,10 @@ function vendorChunk(id: string): string | undefined {
 
 export default defineConfig({
   resolve: {
+    // SeedThree is vendored with its own r184 development install. Loading that
+    // alongside the game's r185 runtime mixes incompatible TSL node classes and
+    // produces malformed WebGPU shaders across otherwise unrelated materials.
+    dedupe: ['three'],
     alias: {
       'sky-cloud-3d/webgl': fileURLToPath(new URL('./vendor/sky-cloud-3d/SkyCloudMesh.webgl', import.meta.url)),
       'sky-cloud-3d': fileURLToPath(new URL('./vendor/sky-cloud-3d/SkyCloudMesh.js', import.meta.url)),
