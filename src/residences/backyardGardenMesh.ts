@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BackyardGardenKind } from '../generated/gameBalance.ts';
 import {
   sharedBuildingDetailMaterial,
@@ -31,6 +32,12 @@ const MATERIALS = {
   apple: new THREE.MeshStandardMaterial({ color: 0xb94332, roughness: 0.76 }),
   appleGold: new THREE.MeshStandardMaterial({ color: 0xd99b3a, roughness: 0.76 }),
   cherry: new THREE.MeshStandardMaterial({ color: 0x7f1f2f, roughness: 0.72 }),
+  flowerCenter: new THREE.MeshStandardMaterial({ color: 0xd8aa3f, roughness: 0.82 }),
+  flowerVertex: new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.8,
+    vertexColors: true,
+  }),
   cabbage: new THREE.MeshStandardMaterial({ color: 0x759c5c, roughness: 0.9 }),
   squash: new THREE.MeshStandardMaterial({ color: 0x4d7939, roughness: 0.9 }),
   terracotta: new THREE.MeshStandardMaterial({ color: 0x9b4c36, roughness: 0.88 }),
@@ -44,6 +51,15 @@ const FLOWER_MATERIALS = [
   new THREE.MeshStandardMaterial({ color: 0x8663a8, roughness: 0.8 }),
   new THREE.MeshStandardMaterial({ color: 0xd9a43c, roughness: 0.8 }),
 ] as const;
+
+type BackyardSwayBinding = {
+  object: THREE.Object3D;
+  basePosition: THREE.Vector3;
+  baseRotation: THREE.Euler;
+  phase: number;
+  translation: number;
+  tilt: number;
+};
 
 function addMesh(
   parent: THREE.Object3D,
@@ -65,6 +81,115 @@ function addMesh(
   if (name) mesh.name = name;
   parent.add(mesh);
   return mesh;
+}
+
+function addFlowerHead(
+  parent: THREE.Object3D,
+  name: string,
+  material: THREE.Material,
+  scale: number,
+  rose = false,
+): THREE.Group {
+  const flower = new THREE.Group();
+  flower.name = name;
+  parent.add(flower);
+  const color = (material as THREE.MeshStandardMaterial).color?.clone()
+    ?? new THREE.Color(0xffffff);
+  const parts: THREE.BufferGeometry[] = [];
+  const addPetalLayer = (
+    count: number,
+    radius: number,
+    petalScale: THREE.Vector3,
+    yawOffset: number,
+    layerY: number,
+  ) => {
+    for (let index = 0; index < count; index++) {
+      const angle = yawOffset + (index / count) * Math.PI * 2;
+      parts.push(coloredFlowerPart(
+        new THREE.SphereGeometry(0.1, 7, 4),
+        color,
+        new THREE.Vector3(Math.sin(angle) * radius, layerY, Math.cos(angle) * radius),
+        new THREE.Euler(0, angle, 0),
+        petalScale,
+        scale,
+      ));
+    }
+  };
+
+  const petalCount = rose ? 12 : 6;
+  if (rose) {
+    addPetalLayer(7, 0.09, new THREE.Vector3(0.58, 0.24, 1.16), 0, 0);
+    addPetalLayer(5, 0.045, new THREE.Vector3(0.45, 0.24, 0.82), Math.PI / 5, 0.025);
+  } else {
+    addPetalLayer(6, 0.105, new THREE.Vector3(0.52, 0.2, 1.2), 0, 0);
+  }
+  parts.push(coloredFlowerPart(
+    new THREE.SphereGeometry(rose ? 0.055 : 0.06, 8, 5),
+    rose ? color.clone().multiplyScalar(0.72) : MATERIALS.flowerCenter.color,
+    new THREE.Vector3(0, rose ? 0.045 : 0.025, 0),
+    new THREE.Euler(),
+    rose ? new THREE.Vector3(1, 0.7, 1) : new THREE.Vector3(1, 1, 1),
+    scale,
+  ));
+
+  const geometry = mergeGeometries(parts, false);
+  if (!geometry) throw new Error(`Could not merge ${name} geometry.`);
+  const mesh = addMesh(
+    flower,
+    geometry,
+    MATERIALS.flowerVertex,
+    0,
+    0,
+    0,
+    undefined,
+    undefined,
+    rose ? 'Modeled rose blossom' : 'Modeled cottage flower',
+  );
+  mesh.userData.petalCount = petalCount;
+  return flower;
+}
+
+function coloredFlowerPart(
+  geometry: THREE.BufferGeometry,
+  color: THREE.Color,
+  position: THREE.Vector3,
+  rotation: THREE.Euler,
+  partScale: THREE.Vector3,
+  flowerScale: number,
+): THREE.BufferGeometry {
+  const matrix = new THREE.Matrix4().compose(
+    position.clone().multiplyScalar(flowerScale),
+    new THREE.Quaternion().setFromEuler(rotation),
+    partScale.clone().multiplyScalar(flowerScale),
+  );
+  geometry.applyMatrix4(matrix);
+  const vertexCount = geometry.getAttribute('position').count;
+  const colors = new Float32Array(vertexCount * 3);
+  for (let index = 0; index < vertexCount; index++) {
+    colors[index * 3] = color.r;
+    colors[index * 3 + 1] = color.g;
+    colors[index * 3 + 2] = color.b;
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
+function registerBackyardSway(
+  root: THREE.Group,
+  object: THREE.Object3D,
+  phase: number,
+  translation: number,
+  tilt: number,
+): void {
+  const bindings = (root.userData.backyardSwayBindings ??= []) as BackyardSwayBinding[];
+  bindings.push({
+    object,
+    basePosition: object.position.clone(),
+    baseRotation: object.rotation.clone(),
+    phase,
+    translation,
+    tilt,
+  });
 }
 
 function addSoilBed(
@@ -130,13 +255,29 @@ function addLowWattleFence(group: THREE.Group, width: number, z: number, seed: n
   group.userData.wattleSeed = seed;
 }
 
-function addBasket(group: THREE.Group, x: number, z: number, filled: boolean, fruit: THREE.Material): void {
+function addBasket(
+  group: THREE.Group,
+  x: number,
+  z: number,
+  filled: boolean,
+  fruit: THREE.Material,
+  fruitRadius = 0.095,
+  fruitCount = 5,
+): void {
   addMesh(group, new THREE.CylinderGeometry(0.3, 0.23, 0.32, 10, 1, true), MATERIALS.wicker, x, 0.17, z);
   addMesh(group, new THREE.TorusGeometry(0.27, 0.035, 5, 12), MATERIALS.darkTimber, x, 0.45, z, new THREE.Euler(Math.PI * 0.5, 0, 0));
   if (!filled) return;
-  for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2;
-    addMesh(group, new THREE.IcosahedronGeometry(0.095, 1), fruit, x + Math.cos(angle) * 0.14, 0.36, z + Math.sin(angle) * 0.14);
+  for (let i = 0; i < fruitCount; i++) {
+    const angle = (i / fruitCount) * Math.PI * 2;
+    const ring = fruitRadius < 0.06 ? 0.08 + (i % 2) * 0.07 : 0.14;
+    addMesh(
+      group,
+      new THREE.IcosahedronGeometry(fruitRadius, 1),
+      fruit,
+      x + Math.cos(angle) * ring,
+      0.32 + fruitRadius + (i % 3) * fruitRadius * 0.45,
+      z + Math.sin(angle) * ring,
+    );
   }
 }
 
@@ -161,6 +302,57 @@ function addFallbackTree(anchor: THREE.Group, kind: 'apple' | 'cherry', seed: nu
   }
 }
 
+function addFruitClusters(
+  anchor: THREE.Group,
+  plantKind: 'apple' | 'cherry',
+  variant: number,
+  seed: number,
+): void {
+  const rng = mulberry32(seed ^ 0x9e3779b9);
+  const material = plantKind === 'apple'
+    ? (variant % 3 === 2 ? MATERIALS.appleGold : MATERIALS.apple)
+    : MATERIALS.cherry;
+  const clusterCount = plantKind === 'apple' ? 10 : 22;
+  const positions: THREE.Vector3[] = [];
+
+  for (let cluster = 0; cluster < clusterCount; cluster++) {
+    const angle = rng() * Math.PI * 2;
+    const radius = 0.45 + rng() * 0.8;
+    const y = (plantKind === 'apple' ? 2.1 : 2.35) + rng() * 1.25;
+    const center = new THREE.Vector3(
+      Math.cos(angle) * radius,
+      y,
+      Math.sin(angle) * radius,
+    );
+    positions.push(center);
+    if (plantKind === 'cherry') {
+      positions.push(center.clone().add(new THREE.Vector3(0.048, -0.055, 0.022)));
+      if (cluster % 3 === 0) {
+        positions.push(center.clone().add(new THREE.Vector3(-0.04, -0.085, -0.032)));
+      }
+    }
+  }
+
+  const fruitRadius = plantKind === 'apple' ? 0.09 : 0.036;
+  const geometry = new THREE.IcosahedronGeometry(fruitRadius, 1);
+  const fruit = new THREE.InstancedMesh(geometry, material, positions.length);
+  fruit.name = plantKind === 'apple' ? 'Apple fruit' : 'Cherry fruit clusters';
+  fruit.userData.fruitRadius = fruitRadius;
+  fruit.userData.fruitCount = positions.length;
+  fruit.receiveShadow = true;
+  fruit.castShadow = false;
+  const matrix = new THREE.Matrix4();
+  const rotation = new THREE.Quaternion();
+  const scale = new THREE.Vector3(1, 1, 1);
+  for (let index = 0; index < positions.length; index++) {
+    matrix.compose(positions[index]!, rotation, scale);
+    fruit.setMatrixAt(index, matrix);
+  }
+  fruit.instanceMatrix.needsUpdate = true;
+  fruit.computeBoundingSphere();
+  anchor.add(fruit);
+}
+
 function addFruitTree(
   group: THREE.Group,
   plantKind: 'apple' | 'cherry',
@@ -179,19 +371,7 @@ function addFruitTree(
   if (plants) anchor.add(plants.clone(plantKind, variant));
   else addFallbackTree(anchor, plantKind, seed);
 
-  const rng = mulberry32(seed ^ 0x9e3779b9);
-  const material = plantKind === 'apple' ? (variant % 3 === 2 ? MATERIALS.appleGold : MATERIALS.apple) : MATERIALS.cherry;
-  const count = plantKind === 'apple' ? 10 : 14;
-  for (let i = 0; i < count; i++) {
-    const angle = rng() * Math.PI * 2;
-    const radius = 0.45 + rng() * 0.8;
-    const y = (plantKind === 'apple' ? 2.1 : 2.35) + rng() * 1.25;
-    const fruitRadius = plantKind === 'apple' ? 0.095 : 0.062;
-    addMesh(anchor, new THREE.IcosahedronGeometry(fruitRadius, 1), material, Math.cos(angle) * radius, y, Math.sin(angle) * radius);
-    if (plantKind === 'cherry' && i % 3 === 0) {
-      addMesh(anchor, new THREE.IcosahedronGeometry(fruitRadius, 1), material, Math.cos(angle) * radius + 0.08, y - 0.07, Math.sin(angle) * radius + 0.03);
-    }
-  }
+  addFruitClusters(anchor, plantKind, variant, seed);
 }
 
 function addOrchard(
@@ -210,7 +390,15 @@ function addOrchard(
     : [[-width * 0.25, shallow ? 0 : -depth * 0.12], [width * 0.25, shallow ? 0 : depth * 0.16]];
   positions.forEach(([x, z], index) => addFruitTree(group, kind, x!, z!, index, seed + index * 997, plants));
   addLowWattleFence(group, width, depth * 0.47, seed);
-  addBasket(group, width * 0.34, -depth * 0.34, true, kind === 'apple' ? MATERIALS.apple : MATERIALS.cherry);
+  addBasket(
+    group,
+    width * 0.34,
+    -depth * 0.34,
+    true,
+    kind === 'apple' ? MATERIALS.apple : MATERIALS.cherry,
+    kind === 'apple' ? 0.09 : 0.036,
+    kind === 'apple' ? 5 : 12,
+  );
   addSteppingStones(group, -depth * 0.46, depth * 0.34, seed);
 }
 
@@ -296,7 +484,30 @@ function addRoseShrub(
   const flower = FLOWER_MATERIALS[index % 3]!;
   for (let bloom = 0; bloom < 8; bloom++) {
     const angle = (bloom / 8) * Math.PI * 2 + index * 0.37;
-    addMesh(anchor, new THREE.IcosahedronGeometry(0.095, 1), flower, Math.cos(angle) * (0.3 + (bloom % 2) * 0.18), 0.64 + (bloom % 3) * 0.17, Math.sin(angle) * (0.3 + (bloom % 2) * 0.18));
+    const bloomRoot = new THREE.Group();
+    bloomRoot.name = `Swaying rose bloom ${index + 1}.${bloom + 1}`;
+    const radius = 0.28 + (bloom % 2) * 0.14;
+    bloomRoot.position.set(
+      Math.cos(angle) * radius,
+      0.66 + (bloom % 3) * 0.14,
+      Math.sin(angle) * radius,
+    );
+    bloomRoot.rotation.y = angle;
+    anchor.add(bloomRoot);
+    addFlowerHead(
+      bloomRoot,
+      'Layered rose flower',
+      flower,
+      0.62 + (bloom % 3) * 0.045,
+      true,
+    );
+    registerBackyardSway(
+      group,
+      bloomRoot,
+      seed * 0.0007 + angle,
+      plants ? 0.075 : 0.025,
+      plants ? 0.065 : 0.035,
+    );
   }
 }
 
@@ -323,8 +534,52 @@ function addFlowerGarden(
     const x = side * (width * 0.16 + rng() * width * 0.26);
     const z = (rng() - 0.5) * depth * 0.72;
     const h = 0.22 + rng() * 0.28;
-    addMesh(group, new THREE.CylinderGeometry(0.012, 0.018, h, 5), MATERIALS.herb, x, h * 0.5 + 0.08, z);
-    addMesh(group, new THREE.IcosahedronGeometry(0.07 + rng() * 0.035, 1), FLOWER_MATERIALS[(i + 3) % FLOWER_MATERIALS.length]!, x, h + 0.08, z);
+    const wildflower = new THREE.Group();
+    wildflower.name = `Swaying cottage flower ${i + 1}`;
+    wildflower.position.set(x, 0.08, z);
+    wildflower.rotation.y = rng() * Math.PI * 2;
+    group.add(wildflower);
+    addMesh(
+      wildflower,
+      new THREE.CylinderGeometry(0.012, 0.018, h, 5),
+      MATERIALS.herb,
+      0,
+      h * 0.5,
+      0,
+      undefined,
+      undefined,
+      'Flower stem',
+    );
+    for (const direction of [-1, 1]) {
+      addMesh(
+        wildflower,
+        new THREE.SphereGeometry(0.07, 6, 4),
+        i % 2 ? MATERIALS.herb : MATERIALS.herbSilver,
+        direction * 0.055,
+        h * (direction < 0 ? 0.42 : 0.62),
+        0,
+        new THREE.Euler(0, 0, direction * 0.52),
+        new THREE.Vector3(1.15, 0.18, 0.55),
+        'Flower stem leaf',
+      );
+    }
+    const head = new THREE.Group();
+    head.position.y = h;
+    head.rotation.y = rng() * Math.PI;
+    wildflower.add(head);
+    addFlowerHead(
+      head,
+      'Six-petal cottage flower',
+      FLOWER_MATERIALS[(i + 3) % FLOWER_MATERIALS.length]!,
+      0.48 + rng() * 0.16,
+    );
+    registerBackyardSway(
+      group,
+      wildflower,
+      seed * 0.0009 + x * 0.35 + z * 0.27,
+      0,
+      0.075 + rng() * 0.035,
+    );
   }
   addSteppingStones(group, -depth * 0.45, depth * 0.42, seed);
 }
@@ -455,6 +710,31 @@ export function createBackyardGardenMesh(
   }
 
   return group;
+}
+
+/** Keeps modeled blossoms moving with SeedThree shrubs and bends bed flowers from their roots. */
+export function animateBackyardGardenMesh(
+  group: THREE.Group,
+  elapsedSeconds: number,
+): void {
+  const bindings = group.userData.backyardSwayBindings as BackyardSwayBinding[] | undefined;
+  if (!bindings?.length) return;
+
+  for (const binding of bindings) {
+    const phase = binding.phase;
+    const sway = Math.sin(elapsedSeconds * 1.15 + phase) * 0.72
+      + Math.sin(elapsedSeconds * 2.63 + phase * 1.9) * 0.28;
+    binding.object.position.set(
+      binding.basePosition.x + sway * binding.translation * 0.85,
+      binding.basePosition.y,
+      binding.basePosition.z + sway * binding.translation * 0.53,
+    );
+    binding.object.rotation.set(
+      binding.baseRotation.x + sway * binding.tilt * 0.28,
+      binding.baseRotation.y,
+      binding.baseRotation.z - sway * binding.tilt,
+    );
+  }
 }
 
 /** Dispose only geometry owned by a garden instance; SeedThree clones share prototypes. */

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { windStrength } from '@seedthree/core/wind.js';
 import {
+  animateBackyardGardenMesh,
   createBackyardGardenMesh,
   disposeBackyardGardenMesh,
 } from '../residences/backyardGardenMesh.ts';
@@ -76,6 +77,8 @@ camera.lookAt(0, 1.8, 0);
 let running = true;
 function render(): void {
   if (!running) return;
+  const elapsedSeconds = performance.now() * 0.001;
+  for (const garden of gardens) animateBackyardGardenMesh(garden, elapsedSeconds);
   const width = root!.clientWidth;
   const height = root!.clientHeight;
   renderer.setSize(width, height, false);

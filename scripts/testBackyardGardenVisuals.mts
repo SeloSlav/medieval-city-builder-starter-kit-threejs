@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as THREE from 'three';
-import { createBackyardGardenMesh, disposeBackyardGardenMesh } from '../src/residences/backyardGardenMesh.ts';
+import {
+  animateBackyardGardenMesh,
+  createBackyardGardenMesh,
+  disposeBackyardGardenMesh,
+} from '../src/residences/backyardGardenMesh.ts';
 import type { BackyardGardenKind } from '../src/generated/gameBalance.ts';
 import { BACKYARD_PLANT_SPECIES } from '../src/vegetation/seedthree/backyardPlantPresets.ts';
 
@@ -54,6 +58,54 @@ shallow.traverse((object) => {
 });
 assert.equal(shallowTrees, 2, 'shallow plots should reduce orchard count instead of flattening trees');
 disposeBackyardGardenMesh(shallow);
+
+const appleDetail = createBackyardGardenMesh('apple_orchard', { width: 6.2, depth: 5.4, seed: 4271 });
+const cherryDetail = createBackyardGardenMesh('cherry_orchard', { width: 6.2, depth: 5.4, seed: 4271 });
+let appleFruitCount = 0;
+let cherryFruitCount = 0;
+let appleFruitRadius = 0;
+let cherryFruitRadius = 0;
+appleDetail.traverse((object) => {
+  const fruit = object as THREE.InstancedMesh;
+  if (!fruit.isInstancedMesh || fruit.name !== 'Apple fruit') return;
+  appleFruitCount += fruit.count;
+  appleFruitRadius = Number(fruit.userData.fruitRadius);
+});
+cherryDetail.traverse((object) => {
+  const fruit = object as THREE.InstancedMesh;
+  if (!fruit.isInstancedMesh || fruit.name !== 'Cherry fruit clusters') return;
+  cherryFruitCount += fruit.count;
+  cherryFruitRadius = Number(fruit.userData.fruitRadius);
+});
+assert.ok(cherryFruitCount >= appleFruitCount * 4, 'cherries should be much more numerous than apples');
+assert.ok(cherryFruitRadius <= appleFruitRadius * 0.45, 'cherries should read substantially smaller than apples');
+disposeBackyardGardenMesh(appleDetail);
+disposeBackyardGardenMesh(cherryDetail);
+
+const flowerDetail = createBackyardGardenMesh('flower_garden', { width: 6.2, depth: 5.4, seed: 4271 });
+let petalCount = 0;
+let modeledFlowerMeshes = 0;
+let swayingBloom: THREE.Object3D | null = null;
+flowerDetail.traverse((object) => {
+  petalCount += Number(object.userData.petalCount ?? 0);
+  if (object.name === 'Modeled rose blossom' || object.name === 'Modeled cottage flower') {
+    modeledFlowerMeshes += 1;
+  }
+  if (!swayingBloom && object.name.startsWith('Swaying rose bloom')) swayingBloom = object;
+});
+assert.ok(petalCount >= 100, 'flower gardens should use modeled petals instead of colored orb placeholders');
+assert.ok(modeledFlowerMeshes <= 60, 'petals should be consolidated per blossom to protect draw-call cost');
+assert.ok(swayingBloom, 'rose bushes should expose animated bloom anchors');
+animateBackyardGardenMesh(flowerDetail, 0);
+const firstBloomPosition = swayingBloom!.position.clone();
+const firstBloomRotation = swayingBloom!.rotation.clone();
+animateBackyardGardenMesh(flowerDetail, 1.25);
+assert.ok(
+  firstBloomPosition.distanceTo(swayingBloom!.position) > 1e-4
+    || Math.abs(firstBloomRotation.z - swayingBloom!.rotation.z) > 1e-4,
+  'rose blooms should sway with their bushes',
+);
+disposeBackyardGardenMesh(flowerDetail);
 
 for (const [kind, species] of Object.entries(BACKYARD_PLANT_SPECIES)) {
   const scale = Number(species.params?.scale);

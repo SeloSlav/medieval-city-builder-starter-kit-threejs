@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { backyardGardenPlacement } from './backyardPosition.ts';
 import {
+  animateBackyardGardenMesh,
   createBackyardGardenMesh,
   disposeBackyardGardenMesh,
 } from './backyardGardenMesh.ts';
@@ -175,6 +176,10 @@ export class BackyardGardenMarkers {
 
   tick(dtSeconds: number, view?: CrowdViewState): void {
     const dt = Math.min(0.08, Math.max(0, dtSeconds));
+    const elapsedSeconds = performance.now() * 0.001;
+    for (const marker of this.meshes.values()) {
+      animateBackyardGardenMesh(marker, elapsedSeconds);
+    }
     for (const [residenceId, visuals] of this.chickens) {
       const marker = this.meshes.get(residenceId);
       if (!marker) continue;
