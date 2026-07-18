@@ -2,6 +2,7 @@ import type { SpacetimeGameSnapshot } from '../data/spacetimeGameStore.ts';
 import { simElapsedSeconds } from '../world/gameCalendar.ts';
 import type { AmbientAudioController } from '../audio/AmbientAudioController.ts';
 import type { ResidenceMarkers } from '../residences/ResidenceMarkers.ts';
+import type { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import type { GameState } from '../resources/types.ts';
 import type { SceneManager } from '../scene/SceneManager.ts';
 import type { SettlementHud } from '../ui/SettlementHud.ts';
@@ -16,6 +17,7 @@ export type SettlementPresentationTargets = {
   settlementHud: SettlementHud | null;
   sceneManager: SceneManager | null;
   residenceMarkers: ResidenceMarkers | null;
+  villagers: VillagerRenderer | null;
   ambientAudio: AmbientAudioController | null;
 };
 
@@ -82,7 +84,11 @@ export class SettlementPresentationController {
     targets.settlementHud?.setSettlementClock(schedule);
     targets.sceneManager?.applyDayNight(schedule.dayNight);
     targets.residenceMarkers?.setChimneySmokeAllowed(schedule.dayNight.smokeAllowed);
-    targets.residenceMarkers?.setEveningWindowGlow(schedule.dayNight.eveningWindowGlow);
+    targets.residenceMarkers?.setHouseholdLighting(
+      schedule.clock,
+      schedule.dayNight.eveningWindowGlow,
+    );
+    targets.villagers?.setSchedule(schedule.clock, schedule.laborPaused);
     targets.ambientAudio?.syncSettlementSchedule(schedule);
   }
 }

@@ -28,6 +28,7 @@ const tests = [
   'test:livestock',
   'test:agent-visuals',
   'test:worker-agents',
+  'test:household-routines',
   'test:civic-logistics',
 ] as const;
 

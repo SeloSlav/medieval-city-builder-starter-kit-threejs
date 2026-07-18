@@ -23,6 +23,8 @@ import { getNeedStock } from './residenceNeedState.ts';
 import type { ResidenceState } from '../resources/types.ts';
 import { RESIDENCE_FIREWOOD_CAPACITY } from '../generated/gameBalance.ts';
 import { hashStringSeed } from '../utils/random.ts';
+import type { GameClock } from '../world/gameCalendar.ts';
+import { residenceWindowActivity } from './householdRoutine.ts';
 
 const WINDOW_GLOW_EMISSIVE = 0xffc060;
 const WINDOW_GLOW_COLOR = 0x4a3820;
@@ -559,10 +561,12 @@ export class ResidenceMarkers {
   private readonly root: THREE.Group;
   private readonly meshes = new Map<string, THREE.Group>();
   private readonly smokeEmitters = new Map<string, ChimneySmokeEmitter>();
-  private readonly smokeActive = new Map<string, boolean>();
+  private readonly smokeEligible = new Map<string, boolean>();
   private readonly residenceOccupied = new Map<string, boolean>();
+  private readonly residencePopulation = new Map<string, number>();
   private chimneySmokeAllowed = true;
   private eveningWindowGlow = 0;
+  private householdClock: GameClock | null = null;
 
   constructor(parent: THREE.Group) {
     this.root = new THREE.Group();
@@ -573,8 +577,19 @@ export class ResidenceMarkers {
   setChimneySmokeAllowed(allowed: boolean): void {
     this.chimneySmokeAllowed = allowed;
     for (const [id, emitter] of this.smokeEmitters) {
-      emitter.setActive(this.smokeActive.get(id) ?? false);
+      emitter.setActive(allowed && (this.smokeEligible.get(id) ?? false));
     }
+  }
+
+  setHouseholdClock(clock: GameClock): void {
+    this.householdClock = clock;
+    this.applyWindowGlow();
+  }
+
+  setHouseholdLighting(clock: GameClock, glow: number): void {
+    this.householdClock = clock;
+    this.eveningWindowGlow = glow;
+    this.applyWindowGlow();
   }
 
   setEveningWindowGlow(glow: number): void {
@@ -588,7 +603,7 @@ export class ResidenceMarkers {
       if (!material) continue;
       applyResidenceWindowGlow(
         material,
-        this.eveningWindowGlow,
+        this.windowGlowForResidence(id),
         this.residenceOccupied.get(id) ?? false,
       );
     }
@@ -596,7 +611,9 @@ export class ResidenceMarkers {
 
   tick(dt: number): void {
     for (const [id, emitter] of this.smokeEmitters) {
-      emitter.setActive(this.smokeActive.get(id) ?? false);
+      emitter.setActive(
+        this.chimneySmokeAllowed && (this.smokeEligible.get(id) ?? false),
+      );
       emitter.tick(dt);
     }
   }
@@ -634,10 +651,9 @@ export class ResidenceMarkers {
       const y = getHeightAt(residence.x, residence.z);
       marker.position.set(residence.x, y, residence.z);
       marker.rotation.y = residence.yaw;
-      this.smokeActive.set(
+      this.smokeEligible.set(
         residence.id,
-        this.chimneySmokeAllowed
-          && !residence.abandoned
+        !residence.abandoned
           && residence.population > 0
           && getNeedStock(residence.needs, 'firewood') > 0,
       );
@@ -645,6 +661,7 @@ export class ResidenceMarkers {
         residence.id,
         !residence.abandoned && residence.population > 0,
       );
+      this.residencePopulation.set(residence.id, residence.population);
       this.applyWindowGlowForResidence(marker, residence.id);
       syncFirewoodPile(marker, getNeedStock(residence.needs, 'firewood'));
       if (!marker.getObjectByName('Building shadow proxy')) {
@@ -661,8 +678,9 @@ export class ResidenceMarkers {
       this.meshes.delete(id);
       this.smokeEmitters.get(id)?.dispose();
       this.smokeEmitters.delete(id);
-      this.smokeActive.delete(id);
+      this.smokeEligible.delete(id);
       this.residenceOccupied.delete(id);
+      this.residencePopulation.delete(id);
     }
   }
 
@@ -671,9 +689,19 @@ export class ResidenceMarkers {
     if (!material) return;
     applyResidenceWindowGlow(
       material,
-      this.eveningWindowGlow,
+      this.windowGlowForResidence(residenceId),
       this.residenceOccupied.get(residenceId) ?? false,
     );
+  }
+
+  private windowGlowForResidence(residenceId: string): number {
+    if (!this.householdClock) return this.eveningWindowGlow;
+    const householdActivity = residenceWindowActivity(
+      residenceId,
+      this.residencePopulation.get(residenceId) ?? 0,
+      this.householdClock,
+    );
+    return this.eveningWindowGlow * householdActivity;
   }
 
   dispose(): void {
@@ -681,8 +709,9 @@ export class ResidenceMarkers {
       emitter.dispose();
     }
     this.smokeEmitters.clear();
-    this.smokeActive.clear();
+    this.smokeEligible.clear();
     this.residenceOccupied.clear();
+    this.residencePopulation.clear();
     for (const marker of this.meshes.values()) {
       disposeGroup(marker);
     }

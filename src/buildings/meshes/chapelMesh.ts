@@ -249,7 +249,9 @@ function addBellTower(
   const baseSize = 1.62;
   const belfryFloorY = roofY + 0.18;
   const belfryHeight = 2.08;
-  const bellLift = 0.18;
+  // Keep the yoke tucked beneath the belfry's upper beams so the bell reads as
+  // suspended from the steeple ceiling instead of floating near the floor.
+  const bellLift = 0.63;
 
   addMesh(
     group,

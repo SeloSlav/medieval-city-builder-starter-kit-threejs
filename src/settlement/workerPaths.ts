@@ -10,6 +10,8 @@ import type {
   TreeLayoutEntry,
 } from '../resources/types.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
+import { roadPathRoute } from '../logistics/roadLogistics.ts';
+import type { RoadNetwork } from '../roads/RoadNetwork.ts';
 import { polylineLengthXZ, type PointXZ } from '../utils/pathGeometry.ts';
 import { hashStringSeed, mulberry32 } from '../utils/random.ts';
 
@@ -251,6 +253,38 @@ export function pickWorkerWalkPath(
 
   const localPath = workplaceLoop(building, start, slotIndex, rng);
   return polylineLengthXZ(localPath) >= 4 ? localPath : null;
+}
+
+export function pickWorkerCommutePath(
+  start: PointXZ,
+  destination: PointXZ,
+  roadNetwork: RoadNetwork | null,
+): PointXZ[] | null {
+  const directDistance = Math.hypot(
+    destination.x - start.x,
+    destination.z - start.z,
+  );
+  if (directDistance < 0.25) return null;
+
+  if (roadNetwork) {
+    const route = roadPathRoute(
+      roadNetwork,
+      start.x,
+      start.z,
+      destination.x,
+      destination.z,
+    );
+    if (route && route.distance >= 0.25 && route.polyline.length >= 2) {
+      return route.polyline;
+    }
+  }
+
+  // A direct fallback is preferable to teleporting when a workplace or home
+  // has not yet been connected to the road graph.
+  return [
+    { x: start.x, z: start.z },
+    { x: destination.x, z: destination.z },
+  ];
 }
 
 function collectTreeTargets(

@@ -1,0 +1,243 @@
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import type { BuildingState, ResidenceState } from '../src/resources/types.ts';
+import { ResidenceMarkers } from '../src/residences/ResidenceMarkers.ts';
+import {
+  householdMemberHomeState,
+  householdMemberRoutine,
+  residenceWindowActivity,
+} from '../src/residences/householdRoutine.ts';
+import { pickWorkerCommutePath } from '../src/settlement/workerPaths.ts';
+import { VillagerRenderer } from '../src/settlement/VillagerRenderer.ts';
+import { computeDayNightState } from '../src/world/dayNightPresentation.ts';
+import type { GameClock } from '../src/world/gameCalendar.ts';
+
+const identities = Array.from(
+  { length: 12 },
+  (_, index) => `residence-routine:person:${index}`,
+);
+const routines = identities.map((identity) => householdMemberRoutine(identity));
+
+assert.ok(
+  new Set(routines.map((routine) => routine.bedtimeHour.toFixed(2))).size >= 8,
+  'household members should not all share one bedtime',
+);
+assert.ok(
+  new Set(routines.map((routine) => routine.wakeHour.toFixed(2))).size >= 8,
+  'household members should not all wake at the same time',
+);
+
+for (let index = 0; index < identities.length; index++) {
+  const identity = identities[index];
+  const routine = routines[index];
+  assert.equal(
+    householdMemberHomeState(identity, clockFromHour(routine.indoorsHour - 0.02)),
+    'home_outdoors',
+  );
+  assert.equal(
+    householdMemberHomeState(identity, clockFromHour(routine.indoorsHour + 0.02)),
+    'indoors',
+  );
+  assert.equal(
+    householdMemberHomeState(identity, clockFromHour(routine.bedtimeHour + 0.02)),
+    'asleep',
+  );
+  assert.equal(
+    householdMemberHomeState(identity, clockFromHour(routine.wakeHour + 0.02)),
+    'indoors',
+  );
+}
+
+assert.ok(
+  residenceWindowActivity('residence-lit', 6, clockFromHour(21)) > 0,
+  'occupied homes should show lamps after household members come inside',
+);
+assert.equal(
+  residenceWindowActivity('residence-lit', 6, clockFromHour(2)),
+  0,
+  'homes should go dark after every household member is asleep',
+);
+assert.equal(
+  residenceWindowActivity('residence-lit', 6, clockFromHour(12)),
+  0,
+  'household lamps should be off during daytime outdoor activity',
+);
+
+const lateEvening = computeDayNightState(fullClock(22), true);
+assert.equal(lateEvening.smokeAllowed, false);
+assert.ok(
+  lateEvening.eveningWindowGlow > 0.8,
+  'the darkness envelope should allow awake households to remain lit at night',
+);
+const deepNight = computeDayNightState(fullClock(2), true);
+assert.ok(deepNight.eveningWindowGlow > 0.8);
+assert.equal(
+  deepNight.eveningWindowGlow
+    * residenceWindowActivity('residence-lit', 6, clockFromHour(2)),
+  0,
+  'sleep schedules, rather than the global darkness envelope, should turn homes off',
+);
+
+assert.deepEqual(
+  pickWorkerCommutePath({ x: 2, z: 3 }, { x: 12, z: -4 }, null),
+  [{ x: 2, z: 3 }, { x: 12, z: -4 }],
+  'workers should still walk home directly when no road route is available',
+);
+
+const originalWarn = console.warn;
+console.warn = () => {};
+const villagers = new VillagerRenderer({
+  parent: new THREE.Group(),
+  getHeightAt: () => 0,
+});
+const home = residence('routine-home', 0, 0);
+const workplace = building('routine-workplace', 12, 0);
+villagers.sync({
+  residences: [home],
+  buildings: [workplace],
+  quarries: [],
+  foragingNodes: [],
+  trees: new Map(),
+  treeRegistry: null,
+  farmFields: [],
+  pastures: [],
+  roadNetwork: null,
+});
+villagers.setSchedule(fullClock(19), false);
+
+const agents = (
+  villagers as unknown as {
+    agents: Map<string, {
+      routinePhase: string;
+      pathPurpose: string | null;
+    }>;
+  }
+).agents;
+const worker = agents.get('worker:routine-workplace:0');
+assert.ok(worker);
+assert.equal(worker.routinePhase, 'work');
+
+villagers.setSchedule(fullClock(20), true);
+assert.equal(worker.routinePhase, 'returning_home');
+assert.equal(worker.pathPurpose, 'return_home');
+for (let step = 0; step < 600; step++) villagers.tick(0.05);
+assert.equal(worker.routinePhase, 'home_outdoors');
+assert.equal(worker.pathPurpose, null);
+
+villagers.setSchedule(fullClock(23.8), true);
+assert.equal(worker.routinePhase, 'asleep');
+villagers.setSchedule(fullClock(6), false);
+assert.equal(worker.routinePhase, 'commuting_to_work');
+assert.equal(worker.pathPurpose, 'commute_to_work');
+for (let step = 0; step < 600; step++) villagers.tick(0.05);
+assert.equal(worker.routinePhase, 'work');
+assert.notEqual(worker.pathPurpose, 'commute_to_work');
+villagers.dispose();
+await new Promise((resolve) => setTimeout(resolve, 0));
+console.warn = originalWarn;
+
+const residenceMarkers = new ResidenceMarkers(new THREE.Group());
+residenceMarkers.syncResidences([home], () => 0);
+residenceMarkers.tick(0.05);
+const markerInternals = residenceMarkers as unknown as {
+  smokeEmitters: Map<string, { active: boolean }>;
+  meshes: Map<string, THREE.Group>;
+};
+const smokeEmitter = markerInternals.smokeEmitters.get(home.id);
+assert.equal(smokeEmitter?.active, true);
+residenceMarkers.setChimneySmokeAllowed(false);
+assert.equal(
+  smokeEmitter?.active,
+  false,
+  'the global night-hours switch should immediately stop residence chimney smoke',
+);
+
+const bedtime = householdMemberRoutine(`${home.id}:person:0`).bedtimeHour;
+residenceMarkers.setEveningWindowGlow(1);
+residenceMarkers.setHouseholdClock(fullClock(bedtime - 0.1));
+const windowMaterial = markerInternals.meshes.get(home.id)?.userData
+  .windowMaterial as THREE.MeshStandardMaterial | undefined;
+assert.ok(windowMaterial && windowMaterial.emissiveIntensity > 0.2);
+residenceMarkers.setHouseholdClock(fullClock(2));
+assert.equal(
+  windowMaterial?.emissiveIntensity,
+  0.12,
+  'residence windows should go fully dark once the household is asleep',
+);
+residenceMarkers.dispose();
+
+console.log('household routine and worker commute tests passed');
+
+function clockFromHour(hourValue: number): Pick<GameClock, 'hour' | 'minute'> {
+  const wrapped = ((hourValue % 24) + 24) % 24;
+  const hour = Math.floor(wrapped);
+  const minute = Math.floor((wrapped - hour) * 60);
+  return { hour, minute };
+}
+
+function fullClock(hourValue: number): GameClock {
+  const clock = clockFromHour(hourValue);
+  return {
+    ...clock,
+    simTick: 0,
+    totalDays: 0,
+    weekday: 1,
+    monthDay: 1,
+    month: 1,
+    year: 1,
+    isSunday: false,
+    isWorkHours: hourValue >= 6 && hourValue < 20,
+  };
+}
+
+function residence(id: string, x: number, z: number): ResidenceState {
+  return {
+    id,
+    zoneId: `zone-${id}`,
+    parcelIndex: 0,
+    x,
+    z,
+    yaw: 0,
+    population: 1,
+    populationCapacity: 1,
+    tier: 1,
+    settlementTicks: 0,
+    needs: {
+      firewood: { stock: 1, deficitTicks: 0 },
+      water: { stock: 1, deficitTicks: 0 },
+      food: { stock: 1, deficitTicks: 0 },
+      ale: { stock: 0, deficitTicks: 0 },
+      preservedFood: { stock: 0, deficitTicks: 0 },
+    },
+    abandoned: false,
+    householdWealth: 0,
+  };
+}
+
+function building(id: string, x: number, z: number): BuildingState {
+  return {
+    id,
+    kind: 'lumber_mill',
+    x,
+    z,
+    workRadius: 50,
+    actionCooldown: 0,
+    timber: 0,
+    firewood: 0,
+    stone: 0,
+    water: 0,
+    food: 0,
+    grain: 0,
+    flour: 0,
+    ale: 0,
+    preservedFood: 0,
+    honey: 0,
+    wine: 0,
+    gold: 0,
+    waterCapacity: 0,
+    assignedLabor: 1,
+    storehouseAcceptsTimber: true,
+    storehouseAcceptsStone: true,
+    storehouseAcceptsFirewood: true,
+  };
+}

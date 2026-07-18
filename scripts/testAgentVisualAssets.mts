@@ -10,6 +10,15 @@ import {
   type DeliveryCartModelSource,
 } from '../src/logistics/deliveryCartMesh.ts';
 import {
+  createDeliveryCartWorkerSource,
+  createDeliveryCartWorkerVisual,
+  DELIVERY_CART_HANDLE_TARGETS,
+  disposeDeliveryCartWorkerSources,
+  disposeDeliveryCartWorkerVisual,
+  updateDeliveryCartWorkerVisual,
+  type DeliveryCartWorkerSources,
+} from '../src/logistics/deliveryCartWorker.ts';
+import {
   pickVillagerHairColor,
   pickVillagerModelVariant,
 } from '../src/settlement/villagerPaths.ts';
@@ -38,6 +47,7 @@ const villagerAssets = [
   },
 ] as const;
 
+const deliveryWorkerSources = {} as DeliveryCartWorkerSources;
 for (const asset of villagerAssets) {
   const gltf = await parseGlb(asset.path);
   const clips = gltf.animations.map((clip) => clip.name.toLowerCase());
@@ -70,6 +80,11 @@ for (const asset of villagerAssets) {
     cloneMesh.skeleton,
     sourceMesh.skeleton,
     `${asset.variant} runtime clone needs an independent rig`,
+  );
+  deliveryWorkerSources[asset.variant] = createDeliveryCartWorkerSource(
+    asset.variant,
+    gltf.scene,
+    gltf.animations,
   );
 }
 
@@ -124,8 +139,38 @@ assert.notEqual(
   undefined,
   'all delivery kinds should preserve their readable load',
 );
+
+const worker = createDeliveryCartWorkerVisual(84525, deliveryWorkerSources);
+cartA.add(worker.root);
+assert.equal(worker.root.userData.deliveryCartWorker, true);
+assert.equal(worker.mode, 'walk');
+for (let index = 0; index < 12; index++) {
+  updateDeliveryCartWorkerVisual(worker, 1 / 30, true, 1.05);
+}
+cartA.updateMatrixWorld(true);
+for (const [side, palmName] of [
+  ['left', 'PalmL'],
+  ['right', 'PalmR'],
+] as const) {
+  const palm = worker.model.getObjectByName(palmName);
+  assert.ok(palm, `delivery worker must retain ${palmName}`);
+  const handPosition = palm.getWorldPosition(new THREE.Vector3());
+  const handleTarget = DELIVERY_CART_HANDLE_TARGETS[side];
+  const target = cartA.localToWorld(
+    new THREE.Vector3(handleTarget.x, handleTarget.y, handleTarget.z),
+  );
+  const handDistance = handPosition.distanceTo(target);
+  assert.ok(
+    handDistance < 0.125,
+    `${side} hand should remain planted on its cart handle (${handDistance.toFixed(3)}m)`,
+  );
+}
+updateDeliveryCartWorkerVisual(worker, 1 / 30, false, 0);
+assert.equal(worker.mode, 'idle', 'unloading workers should settle into an idle stance');
+disposeDeliveryCartWorkerVisual(worker);
 disposeDeliveryCartMesh(cartA);
 disposeDeliveryCartMesh(cartB);
+disposeDeliveryCartWorkerSources(deliveryWorkerSources);
 
 const villagerLicense = fs.readFileSync(
   'public/assets/models/villagers/LICENSE.txt',

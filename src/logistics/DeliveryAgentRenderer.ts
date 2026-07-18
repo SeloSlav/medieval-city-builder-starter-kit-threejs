@@ -9,6 +9,15 @@ import {
   loadDeliveryCartModelSource,
   type DeliveryCartModelSource,
 } from '../logistics/deliveryCartMesh.ts';
+import {
+  createDeliveryCartWorkerVisual,
+  disposeDeliveryCartWorkerSources,
+  disposeDeliveryCartWorkerVisual,
+  loadDeliveryCartWorkerSources,
+  updateDeliveryCartWorkerVisual,
+  type DeliveryCartWorkerSources,
+  type DeliveryCartWorkerVisual,
+} from './deliveryCartWorker.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import { samplePolylineXZ, type PointXZ } from '../utils/pathGeometry.ts';
 import { isWithinShadowRange, type CrowdViewState } from '../settlement/crowdView.ts';
@@ -18,6 +27,7 @@ const DISPLAY_BLEND_RATE = 14;
 
 type TripVisual = {
   mesh: THREE.Group;
+  worker: DeliveryCartWorkerVisual | null;
   polyline: PointXZ[];
   pathDistance: number;
   serverProgress: number;
@@ -40,6 +50,7 @@ export class DeliveryAgentRenderer {
   private readonly visuals = new Map<string, TripVisual>();
   private latestTrips = new Map<string, DeliveryTripState>();
   private cartSource: DeliveryCartModelSource | null = null;
+  private workerSources: DeliveryCartWorkerSources | null = null;
   private disposed = false;
 
   constructor(options: DeliveryAgentRendererOptions) {
@@ -47,6 +58,7 @@ export class DeliveryAgentRenderer {
     this.group.name = 'Delivery agents';
     options.parent.add(this.group);
     void this.loadCartSource();
+    void this.loadWorkerSources();
   }
 
   syncTrips(trips: Iterable<DeliveryTripState>): void {
@@ -79,8 +91,9 @@ export class DeliveryAgentRenderer {
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       this.group.add(mesh);
-      this.visuals.set(trip.id, {
+      const visual: TripVisual = {
         mesh,
+        worker: null,
         polyline,
         pathDistance,
         serverProgress: trip.progress,
@@ -90,7 +103,9 @@ export class DeliveryAgentRenderer {
         serverX: trip.x,
         serverZ: trip.z,
         yaw: 0,
-      });
+      };
+      this.visuals.set(trip.id, visual);
+      this.ensureWorker(visual, trip);
     }
 
     for (const id of this.visuals.keys()) {
@@ -129,7 +144,17 @@ export class DeliveryAgentRenderer {
 
       const y = this.terrain.getHeightAt(x, z) + 0.05;
       visual.mesh.position.set(x, y, z);
-      visual.mesh.rotation.y = yaw;
+      visual.mesh.rotation.y = visual.phase === 'inbound'
+        ? yaw + Math.PI
+        : yaw;
+      if (visual.worker) {
+        updateDeliveryCartWorkerVisual(
+          visual.worker,
+          dt,
+          visual.phase !== 'unloading',
+          visual.travelSpeed,
+        );
+      }
       const castShadow = isWithinShadowRange(x, z, view);
       visual.mesh.traverse((object) => {
         const mesh = object as THREE.Mesh;
@@ -166,7 +191,9 @@ export class DeliveryAgentRenderer {
       this.removeTrip(id);
     }
     if (this.cartSource) disposeDeliveryCartModelSource(this.cartSource);
+    if (this.workerSources) disposeDeliveryCartWorkerSources(this.workerSources);
     this.cartSource = null;
+    this.workerSources = null;
     this.latestTrips.clear();
     this.group.removeFromParent();
   }
@@ -197,15 +224,22 @@ export class DeliveryAgentRenderer {
     replacement.position.copy(visual.mesh.position);
     replacement.rotation.copy(visual.mesh.rotation);
     replacement.castShadow = visual.mesh.castShadow;
+    visual.worker?.root.removeFromParent();
     this.group.remove(visual.mesh);
     disposeDeliveryCartMesh(visual.mesh);
+    if (visual.worker) replacement.add(visual.worker.root);
     this.group.add(replacement);
     visual.mesh = replacement;
+    this.ensureWorker(visual, trip);
   }
 
   private removeTrip(id: string): void {
     const visual = this.visuals.get(id);
     if (!visual) return;
+    if (visual.worker) {
+      disposeDeliveryCartWorkerVisual(visual.worker);
+      visual.worker = null;
+    }
     disposeDeliveryCartMesh(visual.mesh);
     visual.mesh.removeFromParent();
     this.visuals.delete(id);
@@ -216,6 +250,15 @@ export class DeliveryAgentRenderer {
       appearanceSeed: hashStringSeed(`delivery-cart:${trip.id}`),
       source: this.cartSource,
     });
+  }
+
+  private ensureWorker(visual: TripVisual, trip: DeliveryTripState): void {
+    if (visual.worker || !this.cartSource || !this.workerSources) return;
+    visual.worker = createDeliveryCartWorkerVisual(
+      hashStringSeed(`delivery-worker:${trip.id}`),
+      this.workerSources,
+    );
+    visual.mesh.add(visual.worker.root);
   }
 
   private async loadCartSource(): Promise<void> {
@@ -232,6 +275,23 @@ export class DeliveryAgentRenderer {
       }
     } catch (error) {
       console.warn('[Delivery carts] CC0 Quaternius cart failed to load.', error);
+    }
+  }
+
+  private async loadWorkerSources(): Promise<void> {
+    try {
+      const sources = await loadDeliveryCartWorkerSources();
+      if (this.disposed) {
+        disposeDeliveryCartWorkerSources(sources);
+        return;
+      }
+      this.workerSources = sources;
+      for (const [id, trip] of this.latestTrips) {
+        const visual = this.visuals.get(id);
+        if (visual) this.ensureWorker(visual, trip);
+      }
+    } catch (error) {
+      console.warn('[Delivery carts] Rigged cart workers failed to load.', error);
     }
   }
 }

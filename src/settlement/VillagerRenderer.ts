@@ -10,7 +10,12 @@ import type {
   TreeEntityState,
   TreeLayoutEntry,
 } from '../resources/types.ts';
+import {
+  householdMemberHomeState,
+  type HouseholdHomeState,
+} from '../residences/householdRoutine.ts';
 import { polylineLengthXZ, samplePolylineXZ, type PointXZ } from '../utils/pathGeometry.ts';
+import type { GameClock } from '../world/gameCalendar.ts';
 import {
   CROWD_SIM_DT,
   isWithinCrowdView,
@@ -38,6 +43,7 @@ import {
 import {
   allocateProductionWorkers,
   collectWorkerTargets,
+  pickWorkerCommutePath,
   pickWorkerWalkPath,
   workplaceYardPosition,
   type WorkerTarget,
@@ -45,15 +51,29 @@ import {
 
 type VillagerMode = 'idle' | 'walk';
 type VillagerRole = 'resident' | 'worker';
+type VillagerRoutinePhase =
+  | 'work'
+  | 'commuting_to_work'
+  | 'returning_home'
+  | HouseholdHomeState;
+type VillagerPathPurpose =
+  | 'home_wander'
+  | 'worker_work_loop'
+  | 'commute_to_work'
+  | 'return_home'
+  | null;
 
 type VillagerAgent = {
   id: string;
+  personIdentity: string;
   role: VillagerRole;
   residenceId: string | null;
   workplaceId: string | null;
   workplaceSlot: number;
   slotIndex: number;
   mode: VillagerMode;
+  routinePhase: VillagerRoutinePhase;
+  pathPurpose: VillagerPathPurpose;
   path: PointXZ[];
   pathDistance: number;
   pathCursor: number;
@@ -93,12 +113,24 @@ export class VillagerRenderer {
   private buildings = new Map<string, BuildingState>();
   private workerTargets = new Map<string, WorkerTarget[]>();
   private roadNetwork: RoadNetwork | null = null;
+  private clock: GameClock | null = null;
+  private laborPaused = false;
   private lastView: CrowdViewState | undefined;
 
   constructor(options: VillagerRendererOptions) {
     this.getHeightAt = options.getHeightAt;
     this.getRoadDeckY = options.getRoadDeckY ?? null;
     this.renderer = new SettlementCrowdRenderer({ parent: options.parent });
+  }
+
+  setSchedule(clock: GameClock, laborPaused: boolean): void {
+    this.clock = clock;
+    this.laborPaused = laborPaused;
+    let changed = false;
+    for (const agent of this.agents.values()) {
+      changed = this.reconcileRoutine(agent) || changed;
+    }
+    if (changed) this.pushRenderState();
   }
 
   sync(options: {
@@ -142,9 +174,17 @@ export class VillagerRenderer {
       const nearestEdge = this.roadNetwork
         ? findNearestRoadEdgePath(this.roadNetwork, residence.x, residence.z)
         : null;
+      const remainingPopulation = roster.remainingPopulationByResidence.get(residenceId)
+        ?? residence.population;
+      const claimedPopulation = Math.max(0, residence.population - remainingPopulation);
 
       for (let slotIndex = 0; slotIndex < count; slotIndex++) {
         const id = `resident:${residenceId}:${slotIndex}`;
+        const personIndex = Math.min(
+          Math.max(0, residence.population - 1),
+          claimedPopulation + slotIndex,
+        );
+        const personIdentity = `${residenceId}:person:${personIndex}`;
         nextIds.add(id);
 
         let agent = this.agents.get(id);
@@ -153,12 +193,15 @@ export class VillagerRenderer {
           const colors = pickVillagerColors(appearanceSeed);
           agent = {
             id,
+            personIdentity,
             role: 'resident',
             residenceId,
             workplaceId: null,
             workplaceSlot: -1,
             slotIndex,
             mode: 'idle',
+            routinePhase: 'home_outdoors',
+            pathPurpose: null,
             path: [],
             pathDistance: 0,
             pathCursor: 0,
@@ -184,6 +227,7 @@ export class VillagerRenderer {
           };
           this.agents.set(id, agent);
         } else {
+          agent.personIdentity = personIdentity;
           agent.role = 'resident';
           agent.residenceId = residenceId;
           agent.workplaceId = null;
@@ -230,12 +274,15 @@ export class VillagerRenderer {
         const yard = workplaceYardPosition(building, assignment.slotIndex);
         agent = {
           id: assignment.id,
+          personIdentity: assignment.personIdentity,
           role: 'worker',
           residenceId: assignment.homeResidenceId,
           workplaceId: assignment.buildingId,
           workplaceSlot: assignment.slotIndex,
           slotIndex: assignment.slotIndex,
           mode: 'idle',
+          routinePhase: 'work',
+          pathPurpose: null,
           path: [],
           pathDistance: 0,
           pathCursor: 0,
@@ -261,6 +308,8 @@ export class VillagerRenderer {
         };
         this.agents.set(assignment.id, agent);
       } else {
+        const previousHomeResidenceId = agent.residenceId;
+        agent.personIdentity = assignment.personIdentity;
         agent.role = 'worker';
         agent.residenceId = assignment.homeResidenceId;
         agent.workplaceId = assignment.buildingId;
@@ -278,7 +327,8 @@ export class VillagerRenderer {
         }
         const previousBuilding = previousBuildings.get(assignment.buildingId);
         if (
-          !previousBuilding
+          previousHomeResidenceId !== assignment.homeResidenceId
+          || !previousBuilding
           || previousBuilding.x !== building.x
           || previousBuilding.z !== building.z
         ) {
@@ -294,7 +344,7 @@ export class VillagerRenderer {
 
     for (const agent of this.agents.values()) {
       if (agent.mode !== 'idle' || !agent.idleDirty) continue;
-      if (agent.role === 'worker') {
+      if (agent.role === 'worker' && agent.routinePhase === 'work') {
         const building = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
         if (building) this.placeWorkerIdle(agent, building);
       } else {
@@ -302,6 +352,12 @@ export class VillagerRenderer {
         if (residence) this.placeIdle(agent, residence);
       }
       agent.idleDirty = false;
+    }
+
+    if (this.clock) {
+      for (const agent of this.agents.values()) {
+        this.reconcileRoutine(agent);
+      }
     }
 
     this.pushRenderState();
@@ -326,7 +382,9 @@ export class VillagerRenderer {
       }
 
       agent.frozen = !isWithinCrowdView(agent.x, agent.z, view);
-      if (agent.frozen) continue;
+      const commuteMustAdvance = agent.pathPurpose === 'return_home'
+        || agent.pathPurpose === 'commute_to_work';
+      if (agent.frozen && !commuteMustAdvance) continue;
 
       agent.simAccumulator += dt;
       while (agent.simAccumulator >= CROWD_SIM_DT) {
@@ -360,6 +418,9 @@ export class VillagerRenderer {
         const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
         if (!residence || residence.abandoned || residence.population <= 0) continue;
       }
+      if (agent.routinePhase === 'indoors' || agent.routinePhase === 'asleep') {
+        continue;
+      }
       renderAgents.push({
         id: agent.id,
         slot: slot++,
@@ -383,11 +444,15 @@ export class VillagerRenderer {
     if (agent.mode === 'idle') {
       agent.idleRemaining -= dt;
       if (agent.idleRemaining <= 0) {
-        if (agent.role === 'worker') {
+        if (agent.routinePhase === 'work' && agent.role === 'worker') {
           this.tryBeginWorkerWalk(agent);
-        } else {
-          const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
-          if (residence) this.tryBeginWalk(agent, residence);
+        } else if (agent.routinePhase === 'home_outdoors') {
+          if (agent.role === 'resident') {
+            const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+            if (residence) this.tryBeginWalk(agent, residence);
+          } else {
+            agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.7;
+          }
         }
       }
       return;
@@ -396,11 +461,24 @@ export class VillagerRenderer {
     agent.simPathCursor += agent.walkSpeed * dt;
     agent.pathCursor = agent.simPathCursor;
     if (agent.simPathCursor >= agent.pathDistance) {
-      if (agent.role === 'worker') {
-        this.resetWorkerToIdle(agent);
-      } else {
-        const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
-        if (residence) this.resetToIdle(agent, residence);
+      switch (agent.pathPurpose) {
+        case 'return_home':
+          this.completeWorkerReturnHome(agent);
+          break;
+        case 'commute_to_work':
+          this.completeWorkerCommuteToWork(agent);
+          break;
+        case 'worker_work_loop':
+          this.resetWorkerToIdle(agent);
+          break;
+        case 'home_wander': {
+          const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+          if (residence) this.resetToIdle(agent, residence);
+          break;
+        }
+        default:
+          this.clearPath(agent);
+          break;
       }
     }
   }
@@ -425,7 +503,7 @@ export class VillagerRenderer {
 
   private readDisplayYaw(agent: VillagerAgent): number {
     if (agent.mode === 'idle') {
-      if (agent.role === 'worker') return agent.yaw;
+      if (agent.routinePhase === 'work') return agent.yaw;
       const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
       return residence ? residence.yaw + agent.idleOffset.yaw : agent.yaw;
     }
@@ -455,6 +533,7 @@ export class VillagerRenderer {
     }
 
     agent.mode = 'walk';
+    agent.pathPurpose = 'home_wander';
     agent.path = path;
     agent.pathDistance = pathDistance;
     agent.pathCursor = 0;
@@ -482,6 +561,7 @@ export class VillagerRenderer {
     }
 
     agent.mode = 'walk';
+    agent.pathPurpose = 'worker_work_loop';
     agent.path = path;
     agent.pathDistance = pathDistance;
     agent.pathCursor = 0;
@@ -490,8 +570,130 @@ export class VillagerRenderer {
     agent.idleDirty = false;
   }
 
+  private reconcileRoutine(agent: VillagerAgent): boolean {
+    if (!this.clock) return false;
+    const homeState = householdMemberHomeState(agent.personIdentity, this.clock);
+
+    if (agent.role === 'worker') {
+      const shouldWork = this.clock.isWorkHours && !this.laborPaused;
+      if (shouldWork) {
+        if (agent.routinePhase === 'work' || agent.routinePhase === 'commuting_to_work') {
+          return false;
+        }
+        return this.beginWorkerCommuteToWork(agent);
+      }
+
+      if (agent.routinePhase === 'returning_home') return false;
+      if (agent.routinePhase === 'work' || agent.routinePhase === 'commuting_to_work') {
+        return this.beginWorkerReturnHome(agent);
+      }
+    }
+
+    return this.transitionToHomeState(agent, homeState);
+  }
+
+  private beginWorkerReturnHome(agent: VillagerAgent): boolean {
+    const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+    if (!residence) {
+      this.clearPath(agent);
+      agent.routinePhase = 'indoors';
+      return true;
+    }
+
+    const destination = residenceDoorPosition(residence);
+    const path = pickWorkerCommutePath(
+      { x: agent.x, z: agent.z },
+      destination,
+      this.roadNetwork,
+    );
+    if (!path || !this.beginJourney(agent, path, 'return_home')) {
+      this.completeWorkerReturnHome(agent);
+      return true;
+    }
+    agent.routinePhase = 'returning_home';
+    return true;
+  }
+
+  private completeWorkerReturnHome(agent: VillagerAgent): void {
+    this.clearPath(agent);
+    const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+    if (residence) this.placeIdle(agent, residence);
+    agent.routinePhase = this.clock
+      ? householdMemberHomeState(agent.personIdentity, this.clock)
+      : 'home_outdoors';
+    agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.7;
+  }
+
+  private beginWorkerCommuteToWork(agent: VillagerAgent): boolean {
+    const building = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
+    if (!building) return false;
+
+    const destination = workplaceYardPosition(building, agent.workplaceSlot);
+    const path = pickWorkerCommutePath(
+      { x: agent.x, z: agent.z },
+      destination,
+      this.roadNetwork,
+    );
+    if (!path || !this.beginJourney(agent, path, 'commute_to_work')) {
+      this.completeWorkerCommuteToWork(agent);
+      return true;
+    }
+    agent.routinePhase = 'commuting_to_work';
+    return true;
+  }
+
+  private completeWorkerCommuteToWork(agent: VillagerAgent): void {
+    this.clearPath(agent);
+    agent.routinePhase = 'work';
+    const building = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
+    if (building) this.placeWorkerIdle(agent, building);
+    agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.45;
+  }
+
+  private transitionToHomeState(
+    agent: VillagerAgent,
+    homeState: HouseholdHomeState,
+  ): boolean {
+    if (agent.routinePhase === homeState) return false;
+    this.clearPath(agent);
+    agent.routinePhase = homeState;
+    const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+    if (residence) this.placeIdle(agent, residence);
+    agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.7;
+    return true;
+  }
+
+  private beginJourney(
+    agent: VillagerAgent,
+    path: PointXZ[],
+    purpose: Exclude<VillagerPathPurpose, 'home_wander' | 'worker_work_loop' | null>,
+  ): boolean {
+    const pathDistance = polylineLengthXZ(path);
+    if (pathDistance < 0.25) return false;
+    agent.mode = 'walk';
+    agent.pathPurpose = purpose;
+    agent.path = path;
+    agent.pathDistance = pathDistance;
+    agent.pathCursor = 0;
+    agent.simPathCursor = 0;
+    agent.displayPathCursor = 0;
+    agent.idleDirty = false;
+    return true;
+  }
+
+  private clearPath(agent: VillagerAgent): void {
+    agent.mode = 'idle';
+    agent.pathPurpose = null;
+    agent.path = [];
+    agent.pathDistance = 0;
+    agent.pathCursor = 0;
+    agent.simPathCursor = 0;
+    agent.displayPathCursor = 0;
+  }
+
   private resetToIdle(agent: VillagerAgent, residence: ResidenceState): void {
     agent.mode = 'idle';
+    agent.pathPurpose = null;
     agent.path = [];
     agent.pathDistance = 0;
     agent.pathCursor = 0;
@@ -506,6 +708,8 @@ export class VillagerRenderer {
   private resetWorkerToIdle(agent: VillagerAgent): void {
     const building = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
     agent.mode = 'idle';
+    agent.routinePhase = 'work';
+    agent.pathPurpose = null;
     agent.path = [];
     agent.pathDistance = 0;
     agent.pathCursor = 0;

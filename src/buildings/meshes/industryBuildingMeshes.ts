@@ -166,7 +166,9 @@ export function createLumberMillMesh(): THREE.Group {
 
   addDarkOpening(group, 0, stoneHeight + 1.45, halfW + 0.01, 4.8, 2.72);
   addSawmillRig(group);
-  for (const x of [-halfL + 1.5, halfL - 1.5]) {
+  // The entrance occupies the first framing bay on the left, so move its
+  // neighboring window into the next clear bay rather than layering the two.
+  for (const x of [-halfL + 3.95, halfL - 1.5]) {
     addSmallWindow(group, x, stoneHeight + 1.85, halfW + 0.03, 0.8, 1.05);
   }
   addPlankDoor(group, -halfL + 1.0, stoneHeight + 0.04, halfW + 0.04, 0.92, 1.9);

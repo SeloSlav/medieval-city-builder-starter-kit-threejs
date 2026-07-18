@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { addMesh, timberMaterial } from '../buildings/buildingMaterials.ts';
+import {
+  addMesh,
+  metalMaterial,
+  quarryRockMaterial,
+  timberMaterial,
+} from '../buildings/buildingMaterials.ts';
 import type { DeliveryCargoKind } from './deliveryTrips.ts';
-import { cargoColor } from './deliveryTrips.ts';
 
 const MODEL_URL = '/assets/models/delivery-cart/quaternius-medieval-cart.glb';
 const MODEL_TARGET_HEIGHT = 1.56;
@@ -13,7 +17,20 @@ const WHEEL_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0,
 });
 
-const CARGO_MATERIALS = new Map<DeliveryCargoKind, THREE.MeshStandardMaterial>();
+const CARGO_MATERIALS = {
+  rope: createCargoMaterial('Cargo rope', 0x8b7048, 0.98),
+  grainCanvas: createCargoMaterial('Grain sack canvas', 0xc6aa70, 0.96),
+  flourCanvas: createCargoMaterial('Flour sack canvas', 0xd8cfb9, 0.97),
+  flourMark: createCargoMaterial('Flour sack mark', 0x766a58, 0.96),
+  terracotta: createCargoMaterial('Preserving crock terracotta', 0x9a5339, 0.93),
+  darkTerracotta: createCargoMaterial('Wine amphora terracotta', 0x75402f, 0.94),
+  crockGlaze: createCargoMaterial('Honey crock glaze', 0xb9872e, 0.7),
+  crockCloth: createCargoMaterial('Crock lid cloth', 0xc7b88e, 0.98),
+  leaf: createCargoMaterial('Food leaves', 0x536c3d, 0.98),
+  apple: createCargoMaterial('Food apples', 0xa84637, 0.9),
+  rootVegetable: createCargoMaterial('Food root vegetables', 0xb56f32, 0.94),
+  bread: createCargoMaterial('Food bread', 0xb9854f, 0.96),
+} as const;
 
 const CANOPY_PALETTES = [
   { primary: 0x8a3228, cloth: 0xd8c9a6 },
@@ -33,112 +50,567 @@ export type DeliveryCartMeshOptions = {
   source?: DeliveryCartModelSource | null;
 };
 
-function cargoMaterial(kind: DeliveryCargoKind): THREE.MeshStandardMaterial {
-  let material = CARGO_MATERIALS.get(kind);
-  if (!material) {
-    const color = cargoColor(kind);
-    material = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.72,
-      metalness: 0.04,
-      emissive: color,
-      emissiveIntensity: 0.06,
-    });
-    CARGO_MATERIALS.set(kind, material);
-  }
+function createCargoMaterial(
+  name: string,
+  color: number,
+  roughness: number,
+  metalness = 0,
+): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness,
+    metalness,
+  });
+  material.name = name;
   return material;
 }
 
 function addCargo(group: THREE.Group, kind: DeliveryCargoKind): void {
-  const material = cargoMaterial(kind);
-
   switch (kind) {
     case 'firewood':
-      addMesh(group, new THREE.BoxGeometry(0.9, 0.42, 0.55), material, new THREE.Vector3(0, 0.72, 0.05));
-      addMesh(
-        group,
-        new THREE.CylinderGeometry(0.1, 0.1, 0.85, 6),
-        timberMaterial('weathered'),
-        new THREE.Vector3(-0.18, 0.78, 0.05),
-        new THREE.Euler(0, 0, Math.PI * 0.5),
-      );
+      addFirewoodLoad(group);
       break;
     case 'water':
-      addMesh(group, new THREE.CylinderGeometry(0.28, 0.3, 0.55, 10), material, new THREE.Vector3(0, 0.78, 0));
-      addMesh(
-        group,
-        new THREE.TorusGeometry(0.3, 0.04, 6, 12),
-        timberMaterial('dark'),
-        new THREE.Vector3(0, 1.02, 0),
-        new THREE.Euler(Math.PI * 0.5, 0, 0),
-      );
+      addWaterLoad(group);
       break;
     case 'food':
-      addMesh(group, new THREE.BoxGeometry(0.62, 0.34, 0.48), material, new THREE.Vector3(-0.12, 0.7, 0));
-      addMesh(group, new THREE.BoxGeometry(0.48, 0.28, 0.4), material, new THREE.Vector3(0.28, 0.76, 0.08));
+      addFoodLoad(group);
       break;
     case 'grain':
-      addMesh(group, new THREE.BoxGeometry(0.72, 0.38, 0.52), material, new THREE.Vector3(0, 0.72, 0));
-      addMesh(group, new THREE.BoxGeometry(0.34, 0.22, 0.34), material, new THREE.Vector3(-0.22, 0.84, 0.12));
+      addGrainLoad(group);
       break;
     case 'flour':
-      addMesh(group, new THREE.BoxGeometry(0.58, 0.46, 0.42), material, new THREE.Vector3(0, 0.74, 0));
-      addMesh(group, new THREE.BoxGeometry(0.36, 0.12, 0.36), material, new THREE.Vector3(0.18, 0.92, -0.08));
+      addFlourLoad(group);
       break;
     case 'ale':
-      addMesh(group, new THREE.CylinderGeometry(0.24, 0.26, 0.62, 10), material, new THREE.Vector3(0, 0.78, 0));
-      addMesh(
-        group,
-        new THREE.TorusGeometry(0.24, 0.035, 6, 12),
-        timberMaterial('dark'),
-        new THREE.Vector3(0, 1.04, 0),
-        new THREE.Euler(Math.PI * 0.5, 0, 0),
-      );
+      addAleLoad(group);
       break;
     case 'preservedFood':
-      addMesh(group, new THREE.BoxGeometry(0.56, 0.3, 0.44), material, new THREE.Vector3(-0.1, 0.72, 0));
-      addMesh(group, new THREE.BoxGeometry(0.42, 0.24, 0.36), material, new THREE.Vector3(0.24, 0.78, 0.06));
+      addPreservedFoodLoad(group);
       break;
     case 'honey':
-      addMesh(group, new THREE.CylinderGeometry(0.22, 0.24, 0.48, 8), material, new THREE.Vector3(0, 0.76, 0));
+      addHoneyLoad(group);
       break;
     case 'wine':
-      addMesh(group, new THREE.CylinderGeometry(0.18, 0.22, 0.58, 8), material, new THREE.Vector3(0, 0.78, 0));
-      addMesh(group, new THREE.SphereGeometry(0.12, 8, 6), material, new THREE.Vector3(0, 1.08, 0));
+      addWineLoad(group);
       break;
     case 'timber':
-      addMesh(
-        group,
-        new THREE.CylinderGeometry(0.11, 0.11, 0.82, 8),
-        timberMaterial('weathered'),
-        new THREE.Vector3(-0.2, 0.78, 0.04),
-        new THREE.Euler(0, 0, Math.PI * 0.5),
-      );
-      addMesh(
-        group,
-        new THREE.CylinderGeometry(0.1, 0.1, 0.78, 8),
-        timberMaterial('mid'),
-        new THREE.Vector3(0.08, 0.8, -0.02),
-        new THREE.Euler(0.08, 0.2, Math.PI * 0.5),
-      );
-      addMesh(
-        group,
-        new THREE.CylinderGeometry(0.095, 0.095, 0.74, 8),
-        timberMaterial('light'),
-        new THREE.Vector3(0.24, 0.76, 0.06),
-        new THREE.Euler(-0.06, -0.15, Math.PI * 0.5),
-      );
+      addTimberLoad(group);
       break;
     case 'stone':
-      addMesh(group, new THREE.DodecahedronGeometry(0.28, 0), material, new THREE.Vector3(-0.24, 0.72, 0.08));
-      addMesh(group, new THREE.DodecahedronGeometry(0.24, 0), material, new THREE.Vector3(0.18, 0.74, -0.08));
-      addMesh(group, new THREE.DodecahedronGeometry(0.2, 0), material, new THREE.Vector3(0.26, 0.91, 0.12));
+      addStoneLoad(group);
       break;
     default: {
       const unreachable: never = kind;
       throw new Error(`Unknown cargo kind: ${unreachable}`);
     }
   }
+}
+
+function addFirewoodLoad(group: THREE.Group): void {
+  const rows = [
+    { y: 0.64, z: -0.16, length: 0.58, radius: 0.075 },
+    { y: 0.64, z: 0, length: 0.62, radius: 0.078 },
+    { y: 0.64, z: 0.16, length: 0.56, radius: 0.072 },
+    { y: 0.77, z: -0.09, length: 0.54, radius: 0.07 },
+    { y: 0.77, z: 0.09, length: 0.6, radius: 0.074 },
+    { y: 0.89, z: 0, length: 0.5, radius: 0.068 },
+  ] as const;
+  for (const [index, log] of rows.entries()) {
+    addCutLog(
+      group,
+      `Firewood split log ${index + 1}`,
+      new THREE.Vector3(0, log.y, log.z),
+      log.length,
+      log.radius,
+      'x',
+      index % 2 === 0 ? 'weathered' : 'mid',
+    );
+  }
+  for (const x of [-0.16, 0.16]) {
+    addNamedMesh(
+      group,
+      'Firewood bundle rope',
+      new THREE.BoxGeometry(0.038, 0.31, 0.43),
+      CARGO_MATERIALS.rope,
+      new THREE.Vector3(x, 0.75, 0),
+    );
+  }
+}
+
+function addWaterLoad(group: THREE.Group): void {
+  addBarrel(
+    group,
+    'Water barrel',
+    new THREE.Vector3(0, 0.76, 0),
+    1.12,
+    true,
+  );
+  addNamedMesh(
+    group,
+    'Water barrel bung',
+    new THREE.CylinderGeometry(0.045, 0.052, 0.06, 8),
+    timberMaterial('dark'),
+    new THREE.Vector3(0.09, 1.1, 0),
+  );
+}
+
+function addFoodLoad(group: THREE.Group): void {
+  addBasket(group, 'Fresh food basket', new THREE.Vector3(-0.17, 0.69, 0), 1);
+  addNamedMesh(
+    group,
+    'Food apples',
+    new THREE.SphereGeometry(0.09, 8, 6),
+    CARGO_MATERIALS.apple,
+    new THREE.Vector3(-0.25, 0.89, -0.02),
+  );
+  addNamedMesh(
+    group,
+    'Food leaves',
+    new THREE.SphereGeometry(0.1, 7, 5),
+    CARGO_MATERIALS.leaf,
+    new THREE.Vector3(-0.08, 0.9, 0.05),
+    new THREE.Euler(0.15, 0, 0.2),
+    new THREE.Vector3(1.15, 0.7, 0.8),
+  );
+  addNamedMesh(
+    group,
+    'Food root vegetables',
+    new THREE.ConeGeometry(0.07, 0.26, 7),
+    CARGO_MATERIALS.rootVegetable,
+    new THREE.Vector3(-0.13, 0.93, -0.08),
+    new THREE.Euler(0, 0, 0.55),
+  );
+  addCrate(group, 'Bread crate', new THREE.Vector3(0.25, 0.69, 0.04), 0.72);
+  for (const [x, z, yaw] of [
+    [0.2, 0, -0.18],
+    [0.31, 0.07, 0.16],
+  ] as const) {
+    addNamedMesh(
+      group,
+      'Bread loaf',
+      new THREE.CapsuleGeometry(0.07, 0.13, 3, 7),
+      CARGO_MATERIALS.bread,
+      new THREE.Vector3(x, 0.88, z),
+      new THREE.Euler(Math.PI * 0.5, yaw, 0),
+    );
+  }
+}
+
+function addGrainLoad(group: THREE.Group): void {
+  addSack(
+    group,
+    'Grain sack',
+    new THREE.Vector3(-0.18, 0.76, 0.02),
+    1.05,
+    CARGO_MATERIALS.grainCanvas,
+  );
+  addSack(
+    group,
+    'Grain sack',
+    new THREE.Vector3(0.2, 0.72, -0.03),
+    0.88,
+    CARGO_MATERIALS.grainCanvas,
+  );
+  addNamedMesh(
+    group,
+    'Grain sheaf',
+    new THREE.CylinderGeometry(0.09, 0.15, 0.48, 7),
+    CARGO_MATERIALS.grainCanvas,
+    new THREE.Vector3(0.23, 0.96, 0.08),
+    new THREE.Euler(0.08, 0, -0.38),
+  );
+}
+
+function addFlourLoad(group: THREE.Group): void {
+  addSack(
+    group,
+    'Flour sack',
+    new THREE.Vector3(-0.16, 0.75, 0),
+    1,
+    CARGO_MATERIALS.flourCanvas,
+  );
+  addSack(
+    group,
+    'Flour sack',
+    new THREE.Vector3(0.2, 0.72, 0.04),
+    0.84,
+    CARGO_MATERIALS.flourCanvas,
+  );
+  addNamedMesh(
+    group,
+    'Flour sack mill mark',
+    new THREE.CircleGeometry(0.09, 10),
+    CARGO_MATERIALS.flourMark,
+    new THREE.Vector3(-0.16, 0.78, 0.19),
+  );
+}
+
+function addAleLoad(group: THREE.Group): void {
+  addBarrel(group, 'Ale keg', new THREE.Vector3(-0.18, 0.72, 0), 0.82, true);
+  addBarrel(group, 'Ale keg', new THREE.Vector3(0.2, 0.69, 0.03), 0.72, true);
+}
+
+function addPreservedFoodLoad(group: THREE.Group): void {
+  addCrate(
+    group,
+    'Preserved food crock crate',
+    new THREE.Vector3(0, 0.64, 0),
+    1.05,
+  );
+  for (const [index, x] of [-0.2, 0, 0.2].entries()) {
+    addCrock(
+      group,
+      `Preserved food crock ${index + 1}`,
+      new THREE.Vector3(x, 0.86 + (index % 2) * 0.025, 0),
+      0.78,
+      CARGO_MATERIALS.terracotta,
+    );
+  }
+}
+
+function addHoneyLoad(group: THREE.Group): void {
+  for (const [index, [x, z, scale]] of [
+    [-0.2, -0.03, 0.9],
+    [0.04, 0.03, 1],
+    [0.24, -0.05, 0.78],
+  ].entries()) {
+    addCrock(
+      group,
+      `Honey crock ${index + 1}`,
+      new THREE.Vector3(x, 0.73, z),
+      scale,
+      CARGO_MATERIALS.crockGlaze,
+    );
+  }
+}
+
+function addWineLoad(group: THREE.Group): void {
+  addAmphora(group, new THREE.Vector3(-0.18, 0.76, 0.02), 1);
+  addAmphora(group, new THREE.Vector3(0.19, 0.72, -0.02), 0.88);
+}
+
+function addTimberLoad(group: THREE.Group): void {
+  for (const [index, [x, y, z, length, radius]] of [
+    [-0.18, 0.64, 0, 0.82, 0.095],
+    [0.02, 0.64, 0, 0.9, 0.105],
+    [0.21, 0.64, 0, 0.78, 0.09],
+    [-0.09, 0.82, 0, 0.86, 0.09],
+    [0.12, 0.82, 0, 0.8, 0.086],
+  ].entries()) {
+    addCutLog(
+      group,
+      `Timber pole ${index + 1}`,
+      new THREE.Vector3(x, y, z),
+      length,
+      radius,
+      'z',
+      index % 2 === 0 ? 'weathered' : 'mid',
+    );
+  }
+  for (const z of [-0.22, 0.22]) {
+    addNamedMesh(
+      group,
+      'Timber load rope',
+      new THREE.BoxGeometry(0.58, 0.035, 0.04),
+      CARGO_MATERIALS.rope,
+      new THREE.Vector3(0.01, 0.88, z),
+    );
+  }
+}
+
+function addStoneLoad(group: THREE.Group): void {
+  const rocks = [
+    [-0.24, 0.67, 0.08, 0.23, 'dark'],
+    [0.18, 0.68, -0.08, 0.25, 'mid'],
+    [0.26, 0.86, 0.1, 0.18, 'light'],
+    [-0.08, 0.88, -0.04, 0.2, 'cut'],
+    [0.03, 0.65, 0.16, 0.17, 'mid'],
+  ] as const;
+  for (const [index, [x, y, z, radius, shade]] of rocks.entries()) {
+    addNamedMesh(
+      group,
+      `Quarried stone ${index + 1}`,
+      new THREE.DodecahedronGeometry(radius, 0),
+      quarryRockMaterial(shade),
+      new THREE.Vector3(x, y, z),
+      new THREE.Euler(index * 0.19, index * 0.37, index * 0.11),
+      new THREE.Vector3(1, 0.84 + (index % 2) * 0.12, 0.92),
+    );
+  }
+}
+
+function addCutLog(
+  group: THREE.Group,
+  name: string,
+  center: THREE.Vector3,
+  length: number,
+  radius: number,
+  axis: 'x' | 'z',
+  shade: 'mid' | 'weathered',
+): void {
+  const rotation = axis === 'x'
+    ? new THREE.Euler(0, 0, Math.PI * 0.5)
+    : new THREE.Euler(Math.PI * 0.5, 0, 0);
+  addNamedMesh(
+    group,
+    name,
+    new THREE.CylinderGeometry(radius * 0.9, radius, length, 7),
+    timberMaterial(shade),
+    center,
+    rotation,
+  );
+  for (const direction of [-1, 1]) {
+    const capPosition = center.clone();
+    if (axis === 'x') capPosition.x += direction * length * 0.5;
+    else capPosition.z += direction * length * 0.5;
+    addNamedMesh(
+      group,
+      `${name} cut end`,
+      new THREE.CylinderGeometry(radius * 0.82, radius * 0.86, 0.018, 7),
+      timberMaterial('light'),
+      capPosition,
+      rotation,
+    );
+  }
+}
+
+function addBarrel(
+  group: THREE.Group,
+  name: string,
+  center: THREE.Vector3,
+  scale: number,
+  ironBands: boolean,
+): void {
+  const radius = 0.24 * scale;
+  const height = 0.54 * scale;
+  addNamedMesh(
+    group,
+    name,
+    new THREE.CylinderGeometry(radius * 0.91, radius * 0.91, height, 10),
+    timberMaterial('mid'),
+    center,
+  );
+  addNamedMesh(
+    group,
+    `${name} middle staves`,
+    new THREE.CylinderGeometry(radius, radius, height * 0.58, 10),
+    timberMaterial('weathered'),
+    center,
+  );
+  const bandMaterial = ironBands ? metalMaterial('iron') : timberMaterial('dark');
+  for (const yOffset of [-height * 0.34, 0, height * 0.34]) {
+    addNamedMesh(
+      group,
+      `${name} band`,
+      new THREE.TorusGeometry(radius * 0.96, 0.025 * scale, 5, 12),
+      bandMaterial,
+      center.clone().add(new THREE.Vector3(0, yOffset, 0)),
+      new THREE.Euler(Math.PI * 0.5, 0, 0),
+    );
+  }
+  for (const yOffset of [-height * 0.5, height * 0.5]) {
+    addNamedMesh(
+      group,
+      `${name} lid`,
+      new THREE.CylinderGeometry(radius * 0.9, radius * 0.9, 0.025, 10),
+      timberMaterial('dark'),
+      center.clone().add(new THREE.Vector3(0, yOffset, 0)),
+    );
+  }
+}
+
+function addSack(
+  group: THREE.Group,
+  name: string,
+  center: THREE.Vector3,
+  scale: number,
+  material: THREE.Material,
+): void {
+  addNamedMesh(
+    group,
+    name,
+    new THREE.SphereGeometry(0.24 * scale, 8, 6),
+    material,
+    center,
+    new THREE.Euler(0, 0, -0.06),
+    new THREE.Vector3(0.82, 1.3, 0.76),
+  );
+  addNamedMesh(
+    group,
+    `${name} tied neck`,
+    new THREE.CylinderGeometry(
+      0.06 * scale,
+      0.12 * scale,
+      0.18 * scale,
+      7,
+    ),
+    material,
+    center.clone().add(new THREE.Vector3(0, 0.35 * scale, 0)),
+  );
+  addNamedMesh(
+    group,
+    `${name} tie`,
+    new THREE.TorusGeometry(0.065 * scale, 0.015, 5, 8),
+    CARGO_MATERIALS.rope,
+    center.clone().add(new THREE.Vector3(0, 0.29 * scale, 0)),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+}
+
+function addBasket(
+  group: THREE.Group,
+  name: string,
+  center: THREE.Vector3,
+  scale: number,
+): void {
+  addNamedMesh(
+    group,
+    name,
+    new THREE.CylinderGeometry(0.21 * scale, 0.27 * scale, 0.25 * scale, 10),
+    timberMaterial('light'),
+    center,
+  );
+  addNamedMesh(
+    group,
+    `${name} rim`,
+    new THREE.TorusGeometry(0.22 * scale, 0.025 * scale, 5, 12),
+    timberMaterial('dark'),
+    center.clone().add(new THREE.Vector3(0, 0.14 * scale, 0)),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+}
+
+function addCrate(
+  group: THREE.Group,
+  name: string,
+  center: THREE.Vector3,
+  scale: number,
+): void {
+  addNamedMesh(
+    group,
+    name,
+    new THREE.BoxGeometry(0.48 * scale, 0.24 * scale, 0.4 * scale),
+    timberMaterial('weathered'),
+    center,
+  );
+  for (const yOffset of [-0.085, 0.085]) {
+    addNamedMesh(
+      group,
+      `${name} slat`,
+      new THREE.BoxGeometry(0.52 * scale, 0.045 * scale, 0.425 * scale),
+      timberMaterial('dark'),
+      center.clone().add(new THREE.Vector3(0, yOffset * scale, 0)),
+    );
+  }
+}
+
+function addCrock(
+  group: THREE.Group,
+  name: string,
+  center: THREE.Vector3,
+  scale: number,
+  material: THREE.Material,
+): void {
+  addNamedMesh(
+    group,
+    name,
+    new THREE.SphereGeometry(0.15 * scale, 9, 7),
+    material,
+    center,
+    undefined,
+    new THREE.Vector3(1, 1.15, 1),
+  );
+  addNamedMesh(
+    group,
+    `${name} neck`,
+    new THREE.CylinderGeometry(
+      0.08 * scale,
+      0.11 * scale,
+      0.14 * scale,
+      9,
+    ),
+    material,
+    center.clone().add(new THREE.Vector3(0, 0.18 * scale, 0)),
+  );
+  addNamedMesh(
+    group,
+    `${name} cloth lid`,
+    new THREE.CylinderGeometry(0.095 * scale, 0.095 * scale, 0.025, 9),
+    CARGO_MATERIALS.crockCloth,
+    center.clone().add(new THREE.Vector3(0, 0.255 * scale, 0)),
+  );
+  addNamedMesh(
+    group,
+    `${name} lid tie`,
+    new THREE.TorusGeometry(0.09 * scale, 0.012, 5, 9),
+    CARGO_MATERIALS.rope,
+    center.clone().add(new THREE.Vector3(0, 0.235 * scale, 0)),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+}
+
+function addAmphora(group: THREE.Group, center: THREE.Vector3, scale: number): void {
+  const name = 'Wine amphora';
+  addNamedMesh(
+    group,
+    name,
+    new THREE.SphereGeometry(0.2 * scale, 9, 7),
+    CARGO_MATERIALS.darkTerracotta,
+    center,
+    undefined,
+    new THREE.Vector3(0.86, 1.25, 0.86),
+  );
+  addNamedMesh(
+    group,
+    `${name} neck`,
+    new THREE.CylinderGeometry(
+      0.075 * scale,
+      0.11 * scale,
+      0.24 * scale,
+      9,
+    ),
+    CARGO_MATERIALS.darkTerracotta,
+    center.clone().add(new THREE.Vector3(0, 0.29 * scale, 0)),
+  );
+  addNamedMesh(
+    group,
+    `${name} lip`,
+    new THREE.TorusGeometry(0.078 * scale, 0.018, 5, 10),
+    CARGO_MATERIALS.terracotta,
+    center.clone().add(new THREE.Vector3(0, 0.42 * scale, 0)),
+    new THREE.Euler(Math.PI * 0.5, 0, 0),
+  );
+  for (const xOffset of [-0.14, 0.14]) {
+    addNamedMesh(
+      group,
+      `${name} handle`,
+      new THREE.TorusGeometry(0.075 * scale, 0.018, 5, 9),
+      CARGO_MATERIALS.darkTerracotta,
+      center.clone().add(new THREE.Vector3(xOffset * scale, 0.24 * scale, 0)),
+    );
+  }
+}
+
+function addNamedMesh(
+  group: THREE.Group,
+  name: string,
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  position: THREE.Vector3,
+  rotation?: THREE.Euler,
+  scale?: THREE.Vector3,
+): THREE.Mesh {
+  const mesh = addMesh(
+    group,
+    geometry,
+    material,
+    position,
+    rotation,
+    scale,
+  );
+  mesh.name = name;
+  return mesh;
 }
 
 export function deliveryCartMeshName(

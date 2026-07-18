@@ -133,17 +133,18 @@ export function computeDayNightState(
   };
 }
 
-/** Warm window light after work winds down; fades out before deep night. */
+/** Darkness envelope for household-controlled lamps; sleep schedules turn individual homes off. */
 function computeEveningWindowGlow(hour: number, night: number): number {
-  const evening = blendPhases(hour, [
-    { at: 17, value: 0 },
-    { at: 18, value: 0.55 },
-    { at: 19, value: 1 },
-    { at: 20, value: 0.9 },
-    { at: 21, value: 0.45 },
-    { at: 22, value: 0 },
+  const darkness = blendPhases(hour, [
+    { at: 0, value: 1 },
+    { at: CALENDAR_WORK_START_HOUR - 1.25, value: 1 },
+    { at: CALENDAR_WORK_START_HOUR + 0.25, value: 0 },
+    { at: CALENDAR_WORK_END_HOUR - 2.5, value: 0 },
+    { at: CALENDAR_WORK_END_HOUR - 1.5, value: 0.55 },
+    { at: CALENDAR_WORK_END_HOUR - 0.5, value: 1 },
+    { at: CALENDAR_HOURS_PER_DAY, value: 1 },
   ]);
-  return clamp01(evening * (1 - night * 0.95));
+  return clamp01(darkness * (0.82 + night * 0.18));
 }
 
 function blendPhases(hour: number, phases: { at: number; value: number }[]): number {
