@@ -10,9 +10,9 @@ import { getBuildingExtent } from './buildingExtents.ts';
 import { createBuildingShadowProxy } from './buildingShadowProxy.ts';
 import { createBuildingMesh } from './BuildingMeshes.ts';
 import {
-  constructionVisualSignature,
   createConstructionSiteMesh,
 } from './ConstructionSiteMesh.ts';
+import { buildingMeshSignature } from './buildingMarkerSignature.ts';
 import {
   createBuildingPreviewMesh,
   disposeBuildingPreviewMesh,
@@ -37,6 +37,7 @@ export class BuildingMarkers {
   private previewKind: BuildingKind | null = null;
   private previewValid: boolean | null = null;
   private lastPreviewSignature = '';
+  private pendingPlacement: THREE.Group | null = null;
 
   constructor(options: BuildingMarkersOptions) {
     this.terrain = options.terrain;
@@ -91,6 +92,23 @@ export class BuildingMarkers {
     this.lastPreviewSignature = '';
   }
 
+  showPendingPlacement(kind: BuildingKind, x: number, z: number): void {
+    this.clearPendingPlacement();
+    const marker = createConstructionSiteMesh(kind, 0, 0, 0);
+    marker.name = 'Pending building placement';
+    marker.rotation.y = buildingPlacementYaw(kind, x, z, this.getRoadNetwork?.() ?? null);
+    marker.position.set(x, this.terrain.getHeightAt(x, z), z);
+    this.pendingPlacement = marker;
+    this.group.add(marker);
+  }
+
+  clearPendingPlacement(): void {
+    if (!this.pendingPlacement) return;
+    this.pendingPlacement.removeFromParent();
+    disposeObject3D(this.pendingPlacement);
+    this.pendingPlacement = null;
+  }
+
   setPlacementPreview(
     kind: BuildingKind,
     x: number,
@@ -143,6 +161,7 @@ export class BuildingMarkers {
   }
 
   dispose(): void {
+    this.clearPendingPlacement();
     if (this.previewMesh) {
       disposeObject3D(this.previewMesh);
       this.previewMesh = null;
@@ -174,9 +193,7 @@ export class BuildingMarkers {
       building.constructionRequiredStone,
     );
     const operational = building.constructionComplete !== false;
-    const visualSignature = operational
-      ? `complete:${building.kind}`
-      : constructionVisualSignature(building.constructionProgress, timberRatio, stoneRatio);
+    const visualSignature = buildingMeshSignature(building);
     if (marker && marker.userData.visualSignature !== visualSignature) {
       this.group.remove(marker);
       disposeObject3D(marker);

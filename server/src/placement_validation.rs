@@ -1,11 +1,11 @@
-use spacetimedb::ReducerContext;
 use spacetimedb::Identity;
+use spacetimedb::ReducerContext;
 
-use crate::burgage::{zone_corners_polygon, zone_overlaps_footprint, Point2, ZoneCorners};
 use crate::building_defs::building_def;
+use crate::burgage::{zone_corners_polygon, zone_overlaps_footprint, Point2, ZoneCorners};
 use crate::db::*;
 use crate::hydrology::sample_hydrology_score;
-use crate::roads::load_owner_road_network;
+use crate::roads::{load_owner_road_network, RoadNetwork};
 
 const LARGE_QUARRY_PIT_RADIUS: f64 = 58.0;
 const SMALL_QUARRY_PIT_RADIUS: f64 = 30.0;
@@ -67,9 +67,8 @@ fn any_open_water_near(
     let ring_count = (max_distance / SHORE_RADIAL_SAMPLE_STEP).ceil() as usize;
     for ring in 1..=ring_count {
         let radius = (ring as f64 * SHORE_RADIAL_SAMPLE_STEP).min(max_distance);
-        let sample_count = ((std::f64::consts::TAU * radius / SHORE_ARC_SAMPLE_SPACING).ceil()
-            as usize)
-            .max(12);
+        let sample_count =
+            ((std::f64::consts::TAU * radius / SHORE_ARC_SAMPLE_SPACING).ceil() as usize).max(12);
         for index in 0..sample_count {
             let angle = index as f64 / sample_count as f64 * std::f64::consts::TAU;
             if is_water_at(x + angle.cos() * radius, z + angle.sin() * radius) {
@@ -128,12 +127,7 @@ fn zone_edge(corners: &ZoneCorners, edge: u8) -> (Point2, Point2) {
     }
 }
 
-pub fn building_overlaps_residence_zone(
-    ctx: &ReducerContext,
-    kind: &str,
-    x: f64,
-    z: f64,
-) -> bool {
+pub fn building_overlaps_residence_zone(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
     let Some(pick_radius) = building_pick_radius(kind) else {
         return false;
     };
@@ -194,16 +188,7 @@ pub fn is_on_quarry_pit(ctx: &ReducerContext, x: f64, z: f64) -> bool {
     false
 }
 
-pub fn building_overlaps_road_surface(
-    ctx: &ReducerContext,
-    owner: Identity,
-    kind: &str,
-    x: f64,
-    z: f64,
-) -> bool {
-    let Some(network) = load_owner_road_network(ctx, owner) else {
-        return false;
-    };
+pub fn building_overlaps_road_surface(network: &RoadNetwork, kind: &str, x: f64, z: f64) -> bool {
     let pad = building_pad_params(kind);
     let yaw = building_placement_yaw(x, z);
     let cos = yaw.cos();
@@ -389,7 +374,19 @@ mod tests {
 
     #[test]
     fn building_site_clearance_uses_the_local_pad_not_the_work_radius() {
-        assert!(building_site_contains_point("watermill", 10.0, -6.0, 10.0, -6.0));
-        assert!(!building_site_contains_point("watermill", 10.0, -6.0, 40.0, -6.0));
+        assert!(building_site_contains_point(
+            "watermill",
+            10.0,
+            -6.0,
+            10.0,
+            -6.0
+        ));
+        assert!(!building_site_contains_point(
+            "watermill",
+            10.0,
+            -6.0,
+            40.0,
+            -6.0
+        ));
     }
 }

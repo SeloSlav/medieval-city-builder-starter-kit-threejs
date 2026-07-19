@@ -9,23 +9,23 @@ export class ForestVisualSync {
   }
 
   syncAll(trees: Map<string, TreeEntityState>): void {
+    this.syncAuthoritativeTreeLayouts(trees);
+    this.forestManager.applyTreePhases(trees.values());
+  }
+
+  syncAuthoritativeTreeLayouts(trees: Map<string, TreeEntityState>): void {
     this.forestManager.syncAuthoritativeTreeLayouts(
       [...trees.values()].map((entity) => entity.layoutIndex),
     );
-    for (const entity of trees.values()) {
-      this.syncTree(entity);
-    }
   }
 
   syncTrees(trees: Map<string, TreeEntityState>, treeIds: string[]): void {
+    const changedTrees: TreeEntityState[] = [];
     for (const treeId of treeIds) {
       const entity = trees.get(treeId);
-      if (entity) this.syncTree(entity);
+      if (entity) changedTrees.push(entity);
     }
-  }
-
-  private syncTree(entity: TreeEntityState): void {
-    this.forestManager.applyTreePhase(entity.layoutIndex, entity.phase, entity.growthProgress);
+    this.forestManager.applyTreePhases(changedTrees);
   }
 }
 

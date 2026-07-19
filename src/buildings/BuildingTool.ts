@@ -232,10 +232,15 @@ export class BuildingTool {
 
   private async placeAt(kind: BuildingKind, x: number, z: number): Promise<void> {
     const beforeIds = new Set(this.options.getState().buildings.keys());
+    const pendingSource = { kind, x, z };
+    this.options.markers.showPendingPlacement(kind, x, z);
+    this.options.onPreviewChange?.(pendingSource);
     try {
       await this.options.onPlaceBuilding(kind, x, z);
       this.placementPending = false;
       const buildingId = await waitForPlacedBuilding(this.options.getState, beforeIds, kind, x, z);
+      this.options.markers.clearPendingPlacement();
+      this.options.onPreviewChange?.(null);
       if (buildingId) {
         this.undoStack.push({ buildingId, kind, x, z });
         this.redoStack.length = 0;
@@ -245,6 +250,8 @@ export class BuildingTool {
       console.error('Building placement failed:', error);
       this.options.onPlacementFailed?.(message);
       this.placementPending = false;
+      this.options.markers.clearPendingPlacement();
+      this.options.onPreviewChange?.(null);
       if (!this.options.isBlocked()) this.setMode(kind);
       return;
     }

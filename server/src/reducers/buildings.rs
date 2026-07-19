@@ -1,22 +1,21 @@
 use spacetimedb::{reducer, ReducerContext, Table};
 
+use crate::balance_generated::{CARPENTER_TIMBER_COST_MULTIPLIER, TOWN_HALL_POPULATION_REQUIRED};
 use crate::building_defs::{building_def, building_def_or_err};
 use crate::burgage::{zone_overlaps_footprint, Point2};
-use crate::balance_generated::{CARPENTER_TIMBER_COST_MULTIPLIER, TOWN_HALL_POPULATION_REQUIRED};
 use crate::db::*;
 use crate::economy::{
-    assign_building_labor as set_building_labor, building_cost, building_salvage_refund,
-    chapel_coffer_gold, collect_chapel_coffer as sweep_chapel_coffer, credit_treasury_firewood,
+    assign_building_labor as set_building_labor, available_building_labor, building_cost,
+    building_salvage_refund, chapel_coffer_gold, collect_chapel_coffer as sweep_chapel_coffer,
+    construction_treasury_reservation, credit_treasury_commodity, credit_treasury_firewood,
     credit_treasury_food, credit_treasury_gold, credit_treasury_stone, credit_treasury_timber,
-    credit_treasury_water, construction_treasury_reservation, total_stone, total_timber,
-    available_building_labor, credit_treasury_commodity, initial_construction_labor,
-    CommodityKind,
+    credit_treasury_water, initial_construction_labor, total_stone, total_timber, CommodityKind,
 };
-use crate::lifecycle::ensure_player_resources;
 use crate::hydrology::{sample_hydrology_score, well_capacity_from_hydrology};
+use crate::lifecycle::ensure_player_resources;
 use crate::placement_validation::{
-    building_overlaps_residence_zone, building_overlaps_road_surface,
-    building_site_contains_point, is_near_open_water, is_on_quarry_pit, is_open_water,
+    building_overlaps_residence_zone, building_overlaps_road_surface, building_site_contains_point,
+    is_near_open_water, is_on_quarry_pit, is_open_water,
 };
 use crate::roads::load_owner_road_network;
 use crate::simulation::drain_trips_for_building;
@@ -64,26 +63,54 @@ fn is_too_close_to_buildings(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -
 }
 
 fn building_overlaps_farm_field(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
-    let Some(def) = building_def(kind) else { return false; };
+    let Some(def) = building_def(kind) else {
+        return false;
+    };
     ctx.db.farm_field().iter().any(|field| {
         let polygon = [
-            Point2 { x: field.corner_ax, z: field.corner_az },
-            Point2 { x: field.corner_bx, z: field.corner_bz },
-            Point2 { x: field.corner_cx, z: field.corner_cz },
-            Point2 { x: field.corner_dx, z: field.corner_dz },
+            Point2 {
+                x: field.corner_ax,
+                z: field.corner_az,
+            },
+            Point2 {
+                x: field.corner_bx,
+                z: field.corner_bz,
+            },
+            Point2 {
+                x: field.corner_cx,
+                z: field.corner_cz,
+            },
+            Point2 {
+                x: field.corner_dx,
+                z: field.corner_dz,
+            },
         ];
         zone_overlaps_footprint(&polygon, x, z, def.pick_radius)
     })
 }
 
 fn building_overlaps_pasture(ctx: &ReducerContext, kind: &str, x: f64, z: f64) -> bool {
-    let Some(def) = building_def(kind) else { return false; };
+    let Some(def) = building_def(kind) else {
+        return false;
+    };
     ctx.db.pasture().iter().any(|pasture| {
         let polygon = [
-            Point2 { x: pasture.corner_ax, z: pasture.corner_az },
-            Point2 { x: pasture.corner_bx, z: pasture.corner_bz },
-            Point2 { x: pasture.corner_cx, z: pasture.corner_cz },
-            Point2 { x: pasture.corner_dx, z: pasture.corner_dz },
+            Point2 {
+                x: pasture.corner_ax,
+                z: pasture.corner_az,
+            },
+            Point2 {
+                x: pasture.corner_bx,
+                z: pasture.corner_bz,
+            },
+            Point2 {
+                x: pasture.corner_cx,
+                z: pasture.corner_cz,
+            },
+            Point2 {
+                x: pasture.corner_dx,
+                z: pasture.corner_dz,
+            },
         ];
         zone_overlaps_footprint(&polygon, x, z, def.pick_radius)
     })
@@ -150,7 +177,9 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         return Err("Cannot build on a quarry pit.".to_string());
     }
 
-    if is_open_water(x, z) {
+    // Quarry generation now guarantees a dry padded pit. Do not let the coarse,
+    // static server hydrology grid falsely reject a visually dry stonecutter site.
+    if kind != "stone_quarry" && is_open_water(x, z) {
         return Err(if kind == "well" {
             "Cannot build a well on open water.".to_string()
         } else {
@@ -161,6 +190,10 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     if def.requires_water_shore && !is_near_open_water(x, z, 24.0) {
         return Err("This building must be placed on a river or lake shore.".to_string());
     }
+
+    // Parsing and indexing the serialized road graph is one of the more expensive
+    // placement checks. Reuse one snapshot for overlap, landmark, and carpenter checks.
+    let road_network = load_owner_road_network(ctx, owner);
 
     if kind == "monastery" {
         let staffed_chapel = ctx.db.building().owner().filter(&owner).any(|building| {
@@ -179,7 +212,9 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
             .map(|residence| residence.population)
             .sum();
         if parish_population < 12 {
-            return Err("The parish needs at least 12 residents before founding a monastery.".to_string());
+            return Err(
+                "The parish needs at least 12 residents before founding a monastery.".to_string(),
+            );
         }
     }
 
@@ -219,14 +254,19 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
             .filter(&owner)
             .find(|building| building.kind == "marketplace" && building.construction_complete)
             .ok_or_else(|| "Build a marketplace before founding the Town Hall.".to_string())?;
-        let network = load_owner_road_network(ctx, owner)
+        let network = road_network
+            .as_ref()
             .ok_or_else(|| "The Town Hall requires a road network.".to_string())?;
-        if network.road_path_distance(x, z, chapel.x, chapel.z).is_none()
+        if network
+            .road_path_distance(x, z, chapel.x, chapel.z)
+            .is_none()
             || network
                 .road_path_distance(x, z, marketplace.x, marketplace.z)
                 .is_none()
         {
-            return Err("The Town Hall must be road-linked to both the chapel and marketplace.".to_string());
+            return Err(
+                "The Town Hall must be road-linked to both the chapel and marketplace.".to_string(),
+            );
         }
     }
 
@@ -240,12 +280,17 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
         return Err("Cannot build inside a fenced pasture.".to_string());
     }
 
-    if building_overlaps_road_surface(ctx, owner, &kind, x, z) {
+    if road_network
+        .as_ref()
+        .is_some_and(|network| building_overlaps_road_surface(network, &kind, x, z))
+    {
         return Err("Cannot build on a road.".to_string());
     }
 
     if overlaps_same_kind_functional_extent(ctx, &kind, x, z) {
-        return Err("Another building of the same type already covers this functional extent.".to_string());
+        return Err(
+            "Another building of the same type already covers this functional extent.".to_string(),
+        );
     }
 
     if def.requires_mature_trees && !has_mature_tree_in_radius(ctx, x, z, def.work_radius) {
@@ -269,12 +314,23 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     }
 
     let cost = building_cost(&kind)?;
-    let carpenter_discount = load_owner_road_network(ctx, owner).map(|network| {
-        ctx.db.building().owner().filter(&owner).any(|shop| shop.kind == "carpenter"
-            && shop.construction_complete && shop.assigned_labor > 0
-            && network.road_path_distance(x, z, shop.x, shop.z).is_some())
-    }).unwrap_or(false);
-    let timber_cost = cost.timber * if carpenter_discount { CARPENTER_TIMBER_COST_MULTIPLIER } else { 1.0 };
+    let carpenter_discount = road_network
+        .as_ref()
+        .map(|network| {
+            ctx.db.building().owner().filter(&owner).any(|shop| {
+                shop.kind == "carpenter"
+                    && shop.construction_complete
+                    && shop.assigned_labor > 0
+                    && network.road_path_distance(x, z, shop.x, shop.z).is_some()
+            })
+        })
+        .unwrap_or(false);
+    let timber_cost = cost.timber
+        * if carpenter_discount {
+            CARPENTER_TIMBER_COST_MULTIPLIER
+        } else {
+            1.0
+        };
     if total_timber(ctx, owner) + 1e-6 < timber_cost {
         return Err(format!(
             "Not enough timber (need {} timber).",
@@ -289,8 +345,7 @@ pub fn place_building(ctx: &ReducerContext, kind: String, x: f64, z: f64) -> Res
     }
     let (treasury_timber, treasury_stone) =
         construction_treasury_reservation(ctx, owner, timber_cost, cost.stone);
-    let assigned_builders =
-        initial_construction_labor(available_building_labor(ctx, owner));
+    let assigned_builders = initial_construction_labor(available_building_labor(ctx, owner));
 
     let config = ctx
         .db
@@ -429,12 +484,24 @@ pub fn demolish_building(ctx: &ReducerContext, building_id: u64) -> Result<(), S
         return Err("You do not own this building.".to_string());
     }
     if building.kind == "threshing_barn"
-        && ctx.db.farm_field().farmstead_id().filter(&building_id).next().is_some()
+        && ctx
+            .db
+            .farm_field()
+            .farmstead_id()
+            .filter(&building_id)
+            .next()
+            .is_some()
     {
         return Err("Remove or reassign this farmstead's fields first.".to_string());
     }
     if matches!(building.kind.as_str(), "pastoral_farmstead" | "swineherd")
-        && ctx.db.pasture().farmstead_id().filter(&building_id).next().is_some()
+        && ctx
+            .db
+            .pasture()
+            .farmstead_id()
+            .filter(&building_id)
+            .next()
+            .is_some()
     {
         return Err("Remove this livestock building's pastures first.".to_string());
     }
@@ -453,23 +520,52 @@ pub fn demolish_building(ctx: &ReducerContext, building_id: u64) -> Result<(), S
                 .round(),
         }
     };
-    credit_treasury_timber(ctx, owner, refund.timber + building.timber + trip_cargo.timber);
+    credit_treasury_timber(
+        ctx,
+        owner,
+        refund.timber + building.timber + trip_cargo.timber,
+    );
     credit_treasury_stone(ctx, owner, refund.stone + building.stone + trip_cargo.stone);
     credit_treasury_firewood(ctx, owner, building.firewood + trip_cargo.firewood);
     credit_treasury_water(ctx, owner, building.water + trip_cargo.water);
     credit_treasury_food(ctx, owner, building.food + trip_cargo.food);
     credit_treasury_gold(ctx, owner, chapel_coffer_gold(&building));
-    credit_treasury_commodity(ctx, owner, CommodityKind::Grain, building.grain + trip_cargo.grain);
-    credit_treasury_commodity(ctx, owner, CommodityKind::Flour, building.flour + trip_cargo.flour);
-    credit_treasury_commodity(ctx, owner, CommodityKind::Ale, building.ale + trip_cargo.ale);
+    credit_treasury_commodity(
+        ctx,
+        owner,
+        CommodityKind::Grain,
+        building.grain + trip_cargo.grain,
+    );
+    credit_treasury_commodity(
+        ctx,
+        owner,
+        CommodityKind::Flour,
+        building.flour + trip_cargo.flour,
+    );
+    credit_treasury_commodity(
+        ctx,
+        owner,
+        CommodityKind::Ale,
+        building.ale + trip_cargo.ale,
+    );
     credit_treasury_commodity(
         ctx,
         owner,
         CommodityKind::PreservedFood,
         building.preserved_food + trip_cargo.preserved_food,
     );
-    credit_treasury_commodity(ctx, owner, CommodityKind::Honey, building.honey + trip_cargo.honey);
-    credit_treasury_commodity(ctx, owner, CommodityKind::Wine, building.wine + trip_cargo.wine);
+    credit_treasury_commodity(
+        ctx,
+        owner,
+        CommodityKind::Honey,
+        building.honey + trip_cargo.honey,
+    );
+    credit_treasury_commodity(
+        ctx,
+        owner,
+        CommodityKind::Wine,
+        building.wine + trip_cargo.wine,
+    );
 
     if ctx
         .db

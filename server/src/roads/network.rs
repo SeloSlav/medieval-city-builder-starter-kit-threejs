@@ -4,7 +4,7 @@ use serde::Deserialize;
 use spacetimedb::Identity;
 use spacetimedb::ReducerContext;
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
 use crate::constants::BUILDING_ROAD_ACCESS_DISTANCE;
 use crate::db::*;
@@ -45,7 +45,13 @@ pub struct RoadNetwork {
     component_by_node: HashMap<String, u32>,
     edge_lookup: HashMap<String, HashMap<String, (usize, bool)>>,
     endpoint_half_width: HashMap<String, f64>,
+    surface_edge_cells: HashMap<(i32, i32), Vec<usize>>,
+    surface_node_cells: HashMap<(i32, i32), Vec<String>>,
+    max_surface_half_width: f64,
 }
+
+const ROAD_SURFACE_CELL_SIZE: f64 = 24.0;
+const ROAD_SURFACE_MARGIN: f64 = 0.15;
 
 #[derive(Debug, Clone)]
 pub struct RoadPathRoute {
@@ -116,6 +122,9 @@ impl RoadNetwork {
         }
         let component_by_node = build_component_ids(&nodes, &adjacency);
 
+        let (surface_edge_cells, surface_node_cells, max_surface_half_width) =
+            build_surface_spatial_index(&nodes, &snapshot.edges, &endpoint_half_width);
+
         Some(Self {
             nodes,
             edges: snapshot.edges,
@@ -123,6 +132,9 @@ impl RoadNetwork {
             component_by_node,
             edge_lookup,
             endpoint_half_width,
+            surface_edge_cells,
+            surface_node_cells,
+            max_surface_half_width,
         })
     }
 
@@ -138,19 +150,46 @@ impl RoadNetwork {
     }
 
     pub fn is_on_road_surface(&self, x: f64, z: f64) -> bool {
-        const ROAD_SURFACE_MARGIN: f64 = 0.15;
-
-        for edge in &self.edges {
-            let distance = distance_to_polyline(x, z, &edge.sampled_path);
-            if distance <= edge.width * 0.5 + ROAD_SURFACE_MARGIN {
-                return true;
+        let search_radius = self.max_surface_half_width + ROAD_SURFACE_MARGIN;
+        let mut seen_edges = HashSet::new();
+        for key in surface_cell_keys(x, z, search_radius) {
+            let Some(indices) = self.surface_edge_cells.get(&key) else {
+                continue;
+            };
+            for &index in indices {
+                if !seen_edges.insert(index) {
+                    continue;
+                }
+                let edge = &self.edges[index];
+                let distance = distance_to_polyline(x, z, &edge.sampled_path);
+                if distance <= edge.width * 0.5 + ROAD_SURFACE_MARGIN {
+                    return true;
+                }
             }
         }
 
-        for (node_id, &(nx, nz)) in &self.nodes {
-            let max_half_width = self.endpoint_half_width.get(node_id).copied().unwrap_or(0.0);
-            if max_half_width > 0.0 && distance(x, z, nx, nz) <= max_half_width + ROAD_SURFACE_MARGIN {
-                return true;
+        let mut seen_nodes = HashSet::new();
+        for key in surface_cell_keys(x, z, search_radius) {
+            let Some(node_ids) = self.surface_node_cells.get(&key) else {
+                continue;
+            };
+            for node_id in node_ids {
+                if !seen_nodes.insert(node_id) {
+                    continue;
+                }
+                let Some(&(nx, nz)) = self.nodes.get(node_id) else {
+                    continue;
+                };
+                let max_half_width = self
+                    .endpoint_half_width
+                    .get(node_id)
+                    .copied()
+                    .unwrap_or(0.0);
+                if max_half_width > 0.0
+                    && distance(x, z, nx, nz) <= max_half_width + ROAD_SURFACE_MARGIN
+                {
+                    return true;
+                }
             }
         }
 
@@ -183,13 +222,7 @@ impl RoadNetwork {
         })
     }
 
-    fn shortest_path_solve(
-        &self,
-        ax: f64,
-        az: f64,
-        bx: f64,
-        bz: f64,
-    ) -> Option<ShortestPathSolve> {
+    fn shortest_path_solve(&self, ax: f64, az: f64, bx: f64, bz: f64) -> Option<ShortestPathSolve> {
         let nodes_a = self.snap_nodes(ax, az)?;
         let nodes_b = self.snap_nodes(bx, bz)?;
         if !self.share_component(&nodes_a, &nodes_b) {
@@ -301,14 +334,7 @@ impl RoadNetwork {
         Some(vec![[ax, az], [bx, bz]])
     }
 
-    fn route_distance(
-        &self,
-        ax: f64,
-        az: f64,
-        bx: f64,
-        bz: f64,
-        node_path: &[String],
-    ) -> f64 {
+    fn route_distance(&self, ax: f64, az: f64, bx: f64, bz: f64, node_path: &[String]) -> f64 {
         let mut previous = (ax, az);
         let mut total = 0.0;
         for window in node_path.windows(2) {
@@ -349,12 +375,7 @@ impl RoadNetwork {
         }
         let mut total = 0.0;
         for window in path.windows(2) {
-            total += distance(
-                window[0][0],
-                window[0][1],
-                window[1][0],
-                window[1][1],
-            );
+            total += distance(window[0][0], window[0][1], window[1][0], window[1][1]);
         }
         total
     }
@@ -370,12 +391,7 @@ impl RoadNetwork {
 
         let mut remaining = meters;
         for window in path.windows(2) {
-            let seg_len = distance(
-                window[0][0],
-                window[0][1],
-                window[1][0],
-                window[1][1],
-            );
+            let seg_len = distance(window[0][0], window[0][1], window[1][0], window[1][1]);
             if remaining <= seg_len + 1e-9 {
                 let t = if seg_len <= 1e-9 {
                     0.0
@@ -449,6 +465,81 @@ impl RoadNetwork {
     }
 }
 
+fn build_surface_spatial_index(
+    nodes: &HashMap<String, (f64, f64)>,
+    edges: &[RoadEdgeRow],
+    endpoint_half_width: &HashMap<String, f64>,
+) -> (
+    HashMap<(i32, i32), Vec<usize>>,
+    HashMap<(i32, i32), Vec<String>>,
+    f64,
+) {
+    let mut edge_cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+    let mut node_cells: HashMap<(i32, i32), Vec<String>> = HashMap::new();
+    let mut max_half_width: f64 = 0.0;
+
+    for (index, edge) in edges.iter().enumerate() {
+        max_half_width = max_half_width.max(edge.width * 0.5);
+        let Some((min_x, max_x, min_z, max_z)) = polyline_bounds(&edge.sampled_path) else {
+            continue;
+        };
+        for key in surface_cell_keys_for_bounds(min_x, max_x, min_z, max_z) {
+            edge_cells.entry(key).or_default().push(index);
+        }
+    }
+
+    for (node_id, &(x, z)) in nodes {
+        max_half_width =
+            max_half_width.max(endpoint_half_width.get(node_id).copied().unwrap_or(0.0));
+        node_cells
+            .entry(surface_cell(x, z))
+            .or_default()
+            .push(node_id.clone());
+    }
+
+    (edge_cells, node_cells, max_half_width)
+}
+
+fn polyline_bounds(path: &[[f64; 3]]) -> Option<(f64, f64, f64, f64)> {
+    let first = path.first()?;
+    let mut min_x = first[0];
+    let mut max_x = first[0];
+    let mut min_z = first[2];
+    let mut max_z = first[2];
+    for point in &path[1..] {
+        min_x = min_x.min(point[0]);
+        max_x = max_x.max(point[0]);
+        min_z = min_z.min(point[2]);
+        max_z = max_z.max(point[2]);
+    }
+    Some((min_x, max_x, min_z, max_z))
+}
+
+fn surface_cell_keys(x: f64, z: f64, radius: f64) -> Vec<(i32, i32)> {
+    surface_cell_keys_for_bounds(x - radius, x + radius, z - radius, z + radius)
+}
+
+fn surface_cell_keys_for_bounds(min_x: f64, max_x: f64, min_z: f64, max_z: f64) -> Vec<(i32, i32)> {
+    let min_cell_x = (min_x / ROAD_SURFACE_CELL_SIZE).floor() as i32;
+    let max_cell_x = (max_x / ROAD_SURFACE_CELL_SIZE).floor() as i32;
+    let min_cell_z = (min_z / ROAD_SURFACE_CELL_SIZE).floor() as i32;
+    let max_cell_z = (max_z / ROAD_SURFACE_CELL_SIZE).floor() as i32;
+    let mut keys = Vec::new();
+    for cell_x in min_cell_x..=max_cell_x {
+        for cell_z in min_cell_z..=max_cell_z {
+            keys.push((cell_x, cell_z));
+        }
+    }
+    keys
+}
+
+fn surface_cell(x: f64, z: f64) -> (i32, i32) {
+    (
+        (x / ROAD_SURFACE_CELL_SIZE).floor() as i32,
+        (z / ROAD_SURFACE_CELL_SIZE).floor() as i32,
+    )
+}
+
 fn build_component_ids(
     nodes: &HashMap<String, (f64, f64)>,
     adjacency: &HashMap<String, Vec<String>>,
@@ -515,14 +606,7 @@ fn distance_to_polyline(x: f64, z: f64, path: &[[f64; 3]]) -> f64 {
     best
 }
 
-fn distance_to_segment(
-    px: f64,
-    pz: f64,
-    ax: f64,
-    az: f64,
-    bx: f64,
-    bz: f64,
-) -> f64 {
+fn distance_to_segment(px: f64, pz: f64, ax: f64, az: f64, bx: f64, bz: f64) -> f64 {
     let abx = bx - ax;
     let abz = bz - az;
     let length_sq = abx * abx + abz * abz;
@@ -542,12 +626,7 @@ fn polyline_length(path: &[[f64; 3]]) -> f64 {
     }
     let mut total = 0.0;
     for window in path.windows(2) {
-        total += distance(
-            window[0][0],
-            window[0][2],
-            window[1][0],
-            window[1][2],
-        );
+        total += distance(window[0][0], window[0][2], window[1][0], window[1][2]);
     }
     total
 }
@@ -607,8 +686,14 @@ mod tests {
         .expect("road network should parse");
 
         assert_eq!(network.weighted_graph.get("b").map(Vec::len), Some(2));
-        assert_eq!(network.component_by_node.get("a"), network.component_by_node.get("c"));
-        assert_ne!(network.component_by_node.get("a"), network.component_by_node.get("d"));
+        assert_eq!(
+            network.component_by_node.get("a"),
+            network.component_by_node.get("c")
+        );
+        assert_ne!(
+            network.component_by_node.get("a"),
+            network.component_by_node.get("d")
+        );
         assert!(network.road_connected(0.0, 0.0, 20.0, 0.0));
         assert!(!network.road_connected(0.0, 0.0, 100.0, 0.0));
         assert!((network.road_path_distance(0.0, 0.0, 20.0, 0.0).unwrap() - 20.0).abs() < 1e-9);

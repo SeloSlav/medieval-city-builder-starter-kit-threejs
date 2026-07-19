@@ -56,6 +56,17 @@ const PAD_PARAMS: Record<BuildingKind, BuildingPadParams> = {
   swineherd: { radiusX: 6.2, radiusZ: 5.2, innerFade: 0.88, outerFade: 1.28 },
 };
 
+const MAX_BUILDING_SITE_BASE_RADIUS = Math.max(
+  ...Object.values(PAD_PARAMS).map((params) =>
+    Math.hypot(params.radiusX, params.radiusZ) * params.outerFade * 1.04
+  ),
+);
+const MAX_BUILDING_SITE_MARGIN_SCALE = Math.max(
+  ...Object.values(PAD_PARAMS).map((params) =>
+    Math.hypot(params.radiusX, params.radiusZ) / Math.min(params.radiusX, params.radiusZ)
+  ),
+);
+
 const FOOTPRINT_SAMPLE_FRACTIONS = [0, 0.55, 0.82, 1] as const;
 /** Matches placement preview silhouette scale in BuildingPlacementPreview. */
 const FOOTPRINT_PREVIEW_SCALE = 0.92;
@@ -123,6 +134,12 @@ export class BuildingTerrainLayout {
 
 export function getBuildingPadParams(kind: BuildingKind): BuildingPadParams {
   return PAD_PARAMS[kind];
+}
+
+/** Conservative center-query radius for any building pad with obstacle clearance. */
+export function getBuildingSiteClearanceSearchRadius(clearanceRadius = 0): number {
+  return MAX_BUILDING_SITE_BASE_RADIUS
+    + Math.max(0, clearanceRadius) * MAX_BUILDING_SITE_MARGIN_SCALE;
 }
 
 /** Tests a point or circular obstacle against the visible construction pad. */

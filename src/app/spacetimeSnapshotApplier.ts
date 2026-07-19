@@ -1,4 +1,5 @@
 import type { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
+import { buildingMarkerCollectionSignature } from '../buildings/buildingMarkerSignature.ts';
 import type { BurgageFencing } from '../residences/BurgageFencing.ts';
 import type { ForestVisualSync } from '../resources/ForestVisualSync.ts';
 import type { GameState } from '../resources/types.ts';
@@ -26,6 +27,7 @@ export type SpacetimeSnapshotApplierDeps = {
 
 export class SpacetimeSnapshotApplier {
   private lastPlacedBuildingSignature = '';
+  private lastBuildingMarkerSignature = '';
   private lastForestClearanceSignature = '';
   private readonly previousTreePhases = new Map<string, string>();
   private readonly previousTreeGrowth = new Map<string, number>();
@@ -41,7 +43,6 @@ export class SpacetimeSnapshotApplier {
     const farmFieldsChanged = !previous || state.farmFields !== previous.farmFields;
     const treesChanged = !previous || !mapEntriesShareValues(state.trees, previous.trees);
     if (treesChanged) {
-      const previousTreeCount = previous?.trees.size ?? 0;
       const changedTreeIds: string[] = [];
       for (const [treeId, entity] of state.trees) {
         const previousPhase = this.previousTreePhases.get(treeId);
@@ -63,10 +64,23 @@ export class SpacetimeSnapshotApplier {
         }
       }
 
-      if (deps.forestVisualSync && state.trees.size !== previousTreeCount) {
-        deps.forestVisualSync.syncAll(state.trees);
-      } else if (changedTreeIds.length > 0) {
-        deps.forestVisualSync?.syncTrees(state.trees, changedTreeIds);
+      if (!previous) {
+        deps.forestVisualSync?.syncAll(state.trees);
+      } else {
+        if (deps.forestVisualSync && state.trees.size !== previous.trees.size) {
+          deps.forestVisualSync.syncAuthoritativeTreeLayouts(state.trees);
+        }
+        if (changedTreeIds.length > 0) {
+          deps.forestVisualSync?.syncTrees(state.trees, changedTreeIds);
+        }
+      }
+    }
+
+    if (buildingsChanged) {
+      const markerSignature = buildingMarkerCollectionSignature(state.buildings);
+      if (markerSignature !== this.lastBuildingMarkerSignature) {
+        this.lastBuildingMarkerSignature = markerSignature;
+        deps.buildingMarkers?.syncBuildings(state.buildings.values());
       }
     }
 
@@ -75,12 +89,13 @@ export class SpacetimeSnapshotApplier {
       if (terrainSignature !== this.lastPlacedBuildingSignature) {
         this.lastPlacedBuildingSignature = terrainSignature;
         if (buildingsChanged) {
-          deps.buildingMarkers?.syncBuildings(state.buildings.values());
           deps.terrainMinimap?.syncBuildings(buildBuildingWorldMapMarkers(state.buildings.values()));
         }
         syncPlacedBuildingTerrain({
           sceneManager: deps.sceneManager,
           gameState: state,
+          // Terrain pads are rebuilt before this second marker sync so newly
+          // placed buildings and nearby residence changes use the final height.
           buildingMarkers: deps.buildingMarkers,
           forceMeshUpdate: true,
           onSignatureUpdate: (signature) => {
@@ -119,6 +134,7 @@ export class SpacetimeSnapshotApplier {
 
   reset(): void {
     this.lastPlacedBuildingSignature = '';
+    this.lastBuildingMarkerSignature = '';
     this.lastForestClearanceSignature = '';
     this.previousTreePhases.clear();
     this.previousTreeGrowth.clear();

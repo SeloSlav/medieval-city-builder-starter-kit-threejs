@@ -9,6 +9,7 @@ import { distancePointToPolygon2 } from '../utils/polygonGeometry.ts';
 import type { RockObstacle } from '../utils/pathGeometry.ts';
 import type { RiverField } from './RiverField.ts';
 import { buildRiverShoreCrossingGaps, isInRiverShoreCrossingGap } from './RiverShoreCrossingGaps.ts';
+import { PlacementClearanceSpatialIndex } from '../placement/PlacementClearanceSpatialIndex.ts';
 
 type RockShadowMaterials = {
   shadowCast: THREE.MeshStandardMaterial;
@@ -118,16 +119,29 @@ export function createRiverShoreStones(
     syncPlacementClearance(buildings, farmFieldPolygons) {
       const buildingList = [...buildings];
       const farmFields = [...farmFieldPolygons];
+      const clearanceIndex = new PlacementClearanceSpatialIndex(buildingList, [], farmFields);
       const nextRemoved = new Set<number>();
 
       for (let index = 0; index < instances.length; index++) {
         const placement = instances[index].placement;
         const clearRadius = placement.scale * 1.35 + 0.35;
-        const overlapsBuilding = buildingList.some((building) =>
-          pointWithinBuildingSiteClearance(placement.x, placement.z, building, clearRadius),
+        const overlapsBuilding = clearanceIndex.someBuildingNear(
+          placement.x,
+          placement.z,
+          clearRadius,
+          (building) =>
+            pointWithinBuildingSiteClearance(
+              placement.x,
+              placement.z,
+              building,
+              clearRadius,
+            ),
         );
-        const overlapsFarmField = farmFields.some((polygon) =>
-          distancePointToPolygon2(placement, polygon) <= clearRadius,
+        const overlapsFarmField = clearanceIndex.someFarmFieldNear(
+          placement.x,
+          placement.z,
+          clearRadius,
+          (polygon) => distancePointToPolygon2(placement, polygon) <= clearRadius,
         );
         if (overlapsBuilding || overlapsFarmField) nextRemoved.add(index);
       }

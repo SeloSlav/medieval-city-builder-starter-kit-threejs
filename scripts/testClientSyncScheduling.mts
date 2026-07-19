@@ -6,6 +6,7 @@ import { GameTableSync } from '../src/data/spacetimeTableSync/gameTableSync.ts';
 import { syncWorldConfig } from '../src/data/spacetimeTableSync/syncWorldConfig.ts';
 import { ForestManager } from '../src/props/ForestManager.ts';
 import { createStubForestInstances } from '../src/props/forestInstanceStub.ts';
+import { ForestVisualSync } from '../src/resources/ForestVisualSync.ts';
 import type { GameState } from '../src/resources/types.ts';
 import { RoadNetwork } from '../src/roads/RoadNetwork.ts';
 import { isOnRoadSurface } from '../src/roads/roadConnectivity.ts';
@@ -16,6 +17,7 @@ testPlacementClearanceKeepsRoadWorkCached();
 testRoadSurfaceSpatialIndexRespectsRoadWidths();
 testTerrainPreviewOnlyResamplesChangedPads();
 testSettlementSyncSkipsUnchangedDomains();
+testForestPhaseUpdatesCommitOncePerBatch();
 testTreeVisualSyncSkipsUnchangedSnapshots();
 testWorldGenerationReferenceStaysStableAcrossTicks();
 
@@ -281,7 +283,14 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
     phase: 'mature',
     growthProgress: 1,
   });
+  first.trees.set('tree-2', {
+    treeId: 'tree-2',
+    layoutIndex: 2,
+    phase: 'mature',
+    growthProgress: 1,
+  });
   let syncAllCalls = 0;
+  let syncLayoutCalls = 0;
   let syncTreeCalls = 0;
   let buildingSyncCalls = 0;
   let fenceSyncCalls = 0;
@@ -302,6 +311,9 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
     forestVisualSync: {
       syncAll: () => {
         syncAllCalls += 1;
+      },
+      syncAuthoritativeTreeLayouts: () => {
+        syncLayoutCalls += 1;
       },
       syncTrees: () => {
         syncTreeCalls += 1;
@@ -326,6 +338,7 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
   const applier = new SpacetimeSnapshotApplier();
   applier.apply(deps as never, first, null);
   assert.equal(syncAllCalls, 1);
+  assert.equal(syncLayoutCalls, 0);
   assert.equal(buildingSyncCalls, 0);
   assert.equal(fenceSyncCalls, 1);
   assert.equal(forestClearanceCalls, 1);
@@ -370,6 +383,16 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
     gold: 0,
     waterCapacity: 0,
     assignedLabor: 1,
+    constructionComplete: false,
+    constructionProgress: 0,
+    constructionRequiredTimber: 20,
+    constructionRequiredStone: 10,
+    constructionDeliveredTimber: 0,
+    constructionDeliveredStone: 0,
+    constructionReservedTimber: 20,
+    constructionReservedStone: 10,
+    constructionTreasuryTimber: 20,
+    constructionTreasuryStone: 10,
     storehouseAcceptsTimber: true,
     storehouseAcceptsStone: true,
     storehouseAcceptsFirewood: true,
@@ -393,6 +416,120 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
     1,
     'labor-only updates should not rebuild building geometry or terrain pads',
   );
+
+  const progressChanged = new Map(laborChanged);
+  progressChanged.set('building-1', {
+    ...progressChanged.get('building-1')!,
+    constructionProgress: 0.45,
+    constructionDeliveredTimber: 12,
+    constructionDeliveredStone: 5,
+  });
+  const constructionAdvanced = {
+    ...buildingAdded,
+    tick: 5,
+    buildings: progressChanged,
+  };
+  applier.apply(deps as never, constructionAdvanced, {
+    ...buildingAdded,
+    tick: 4,
+    buildings: laborChanged,
+  });
+  assert.equal(
+    buildingSyncCalls,
+    2,
+    'construction stage changes should refresh the construction-site mesh',
+  );
+
+  const completedBuildings = new Map(progressChanged);
+  completedBuildings.set('building-1', {
+    ...completedBuildings.get('building-1')!,
+    constructionComplete: true,
+    constructionProgress: 1,
+    constructionDeliveredTimber: 20,
+    constructionDeliveredStone: 10,
+    assignedLabor: 0,
+  });
+  const constructionCompleted = {
+    ...constructionAdvanced,
+    tick: 6,
+    buildings: completedBuildings,
+  };
+  applier.apply(deps as never, constructionCompleted, constructionAdvanced);
+  assert.equal(
+    buildingSyncCalls,
+    3,
+    'construction completion should replace the site with the operational building mesh',
+  );
+
+  const timberChanged = new Map(completedBuildings);
+  timberChanged.set('building-1', {
+    ...timberChanged.get('building-1')!,
+    timber: 8,
+  });
+  const timberStocked = { ...constructionCompleted, tick: 7, buildings: timberChanged };
+  applier.apply(deps as never, timberStocked, constructionCompleted);
+  assert.equal(
+    buildingSyncCalls,
+    4,
+    'lumber stock changes should refresh the mill stockpile without rebuilding terrain',
+  );
+
+  const clearedTrees = new Map(timberStocked.trees);
+  clearedTrees.delete('tree-1');
+  const treeCleared = { ...timberStocked, tick: 8, trees: clearedTrees };
+  applier.apply(deps as never, treeCleared, timberStocked);
+  assert.equal(syncAllCalls, 1, 'tree deletion should not reapply every remaining tree');
+  assert.equal(syncLayoutCalls, 1, 'tree deletion should only resync authoritative layouts');
+  assert.equal(syncTreeCalls, 1);
+}
+
+function testForestPhaseUpdatesCommitOncePerBatch(): void {
+  const placements = Array.from({ length: 64 }, (_, index) => ({
+    x: index,
+    z: 0,
+    form: 'narrow' as const,
+    species: 'scotsPine',
+    scale: 1,
+  }));
+  const forestInstances = createStubForestInstances(placements);
+  let commits = 0;
+  const forestManager = new ForestManager(
+    new THREE.Group(),
+    forestInstances,
+    { group: new THREE.Group(), instances: [] },
+    null,
+    [],
+    {
+      getHeightAt: () => 0,
+    } as never,
+    () => {},
+    {
+      hideTree: () => {},
+      showTree: () => {},
+      setShadows: () => {},
+      commit: () => {
+        commits += 1;
+      },
+    } as never,
+  );
+  const visualSync = new ForestVisualSync(forestManager);
+  const trees = new Map(
+    placements.map((_, layoutIndex) => [
+      `tree-${layoutIndex}`,
+      {
+        treeId: `tree-${layoutIndex}`,
+        layoutIndex,
+        phase: 'mature' as const,
+        growthProgress: 1,
+      },
+    ]),
+  );
+
+  visualSync.syncAll(trees);
+  assert.equal(commits, 1, 'full forest sync should commit instance buffers once');
+
+  visualSync.syncTrees(trees, [...trees.keys()]);
+  assert.equal(commits, 1, 'unchanged tree phases should not recommit instance buffers');
 }
 
 function testWorldGenerationReferenceStaysStableAcrossTicks(): void {

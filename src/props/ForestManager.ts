@@ -19,6 +19,7 @@ import {
 import { createTreeSaplingMesh, updateTreeSaplingInstance } from './TreeSaplings.ts';
 import type { TreePhase } from '../resources/types.ts';
 import type { SeedThreeForestController } from '../vegetation/seedthree/seedThreeForestTypes.ts';
+import { PlacementClearanceSpatialIndex } from '../placement/PlacementClearanceSpatialIndex.ts';
 
 const ROAD_CLEAR_MARGIN = 1.35;
 const BUILDING_CLEAR_MARGIN = 1.35;
@@ -54,6 +55,12 @@ type TreePlacement = {
 
 export type ForestTreeLayout = TreePlacement & {
   layoutIndex: number;
+};
+
+export type ForestTreePhaseUpdate = {
+  layoutIndex: number;
+  phase: TreePhase;
+  growthProgress: number;
 };
 
 export type MixedForestInstances = {
@@ -167,8 +174,36 @@ export class ForestManager {
   }
 
   applyTreePhase(layoutIndex: number, phase: TreePhase, growthProgress: number): void {
-    if (layoutIndex < 0 || layoutIndex >= this.placements.length) return;
-    this.missingTreeEntities.delete(layoutIndex);
+    if (this.applyTreePhaseWithoutCommit(layoutIndex, phase, growthProgress)) {
+      this.commitTreeInstanceUpdates();
+    }
+  }
+
+  applyTreePhases(updates: Iterable<ForestTreePhaseUpdate>): void {
+    let needsCommit = false;
+    for (const update of updates) {
+      needsCommit = this.applyTreePhaseWithoutCommit(
+        update.layoutIndex,
+        update.phase,
+        update.growthProgress,
+      ) || needsCommit;
+    }
+    if (needsCommit) {
+      this.commitTreeInstanceUpdates();
+    }
+  }
+
+  private applyTreePhaseWithoutCommit(
+    layoutIndex: number,
+    phase: TreePhase,
+    growthProgress: number,
+  ): boolean {
+    if (layoutIndex < 0 || layoutIndex >= this.placements.length) return false;
+    const wasMissing = this.missingTreeEntities.delete(layoutIndex);
+    const phaseChanged = this.treePhases.get(layoutIndex) !== phase;
+    const growthChanged = this.treeGrowthProgress.get(layoutIndex) !== growthProgress;
+    if (!wasMissing && !phaseChanged && !growthChanged) return false;
+
     this.treePhases.set(layoutIndex, phase);
     this.treeGrowthProgress.set(layoutIndex, growthProgress);
 
@@ -176,12 +211,10 @@ export class ForestManager {
       this.hideTree(layoutIndex);
       this.hideHarvestStump(layoutIndex);
       this.hideSapling(layoutIndex);
-      this.commitTreeInstanceUpdates();
-      return;
+    } else {
+      this.restoreTreePhaseVisual(layoutIndex, phase, growthProgress);
     }
-
-    this.restoreTreePhaseVisual(layoutIndex, phase, growthProgress);
-    this.commitTreeInstanceUpdates();
+    return true;
   }
 
   syncAuthoritativeTreeLayouts(activeLayoutIndices: Iterable<number>): void {
@@ -307,19 +340,40 @@ export class ForestManager {
     const buildings = clearance.buildings ? [...clearance.buildings] : [];
     const burgageParcelPolygons = clearance.burgageParcelPolygons ? [...clearance.burgageParcelPolygons] : [];
     const farmFieldPolygons = clearance.farmFieldPolygons ? [...clearance.farmFieldPolygons] : [];
+    const clearanceIndex = new PlacementClearanceSpatialIndex(
+      buildings,
+      burgageParcelPolygons,
+      farmFieldPolygons,
+    );
     const nextPlacementRemovedTrees = new Set<number>();
 
     for (let treeIndex = 0; treeIndex < this.placements.length; treeIndex++) {
       const placement = this.placements[treeIndex];
-      if (this.isTreeNearAnyBuilding(placement, buildings)) {
+      const treeClearance = treeCanopyRadius(placement) + BUILDING_CLEAR_MARGIN;
+      if (clearanceIndex.someBuildingNear(
+        placement.x,
+        placement.z,
+        treeClearance,
+        (building) => treeWithinBuildingPad(placement, building),
+      )) {
         nextPlacementRemovedTrees.add(treeIndex);
         continue;
       }
-      if (this.isTreeNearAnyBurgageParcel(placement, burgageParcelPolygons)) {
+      if (clearanceIndex.someBurgageParcelNear(
+        placement.x,
+        placement.z,
+        treeClearance,
+        (polygon) => treeWithinBurgageParcel(placement, polygon),
+      )) {
         nextPlacementRemovedTrees.add(treeIndex);
         continue;
       }
-      if (this.isTreeInsideAnyFarmField(placement, farmFieldPolygons)) {
+      if (clearanceIndex.someFarmFieldNear(
+        placement.x,
+        placement.z,
+        0,
+        (polygon) => distancePointToPolygon2(placement, polygon) <= 1e-6,
+      )) {
         nextPlacementRemovedTrees.add(treeIndex);
       }
     }
@@ -330,12 +384,8 @@ export class ForestManager {
       this.placementRemovedTrees,
     ));
 
-    this.syncPlacementUndergrowthClearance(
-      buildings,
-      burgageParcelPolygons,
-      farmFieldPolygons,
-    );
-    this.syncRockClearance(buildings, farmFieldPolygons);
+    this.syncPlacementUndergrowthClearance(clearanceIndex);
+    this.syncRockClearance(clearanceIndex);
   }
 
   dispose(): void {
@@ -349,24 +399,37 @@ export class ForestManager {
   }
 
   private syncPlacementUndergrowthClearance(
-    buildings: BuildingTerrainSource[],
-    burgageParcelPolygons: Point2[][],
-    farmFieldPolygons: Point2[][],
+    clearanceIndex: PlacementClearanceSpatialIndex,
   ): void {
     if (!this.undergrowth) return;
 
     const nextPlacementRemovedUndergrowth = new Set<number>();
     for (let index = 0; index < this.undergrowthPlacements.length; index++) {
       const placement = this.undergrowthPlacements[index];
-      if (this.isUndergrowthNearAnyBuilding(placement.x, placement.z, buildings)) {
+      if (clearanceIndex.someBuildingNear(
+        placement.x,
+        placement.z,
+        0,
+        (building) => pointWithinBuildingSiteClearance(placement.x, placement.z, building),
+      )) {
         nextPlacementRemovedUndergrowth.add(index);
         continue;
       }
-      if (this.isUndergrowthNearAnyBurgageParcel(placement.x, placement.z, burgageParcelPolygons)) {
+      if (clearanceIndex.someBurgageParcelNear(
+        placement.x,
+        placement.z,
+        UNDERGROWTH_CLEAR_MARGIN,
+        (polygon) => distancePointToPolygon2(placement, polygon) <= UNDERGROWTH_CLEAR_MARGIN,
+      )) {
         nextPlacementRemovedUndergrowth.add(index);
         continue;
       }
-      if (this.isUndergrowthNearAnyFarmField(placement.x, placement.z, farmFieldPolygons)) {
+      if (clearanceIndex.someFarmFieldNear(
+        placement.x,
+        placement.z,
+        UNDERGROWTH_CLEAR_MARGIN,
+        (polygon) => distancePointToPolygon2(placement, polygon) <= UNDERGROWTH_CLEAR_MARGIN,
+      )) {
         nextPlacementRemovedUndergrowth.add(index);
       }
     }
@@ -426,15 +489,31 @@ export class ForestManager {
   }
 
   private syncRockClearance(
-    buildings: BuildingTerrainSource[],
-    farmFieldPolygons: Point2[][],
+    clearanceIndex: PlacementClearanceSpatialIndex,
   ): void {
     const nextRemoved = new Set<number>();
     for (let index = 0; index < this.rockInstances.length; index++) {
       const placement = this.rockInstances[index].placement;
+      const clearRadius = placement.scale * 1.35 + 0.35;
       if (
-        this.isRockNearAnyBuilding(placement, buildings)
-        || this.isRockNearAnyFarmField(placement, farmFieldPolygons)
+        clearanceIndex.someBuildingNear(
+          placement.x,
+          placement.z,
+          clearRadius,
+          (building) =>
+            pointWithinBuildingSiteClearance(
+              placement.x,
+              placement.z,
+              building,
+              clearRadius,
+            ),
+        )
+        || clearanceIndex.someFarmFieldNear(
+          placement.x,
+          placement.z,
+          clearRadius,
+          (polygon) => distancePointToPolygon2(placement, polygon) <= clearRadius,
+        )
       ) {
         nextRemoved.add(index);
       }
@@ -466,67 +545,6 @@ export class ForestManager {
       if (path.length < 2) continue;
       const distance = distancePointToPolylineXZ(placement.x, placement.z, path);
       if (distance <= treeClearRadius(placement, edge.width)) return true;
-    }
-    return false;
-  }
-
-  private isTreeNearAnyBuilding(placement: TreePlacement, buildings: BuildingTerrainSource[]): boolean {
-    for (const building of buildings) {
-      if (treeWithinBuildingPad(placement, building)) return true;
-    }
-    return false;
-  }
-
-  private isTreeNearAnyBurgageParcel(placement: TreePlacement, parcelPolygons: Point2[][]): boolean {
-    for (const polygon of parcelPolygons) {
-      if (treeWithinBurgageParcel(placement, polygon)) return true;
-    }
-    return false;
-  }
-
-  private isTreeInsideAnyFarmField(placement: TreePlacement, fieldPolygons: Point2[][]): boolean {
-    for (const polygon of fieldPolygons) {
-      if (distancePointToPolygon2({ x: placement.x, z: placement.z }, polygon) <= 1e-6) return true;
-    }
-    return false;
-  }
-
-  private isUndergrowthNearAnyBuilding(x: number, z: number, buildings: BuildingTerrainSource[]): boolean {
-    for (const building of buildings) {
-      if (pointWithinBuildingSiteClearance(x, z, building)) return true;
-    }
-    return false;
-  }
-
-  private isUndergrowthNearAnyBurgageParcel(x: number, z: number, parcelPolygons: Point2[][]): boolean {
-    for (const polygon of parcelPolygons) {
-      if (distancePointToPolygon2({ x, z }, polygon) <= UNDERGROWTH_CLEAR_MARGIN) return true;
-    }
-    return false;
-  }
-
-  private isUndergrowthNearAnyFarmField(x: number, z: number, fieldPolygons: Point2[][]): boolean {
-    for (const polygon of fieldPolygons) {
-      if (distancePointToPolygon2({ x, z }, polygon) <= UNDERGROWTH_CLEAR_MARGIN) return true;
-    }
-    return false;
-  }
-
-  private isRockNearAnyFarmField(placement: RockObstacle, fieldPolygons: Point2[][]): boolean {
-    const clearRadius = placement.scale * 1.35 + 0.35;
-    for (const polygon of fieldPolygons) {
-      if (distancePointToPolygon2(placement, polygon) <= clearRadius) return true;
-    }
-    return false;
-  }
-
-  private isRockNearAnyBuilding(
-    placement: RockObstacle,
-    buildings: BuildingTerrainSource[],
-  ): boolean {
-    const clearRadius = placement.scale * 1.35 + 0.35;
-    for (const building of buildings) {
-      if (pointWithinBuildingSiteClearance(placement.x, placement.z, building, clearRadius)) return true;
     }
     return false;
   }

@@ -24,6 +24,7 @@ const tests = [
   'test:building-art',
   'test:camera-controller',
   'test:client-sync',
+  'test:placement-regressions',
   'test:deer-wildlife',
   'test:livestock',
   'test:agent-visuals',

@@ -37,6 +37,7 @@
     "test:building-art": "npx tsx scripts/testBuildingArtDirection.mts",
     "test:camera-controller": "npx tsx scripts/testCameraController.mts",
     "test:client-sync": "npx tsx scripts/testClientSyncScheduling.mts",
+    "test:placement-regressions": "node --experimental-strip-types scripts/testPlacementRegressions.mts",
     "test:deer-wildlife": "npx tsx scripts/testDeerWildlife.mts",
     "test:livestock": "npx tsx scripts/testLivestock.mts",
     "test:agent-visuals": "node --experimental-strip-types scripts/testAgentVisualAssets.mts",

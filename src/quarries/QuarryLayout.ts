@@ -24,7 +24,10 @@ export type QuarryLayoutOptions = {
 
 const MIN_LARGE_QUARRY_SPACING = 200;
 const MIN_SMALL_QUARRY_SPACING = 110;
-const RIVER_AVOIDANCE_MASK = 0.22;
+const RIVER_AVOIDANCE_MASK = 0.08;
+const RIVER_CLEARANCE = 10;
+const RIVER_FOOTPRINT_SAMPLE_STEP = 4;
+const PLAYABLE_EDGE_CLEARANCE = 8;
 const DRAIN_AVOIDANCE_RADIUS = 130;
 
 export class QuarryLayout {
@@ -109,40 +112,28 @@ function pickQuarrySite(
     const z = (rng() * 2 - 1) * (playableHalf - margin);
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + 48) continue;
     if (Math.hypot(x, z + 88) < DRAIN_AVOIDANCE_RADIUS) continue;
-    if (riverLayout && riverLayout.sampleRiverMask(x, z) > RIVER_AVOIDANCE_MASK) continue;
     if (!hasMinimumDistance(existing, x, z, minSpacing)) continue;
 
     const suitability = quarrySuitabilityAt(x, z, playableHalf);
     if (suitability < 0.34 || rng() > suitability * 0.94) continue;
 
     const rotation = hashF64(seed, attempt, kind === 'large' ? 1 : 2) * Math.PI;
-    if (kind === 'large') {
-      return {
-        x,
-        z,
-        rotation,
-        kind,
-        radiusX: lerp(48, 64, hashF64(seed, attempt, 3)),
-        radiusZ: lerp(36, 52, hashF64(seed, attempt, 4)),
-        pitDepth: lerp(10.8, 14.4, hashF64(seed, attempt, 5)),
-      };
-    }
-
-    return {
-      x,
-      z,
-      rotation,
-      kind,
-      radiusX: lerp(24, 32, hashF64(seed, attempt, 3)),
-      radiusZ: lerp(18, 26, hashF64(seed, attempt, 4)),
-      pitDepth: lerp(5.4, 7.2, hashF64(seed, attempt, 5)),
-    };
+    const site = createQuarrySite(kind, x, z, rotation, seed, attempt);
+    if (!quarrySiteFitsPlayableArea(site, playableHalf)) continue;
+    if (riverLayout && quarrySiteOverlapsRiver(site, riverLayout)) continue;
+    return site;
   }
 
-  return createFallbackSite(existing, kind, seed);
+  return createFallbackSite(existing, kind, seed, playableHalf, riverLayout);
 }
 
-function createFallbackSite(existing: QuarrySite[], kind: QuarryKind, seed: number): QuarrySite {
+function createFallbackSite(
+  existing: QuarrySite[],
+  kind: QuarryKind,
+  seed: number,
+  playableHalf: number,
+  riverLayout: RiverLayout | undefined,
+): QuarrySite | null {
   const presets: Array<{ x: number; z: number; rotation: number }> =
     kind === 'large'
       ? [
@@ -160,45 +151,88 @@ function createFallbackSite(existing: QuarrySite[], kind: QuarryKind, seed: numb
     const preset = presets[i];
     const minSpacing = kind === 'large' ? MIN_LARGE_QUARRY_SPACING : MIN_SMALL_QUARRY_SPACING;
     if (!hasMinimumDistance(existing, preset.x, preset.z, minSpacing)) continue;
-    if (kind === 'large') {
-      return {
-        ...preset,
-        kind,
-        radiusX: 56,
-        radiusZ: 44,
-        pitDepth: 12.8,
-      };
-    }
-    return {
-      ...preset,
-      kind,
-      radiusX: 28,
-      radiusZ: 22,
-      pitDepth: 6.4,
-    };
+    const site = createQuarrySite(kind, preset.x, preset.z, preset.rotation, seed, i + 1000);
+    if (!quarrySiteFitsPlayableArea(site, playableHalf)) continue;
+    if (riverLayout && quarrySiteOverlapsRiver(site, riverLayout)) continue;
+    return site;
   }
 
-  const offset = hashF64(seed, existing.length, kind === 'large' ? 9 : 10) * 80 - 40;
+  // Suitability is intentionally relaxed here, but hard constraints (dry footprint,
+  // playable bounds, center clearing, and quarry spacing) are never relaxed.
+  const fallbackRng = mulberry32(seed ^ (kind === 'large' ? 0x1a93f : 0x2b74d));
+  const minSpacing = kind === 'large' ? MIN_LARGE_QUARRY_SPACING : MIN_SMALL_QUARRY_SPACING;
+  const margin = playableHalf * 0.08;
+  for (let attempt = 0; attempt < 720; attempt++) {
+    const x = (fallbackRng() * 2 - 1) * (playableHalf - margin);
+    const z = (fallbackRng() * 2 - 1) * (playableHalf - margin);
+    if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + 48) continue;
+    if (Math.hypot(x, z + 88) < DRAIN_AVOIDANCE_RADIUS) continue;
+    if (!hasMinimumDistance(existing, x, z, minSpacing)) continue;
+    const rotation = hashF64(seed ^ 0x6f31, attempt, kind === 'large' ? 1 : 2) * Math.PI;
+    const site = createQuarrySite(kind, x, z, rotation, seed ^ 0x4d21, attempt);
+    if (!quarrySiteFitsPlayableArea(site, playableHalf)) continue;
+    if (riverLayout && quarrySiteOverlapsRiver(site, riverLayout)) continue;
+    return site;
+  }
+
+  return null;
+}
+
+function createQuarrySite(
+  kind: QuarryKind,
+  x: number,
+  z: number,
+  rotation: number,
+  seed: number,
+  attempt: number,
+): QuarrySite {
   if (kind === 'large') {
     return {
-      x: 150 + offset,
-      z: 130 - offset * 0.4,
-      rotation: 0.5,
+      x,
+      z,
+      rotation,
       kind,
-      radiusX: 56,
-      radiusZ: 44,
-      pitDepth: 12.8,
+      radiusX: lerp(48, 64, hashF64(seed, attempt, 3)),
+      radiusZ: lerp(36, 52, hashF64(seed, attempt, 4)),
+      pitDepth: lerp(10.8, 14.4, hashF64(seed, attempt, 5)),
     };
   }
   return {
-    x: -140 - offset,
-    z: -110 + offset * 0.35,
-    rotation: 1.1,
+    x,
+    z,
+    rotation,
     kind,
-    radiusX: 28,
-    radiusZ: 22,
-    pitDepth: 6.4,
+    radiusX: lerp(24, 32, hashF64(seed, attempt, 3)),
+    radiusZ: lerp(18, 26, hashF64(seed, attempt, 4)),
+    pitDepth: lerp(5.4, 7.2, hashF64(seed, attempt, 5)),
   };
+}
+
+function quarrySiteFitsPlayableArea(site: QuarrySite, playableHalf: number): boolean {
+  const extent = Math.hypot(site.radiusX, site.radiusZ) + RIVER_CLEARANCE + PLAYABLE_EDGE_CLEARANCE;
+  return Math.abs(site.x) + extent <= playableHalf && Math.abs(site.z) + extent <= playableHalf;
+}
+
+export function quarrySiteOverlapsRiver(site: QuarrySite, riverLayout: RiverLayout): boolean {
+  const radiusX = site.radiusX * 1.08 + RIVER_CLEARANCE;
+  const radiusZ = site.radiusZ * 1.08 + RIVER_CLEARANCE;
+  const cos = Math.cos(site.rotation);
+  const sin = Math.sin(site.rotation);
+  const xSteps = Math.ceil(radiusX / RIVER_FOOTPRINT_SAMPLE_STEP);
+  const zSteps = Math.ceil(radiusZ / RIVER_FOOTPRINT_SAMPLE_STEP);
+
+  for (let ix = -xSteps; ix <= xSteps; ix++) {
+    const localX = ix / xSteps * radiusX;
+    for (let iz = -zSteps; iz <= zSteps; iz++) {
+      const localZ = iz / zSteps * radiusZ;
+      if ((localX / radiusX) ** 2 + (localZ / radiusZ) ** 2 > 1) continue;
+      const x = site.x + localX * cos - localZ * sin;
+      const z = site.z + localX * sin + localZ * cos;
+      if (riverLayout.sampleRiverMask(x, z) > RIVER_AVOIDANCE_MASK) return true;
+    }
+  }
+
+  return false;
 }
 
 function quarrySuitabilityAt(x: number, z: number, playableHalf: number): number {
