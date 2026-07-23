@@ -4,7 +4,10 @@ import type { Terrain } from '../terrain/Terrain.ts';
 import { createRockShadowGeometry } from '../props/ForestProps.ts';
 import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import type { QuarryLayout, QuarrySite } from './QuarryLayout.ts';
-import type { RockObstacle } from '../utils/pathGeometry.ts';
+import {
+  setRockObstacleCollisionBounds,
+  type RockObstacle,
+} from '../utils/pathGeometry.ts';
 
 const TAU = Math.PI * 2;
 
@@ -138,6 +141,7 @@ function createQuarryRockMeshes(
         rock.scale * (0.86 + rng() * 0.52),
       );
       matrix.compose(position, quaternion, scaleVector);
+      setRockObstacleCollisionBounds(rock, variants[variantIndex], matrix);
       mesh.setMatrixAt(rockIndex, matrix);
       shadowMesh.setMatrixAt(rockIndex, matrix);
     });

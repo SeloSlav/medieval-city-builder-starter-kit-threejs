@@ -3,6 +3,11 @@ export type CrowdViewState = {
   centerZ: number;
   viewRadius: number;
   shadowRadius: number;
+  /** Camera zoom used by close-range presentation such as worker sound. */
+  orbitDistance?: number;
+  /** Actual listener position; defaults to the camera target for legacy callers. */
+  listenerX?: number;
+  listenerZ?: number;
 };
 
 export const CROWD_SIM_HZ = 15;
@@ -15,6 +20,8 @@ export function buildCrowdViewState(
   centerX: number,
   centerZ: number,
   orbitDistance: number,
+  listenerX = centerX,
+  listenerZ = centerZ,
 ): CrowdViewState {
   const viewRadius = Math.max(120, orbitDistance * 1.35 + FRUSTUM_SIM_MARGIN);
   return {
@@ -22,6 +29,9 @@ export function buildCrowdViewState(
     centerZ,
     viewRadius,
     shadowRadius: AGENT_SHADOW_DISTANCE,
+    orbitDistance,
+    listenerX,
+    listenerZ,
   };
 }
 

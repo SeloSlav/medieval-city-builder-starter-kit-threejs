@@ -49,6 +49,7 @@ import {
   type ForestTreePlacement,
   type TreeSpeciesProfile,
 } from './forestPlacements.ts';
+import { setRockObstacleCollisionBounds } from '../utils/pathGeometry.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const TAU = Math.PI * 2;
@@ -1030,6 +1031,7 @@ function createRockField(
       quaternion.setFromEuler(new THREE.Euler((rng() - 0.5) * 0.18, rng() * TAU, (rng() - 0.5) * 0.18));
       rockInstanceScaleForProfile(rock.profile, rock.scale, rng, scaleVector);
       matrix.compose(position, quaternion, scaleVector);
+      setRockObstacleCollisionBounds(rock, variants[variantIndex], matrix);
       mesh.setMatrixAt(rockIndex, matrix);
       shadowMesh.setMatrixAt(rockIndex, matrix);
       instances.push({

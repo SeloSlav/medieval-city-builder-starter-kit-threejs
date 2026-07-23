@@ -40,14 +40,17 @@
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
 }
 
-.quarry-map-icon-glyph {
-  width: 18px;
-  height: 18px;
+.map-resource-icon-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
 }
 
 .quarry-map-icon--large .quarry-map-icon-glyph {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
 }
 
 .foraging-map-icons {
@@ -90,7 +93,12 @@
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
 }
 
-.foraging-map-icon-glyph {
-  width: 18px;
-  height: 18px;
+.foraging-map-icon-glyph--game {
+  width: 23px;
+  height: 23px;
+}
+
+.foraging-map-icon-glyph--berries {
+  width: 23px;
+  height: 23px;
 }

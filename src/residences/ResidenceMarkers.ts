@@ -637,6 +637,7 @@ export class ResidenceMarkers {
       if (!marker) {
         const appearanceSeed = hashStringSeed(residence.id);
         marker = createResidenceMesh(appearanceSeed, residence.tier);
+        marker.userData.fpCollisionAggregate = true;
         const shadowProxy = createResidenceShadowProxy(residence.tier);
         shadowProxy.castShadow = areBuildingShadowsEnabled();
         marker.add(shadowProxy);

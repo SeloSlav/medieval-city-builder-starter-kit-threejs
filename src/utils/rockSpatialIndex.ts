@@ -27,6 +27,19 @@ export class RockSpatialIndex {
     return false;
   }
 
+  rocksInRadius(x: number, z: number, radius: number): RockObstacle[] {
+    const radiusSq = radius * radius;
+    return this.queryBounds({
+      minX: x - radius,
+      maxX: x + radius,
+      minZ: z - radius,
+      maxZ: z + radius,
+    }).filter((rock) => {
+      const reach = radius + (rock.collisionRadius ?? rock.scale * 1.35);
+      return (rock.x - x) ** 2 + (rock.z - z) ** 2 <= Math.max(radiusSq, reach * reach);
+    });
+  }
+
   private queryBounds(bounds: PathBoundsXZ): RockObstacle[] {
     const minCellX = Math.floor(bounds.minX / CELL_SIZE);
     const maxCellX = Math.floor(bounds.maxX / CELL_SIZE);

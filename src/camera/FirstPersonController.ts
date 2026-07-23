@@ -11,6 +11,7 @@ import {
   type FpLookAngleState,
 } from './fp/fpCameraLook.ts';
 import { CAM_BOB_DIP_Y } from './fp/fpConstants.ts';
+import type { FpCollisionWorld } from './fp/fpCollisionWorld.ts';
 import {
   publishCompassHeadingFromYawRad,
   resetCompassHeading,
@@ -18,7 +19,9 @@ import {
 import {
   createFpLocomotionState,
   FP_LOCOMOTION_FEET_SKIN_M,
+  FP_WALK_PROBE_DY,
   FP_WALK_FOOT_RADIUS_XZ,
+  FP_WALK_STEP_UP_MARGIN,
   fpLocomotionConstants,
   queueFpJump,
   stepFpLocomotion,
@@ -34,6 +37,7 @@ export type FirstPersonControllerConfig = {
   bounds: TerrainBounds;
   getHeightAt: (x: number, z: number) => number;
   getRoadDeckY?: (x: number, z: number) => number | null;
+  collisionWorld?: FpCollisionWorld;
   getOrbitSpawn?: () => FirstPersonSpawn;
   onModeChange?: (active: boolean) => void;
   isMenuOpen?: () => boolean;
@@ -77,6 +81,20 @@ export class FirstPersonController {
     this.config = config;
     this.walkOpts = {
       sampleWalkGroundTopY: this.sampleTerrainGround,
+      resolveBodyCollisions: (position, previousX, previousZ, state, bodyHeight) => {
+        this.config.collisionWorld?.resolvePlayer(
+          position,
+          previousX,
+          previousZ,
+          state.velocity,
+          {
+            bodyHeight,
+            footRadius: FP_WALK_FOOT_RADIUS_XZ,
+            maxStepHeight: FP_WALK_STEP_UP_MARGIN,
+            grounded: state.grounded,
+          },
+        );
+      },
       substepsForDt: (dtSec, state) => {
         const base = Math.max(
           1,
@@ -133,6 +151,20 @@ export class FirstPersonController {
     this.camBobY = 0;
     this.camBobRoll = 0;
     this.lastEyeLine = fpLocomotionConstants.eyeStand;
+    this.config.collisionWorld?.invalidateStatic();
+    this.config.collisionWorld?.prepare(this.pos.x, this.pos.z);
+    this.config.collisionWorld?.resolvePlayer(
+      this.pos,
+      this.pos.x,
+      this.pos.z,
+      this.loco.velocity,
+      {
+        bodyHeight: fpLocomotionConstants.bodyStand,
+        footRadius: FP_WALK_FOOT_RADIUS_XZ,
+        maxStepHeight: FP_WALK_STEP_UP_MARGIN,
+        grounded: true,
+      },
+    );
 
     this.config.camera.fov = fpLocomotionConstants.cameraFovDeg;
     this.config.camera.updateProjectionMatrix();
@@ -166,11 +198,16 @@ export class FirstPersonController {
     return this.look.bodyYaw;
   }
 
+  invalidateCollisionWorld(): void {
+    this.config.collisionWorld?.invalidateStatic();
+  }
+
   update(dt: number): void {
     if (!this.active) return;
     if (this.config.isMenuOpen?.()) return;
 
     this.syncInputFromKeys();
+    this.config.collisionWorld?.prepare(this.pos.x, this.pos.z);
     const freeLook = this.resolveFreeLook();
     if (document.pointerLockElement === this.config.domElement) {
       stepFpLookInertia(this.lookInertia, this.look, 0, 0, dt, { freeLook });
@@ -247,10 +284,24 @@ export class FirstPersonController {
     this.applyCameraTransform(this.lastEyeLine);
   }
 
-  private readonly sampleTerrainGround: WalkGroundSampler = (worldX, worldZ) => {
+  private readonly sampleTerrainGround: WalkGroundSampler = (
+    worldX,
+    worldZ,
+    probeTopY,
+    phase,
+  ) => {
     const terrainY = sampleTerrainWalkTop(this.config.getHeightAt, worldX, worldZ);
     const roadY = this.config.getRoadDeckY?.(worldX, worldZ);
-    return roadY != null ? Math.max(terrainY, roadY) : terrainY;
+    const obstacleY = this.config.collisionWorld?.sampleSupportTopY(
+      worldX,
+      worldZ,
+      probeTopY,
+      probeTopY - FP_WALK_PROBE_DY,
+      FP_WALK_FOOT_RADIUS_XZ,
+      FP_WALK_STEP_UP_MARGIN,
+      phase,
+    ) ?? Number.NEGATIVE_INFINITY;
+    return Math.max(terrainY, roadY ?? Number.NEGATIVE_INFINITY, obstacleY);
   };
 
   private clampPositionXZ(): void {

@@ -16,6 +16,7 @@ type VillagerInspectorOptions = {
 };
 
 export class VillagerInspector {
+  private readonly options: VillagerInspectorOptions;
   private readonly panel: HTMLElement;
   private readonly name: HTMLElement;
   private readonly eyebrow: HTMLElement;
@@ -30,7 +31,8 @@ export class VillagerInspector {
   private readonly marker: THREE.Mesh;
   private selectedPersonIdentity: string | null = null;
 
-  constructor(private readonly options: VillagerInspectorOptions) {
+  constructor(options: VillagerInspectorOptions) {
+    this.options = options;
     options.uiRoot.insertAdjacentHTML(
       'beforeend',
       `

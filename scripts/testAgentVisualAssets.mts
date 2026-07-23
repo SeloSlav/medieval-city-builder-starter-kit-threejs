@@ -26,6 +26,15 @@ import {
   pickVillagerHairColor,
   pickVillagerModelVariant,
 } from '../src/settlement/villagerPaths.ts';
+import {
+  attachWorkerTool,
+  createWorkerToolSource,
+  type WorkerToolKind,
+} from '../src/settlement/workerTools.ts';
+import {
+  AGENT_WORK_ANIMATION_DISTANCE,
+  isWithinWorkAnimationRange,
+} from '../src/settlement/crowdView.ts';
 
 (globalThis as typeof globalThis & { self: typeof globalThis }).self = globalThis;
 
@@ -216,6 +225,81 @@ disposeDeliveryCartMesh(cartA);
 disposeDeliveryCartMesh(cartB);
 disposeDeliveryCartWorkerSources(deliveryWorkerSources);
 
+const workerToolAssets: ReadonlyArray<{
+  kind: WorkerToolKind;
+  path: string;
+}> = [
+  {
+    kind: 'hatchet',
+    path: 'public/assets/models/worker-tools/kenney-tool-hatchet.glb',
+  },
+  {
+    kind: 'pickaxe',
+    path: 'public/assets/models/worker-tools/kenney-tool-pickaxe.glb',
+  },
+];
+const workerRigGltf = await parseGlb(villagerAssets[0].path);
+const workerRigBounds = new THREE.Box3().setFromObject(workerRigGltf.scene);
+const workerRigHeight = workerRigBounds.max.y - workerRigBounds.min.y;
+for (const asset of workerToolAssets) {
+  const gltf = await parseGlb(asset.path);
+  const source = createWorkerToolSource(asset.kind, gltf.scene);
+  const workerRig = cloneSkinned(workerRigGltf.scene) as THREE.Group;
+  workerRig.scale.setScalar(1.72 / workerRigHeight);
+  const tool = attachWorkerTool(workerRig, source);
+  workerRig.updateMatrixWorld(true);
+
+  assert.equal(
+    tool.parent?.name,
+    'PalmR',
+    `${asset.kind} should be parented directly to the right-hand joint`,
+  );
+  assert.equal(tool.userData.workerTool, asset.kind);
+  const swingClip = workerRigGltf.animations.find((clip) =>
+    clip.name.toLowerCase().endsWith('_swordslash')
+  );
+  assert.ok(swingClip, 'worker rig should retain its authored swing animation');
+  const mixer = new THREE.AnimationMixer(workerRig);
+  mixer.clipAction(swingClip, workerRig).play();
+  mixer.setTime(0);
+  workerRig.updateMatrixWorld(true);
+  const restToolPosition = tool.getWorldPosition(new THREE.Vector3());
+  mixer.setTime(swingClip.duration * 0.55);
+  workerRig.updateMatrixWorld(true);
+  const swungToolPosition = tool.getWorldPosition(new THREE.Vector3());
+  assert.ok(
+    restToolPosition.distanceTo(swungToolPosition) > 0.08,
+    `${asset.kind} should follow the hand joint through the swing animation`,
+  );
+  mixer.stopAllAction();
+  mixer.uncacheRoot(workerRig);
+
+  const worldSize = new THREE.Box3()
+    .setFromObject(tool)
+    .getSize(new THREE.Vector3());
+  const worldLength = Math.max(worldSize.x, worldSize.y, worldSize.z);
+  assert.ok(
+    worldLength >= 0.5 && worldLength <= 0.8,
+    `${asset.kind} should be scaled to a believable hand-tool length`,
+  );
+}
+
+const workView = {
+  centerX: 0,
+  centerZ: 0,
+  viewRadius: 180,
+  shadowRadius: 80,
+};
+assert.equal(
+  isWithinWorkAnimationRange(AGENT_WORK_ANIMATION_DISTANCE - 0.1, 0, workView),
+  true,
+);
+assert.equal(
+  isWithinWorkAnimationRange(AGENT_WORK_ANIMATION_DISTANCE + 0.1, 0, workView),
+  false,
+  'skeletal chopping and mining should stop outside the work-animation LOD',
+);
+
 const villagerLicense = fs.readFileSync(
   'public/assets/models/villagers/LICENSE.txt',
   'utf8',
@@ -230,5 +314,12 @@ const cartLicense = fs.readFileSync(
 );
 assert.match(cartLicense, /CC0 1\.0/);
 assert.match(cartLicense, /l7bDe7ak6j/);
+
+const workerToolLicense = fs.readFileSync(
+  'public/assets/models/worker-tools/LICENSE.txt',
+  'utf8',
+);
+assert.match(workerToolLicense, /CC0 1\.0/);
+assert.match(workerToolLicense, /kenney\.nl\/assets\/survival-kit/);
 
 console.log('villager and delivery-cart asset tests passed');

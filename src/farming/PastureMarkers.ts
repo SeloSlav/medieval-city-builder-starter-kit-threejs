@@ -65,6 +65,7 @@ function pastureSurface(
       ? SHEEP_GRASS
       : CATTLE_GRASS;
   const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData.fpNoCollision = true;
   mesh.receiveShadow = true;
   mesh.renderOrder = 2;
   return mesh;

@@ -6,6 +6,7 @@ import {
   createMapIconRoot,
   placeProjectedMapButton,
 } from './mapIconProjection.ts';
+import { QUARRY_ICON_SVG } from './resourceMapIconGlyphs.ts';
 
 type QuarryMapIconsOptions = {
   uiRoot: HTMLElement;
@@ -23,13 +24,6 @@ type QuarryIconEntry = {
   button: HTMLButtonElement;
   worldPoint: THREE.Vector3;
 };
-
-const STONE_ICON_SVG = `
-  <svg class="quarry-map-icon-glyph" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 3.5 18.5 9l-2.2 11.5H7.7L5.5 9 12 3.5Z" fill="currentColor" opacity="0.92"/>
-    <path d="M9.2 10.2 12 7.8l2.8 2.4-1 5.8H10.2l-1-5.8Z" fill="currentColor" opacity="0.38"/>
-  </svg>
-`.trim();
 
 export class QuarryMapIcons {
   private readonly options: QuarryMapIconsOptions;
@@ -85,7 +79,7 @@ export class QuarryMapIcons {
       button.classList.add('quarry-map-icon--large');
     }
 
-    button.innerHTML = STONE_ICON_SVG;
+    button.innerHTML = QUARRY_ICON_SVG;
     button.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
       if (this.options.isBlocked()) return;

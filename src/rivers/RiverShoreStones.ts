@@ -6,7 +6,10 @@ import { createRockShadowGeometry } from '../props/ForestProps.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { Point2 } from '../utils/polygonGeometry.ts';
 import { distancePointToPolygon2 } from '../utils/polygonGeometry.ts';
-import type { RockObstacle } from '../utils/pathGeometry.ts';
+import {
+  setRockObstacleCollisionBounds,
+  type RockObstacle,
+} from '../utils/pathGeometry.ts';
 import type { RiverField } from './RiverField.ts';
 import { buildRiverShoreCrossingGaps, isInRiverShoreCrossingGap } from './RiverShoreCrossingGaps.ts';
 import { PlacementClearanceSpatialIndex } from '../placement/PlacementClearanceSpatialIndex.ts';
@@ -92,6 +95,7 @@ export function createRiverShoreStones(
         rock.scale * (0.82 + rng() * 0.48),
       );
       matrix.compose(position, quaternion, scaleVector);
+      setRockObstacleCollisionBounds(rock, variants[variantIndex], matrix);
       mesh.setMatrixAt(rockIndex, matrix);
       shadowMesh.setMatrixAt(rockIndex, matrix);
       instances.push({

@@ -8,6 +8,7 @@ import {
   createMapIconRoot,
   placeProjectedMapButton,
 } from './mapIconProjection.ts';
+import { BERRY_ICON_SVG, GAME_ICON_SVG } from './resourceMapIconGlyphs.ts';
 
 type ForagingMapIconsOptions = {
   uiRoot: HTMLElement;
@@ -26,24 +27,6 @@ type ForagingIconEntry = {
   button: HTMLButtonElement;
   worldPoint: THREE.Vector3;
 };
-
-const GAME_ICON_SVG = `
-  <svg class="foraging-map-icon-glyph" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M6.5 18.5 10 6.5h4l3.5 12H6.5Z" fill="currentColor" opacity="0.9"/>
-    <path d="M11 8.5h2l1.2 4.2h-4.4L11 8.5Z" fill="currentColor" opacity="0.35"/>
-    <circle cx="16.5" cy="8" r="1.4" fill="currentColor"/>
-  </svg>
-`.trim();
-
-const BERRY_ICON_SVG = `
-  <svg class="foraging-map-icon-glyph" viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="9" cy="11" r="2.2" fill="currentColor" opacity="0.92"/>
-    <circle cx="13.5" cy="9.5" r="2" fill="currentColor" opacity="0.82"/>
-    <circle cx="15" cy="13.5" r="1.8" fill="currentColor" opacity="0.78"/>
-    <circle cx="11" cy="15" r="1.6" fill="currentColor" opacity="0.7"/>
-    <path d="M12 5.5c1.2 0 2.2.8 2.4 2" stroke="currentColor" stroke-width="1.2" fill="none"/>
-  </svg>
-`.trim();
 
 export class ForagingMapIcons {
   private readonly options: ForagingMapIconsOptions;

@@ -30,6 +30,8 @@ const STOP_SPEED_EPS = 0.01;
 const EYE_STAND = 1.55;
 const EYE_CROUCH = 1.0;
 const EYE_DAMP = 12;
+const BODY_STAND = 1.78;
+const BODY_CROUCH = 1.2;
 
 export const FP_WALK_FOOT_RADIUS_XZ = 0.22;
 export const FP_WALK_STEP_UP_MARGIN = 0.82;
@@ -52,6 +54,13 @@ export type WalkGroundSampler = (
 
 export type FpLocomotionWalkOptions = {
   sampleWalkGroundTopY: WalkGroundSampler;
+  resolveBodyCollisions?: (
+    position: THREE.Vector3,
+    previousX: number,
+    previousZ: number,
+    state: FpLocomotionState,
+    bodyHeight: number,
+  ) => void;
   probeDy?: number;
   maxSupportDropM?: number;
   sprintSpeedMps?: number;
@@ -159,6 +168,13 @@ export function stepFpLocomotion(
     pos.x += state.velocity.x * sh;
     pos.z += state.velocity.z * sh;
     pos.y += state.velocity.y * sh;
+    walk?.resolveBodyCollisions?.(
+      pos,
+      x0,
+      z0,
+      state,
+      input.crouch ? BODY_CROUCH : BODY_STAND,
+    );
     if (walk?.sampleWalkGroundTopY) {
       const phase = resolveFpWalkProbePhase(state.grounded, state.velocity.y);
       if (phase === 'skip') {
@@ -233,6 +249,8 @@ export function stepFpLocomotion(
 export const fpLocomotionConstants = {
   eyeStand: EYE_STAND,
   eyeCrouch: EYE_CROUCH,
+  bodyStand: BODY_STAND,
+  bodyCrouch: BODY_CROUCH,
   floorY: FLOOR_Y,
   walkSpeedMps: WALK_SPEED,
   sprintSpeedMps: SPRINT_SPEED,

@@ -1,6 +1,7 @@
 import { AmbientAudioController } from '../audio/AmbientAudioController.ts';
 import { CameraController } from '../camera/CameraController.ts';
 import { FirstPersonController } from '../camera/FirstPersonController.ts';
+import { FpCollisionWorld } from '../camera/fp/fpCollisionWorld.ts';
 import { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
 import { BuildingTool } from '../buildings/BuildingTool.ts';
 import { FarmFieldMarkers } from '../farming/FarmFieldMarkers.ts';
@@ -59,6 +60,7 @@ import {
 } from './placedBuildingTerrainSync.ts';
 import { LoadingScreen } from '../ui/LoadingScreen.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
+import { VillagerInspector } from '../ui/VillagerInspector.ts';
 import { saveWorldGenerationSettings, shouldShowWorldSetup } from '../world/worldGenerationSettings.ts';
 import { getDraftWorldGeneration, setDraftWorldGeneration } from '../world/worldGenerationContext.ts';
 import { mountTooltips } from '../ui/tooltips.ts';
@@ -106,6 +108,7 @@ export type BootstrappedSession = {
   toastManager: ToastManager;
   disposeTooltips: () => void;
   resourceInspector: ResourceInspector;
+  villagerInspector: VillagerInspector;
   worldMapUi: WorldMapUiBundle;
   ambientAudio: AmbientAudioController;
   spacetimeStore: SpacetimeGameStore;
@@ -195,6 +198,7 @@ export async function bootstrapAppSession(
   let toolbar: BuildToolbar;
   let toastManager: ToastManager;
   let resourceInspector: ResourceInspector;
+  let villagerInspector: VillagerInspector;
 
   const ambientAudio = new AmbientAudioController({
     unlockElement: sceneManager.renderer.domElement,
@@ -285,6 +289,7 @@ export async function bootstrapAppSession(
       burgageTool.setEnabled(false);
       farmFieldTool.setEnabled(false);
       resourceInspector?.clearSelection();
+      villagerInspector?.clearSelection();
     }
     bridge.syncToolbar();
   };
@@ -547,6 +552,7 @@ export async function bootstrapAppSession(
         burgageTool.setEnabled(false);
         farmFieldTool.setEnabled(false);
         resourceInspector?.clearSelection();
+        villagerInspector?.clearSelection();
       }
       bridge.syncToolbar();
     },
@@ -562,6 +568,7 @@ export async function bootstrapAppSession(
         buildingTool.setMode('off');
         farmFieldTool.setEnabled(false);
         resourceInspector?.clearSelection();
+        villagerInspector?.clearSelection();
         if (!wasEnabled) {
           toastManager?.show(
             'Draw the rectangle along the road, then use the on-screen plot controls to choose how many homes fit.',
@@ -634,6 +641,17 @@ export async function bootstrapAppSession(
     () => sessionGate.isReady(),
     toastManager,
   );
+  villagerInspector = new VillagerInspector({
+    domElement: sceneManager.renderer.domElement,
+    uiRoot,
+    camera: sceneManager.camera,
+    villagers,
+    selectionParent: sceneManager.selectionGroup,
+    isBlocked: () => isWorldInspectionBlocked(placementGate),
+    onSelectionChange: (selected) => {
+      if (selected) resourceInspector?.clearSelection();
+    },
+  });
   resourceInspector = new ResourceInspector({
     domElement: sceneManager.renderer.domElement,
     uiRoot,
@@ -652,6 +670,7 @@ export async function bootstrapAppSession(
     onBeginFarmFieldPlacement: (farmsteadId) => beginLinkedLandParcelPlacement('field', farmsteadId),
     onBeginPasturePlacement: (farmsteadId) => beginLinkedLandParcelPlacement('pasture', farmsteadId),
     onSelectionChange: (target) => {
+      if (target) villagerInspector.clearSelection();
       toolbar.setCityAdministrationOpen(target?.kind === 'building' && target.building.kind === 'town_hall');
       if (target?.kind === 'building') {
         buildingMarkers.setBuildingExtentOverlay(target.building);
@@ -666,12 +685,23 @@ export async function bootstrapAppSession(
     computePopulationStats(gameState),
   );
 
+  const firstPersonCollisionWorld = new FpCollisionWorld({
+    getStaticRoots: () => sceneManager.getFirstPersonCollisionRoots(),
+    getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
+    getRockObstaclesNear: (x, z, radius) => sceneManager.getRockObstaclesNear(x, z, radius),
+    getTreeRegistry: () => liveContext.treeRegistry,
+    getTreeState: (treeId) => liveContext.gameState.trees.get(treeId),
+    isTreeLayoutActive: (layoutIndex) =>
+      sceneManager.getForestManager()?.isTreeLayoutActiveForCollision(layoutIndex) ?? false,
+  });
+
   firstPersonController = new FirstPersonController({
     camera: sceneManager.camera,
     domElement: sceneManager.renderer.domElement,
     bounds: sceneManager.terrain.bounds,
     getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
     getRoadDeckY: (x, z) => sceneManager.sampleRoadDeckY(x, z),
+    collisionWorld: firstPersonCollisionWorld,
     getOrbitSpawn: () => {
       const target = cameraController.getTargetPosition();
       return { x: target.x, z: target.z, yaw: cameraController.getYaw() };
@@ -753,6 +783,7 @@ export async function bootstrapAppSession(
     toastManager,
     disposeTooltips,
     resourceInspector,
+    villagerInspector,
     worldMapUi,
     ambientAudio,
     spacetimeStore,

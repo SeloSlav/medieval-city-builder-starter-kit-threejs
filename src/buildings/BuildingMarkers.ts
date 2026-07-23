@@ -210,6 +210,7 @@ export class BuildingMarkers {
             stoneRatio,
           );
       marker.userData.visualSignature = visualSignature;
+      marker.userData.fpCollisionAggregate = true;
       if (operational) {
         const shadowProxy = createBuildingShadowProxy(building.kind);
         shadowProxy.castShadow = areBuildingShadowsEnabled();

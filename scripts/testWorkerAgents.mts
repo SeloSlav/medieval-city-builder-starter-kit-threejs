@@ -1,4 +1,14 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {
+  WORKER_ACTIVITY_CLIPS,
+} from '../src/audio/audioCatalog.ts';
+import {
+  WORKER_SOUND_CUTOFF_DISTANCE,
+  WORKER_SOUND_FULL_VOLUME_DISTANCE,
+  WORKER_SOUND_MAX_ZOOM_DISTANCE,
+  workerActivitySoundGain,
+} from '../src/audio/WorkerActivityAudio.ts';
 import type {
   BuildingState,
   ResidenceState,
@@ -11,7 +21,13 @@ import {
   allocateProductionWorkers,
   collectWorkerTargets,
   pickWorkerWalkPath,
+  pickWorkerWalkPlan,
 } from '../src/settlement/workerPaths.ts';
+import {
+  villagerDisplayName,
+  villagerOccupation,
+} from '../src/settlement/villagerIdentity.ts';
+import { buildCrowdViewState } from '../src/settlement/crowdView.ts';
 
 const residenceA = residence('residence-a', 0, 0, 3);
 const residenceB = residence('residence-b', 100, 0, 2);
@@ -106,6 +122,74 @@ for (let seed = 0; seed < 24; seed++) {
   }
 }
 assert.equal(resourcePathFound, true, 'workers should regularly walk out to eligible resources');
+
+const quarryWorkPlan = Array.from({ length: 32 }, (_, seed) =>
+  pickWorkerWalkPlan(quarryCamp, 0, quarryTargets, seed)
+).find((plan) => plan?.activity === 'mine');
+assert.ok(quarryWorkPlan, 'stonecutters should schedule mining stops at quarry targets');
+assert.equal(quarryWorkPlan.target?.id, quarryTarget.nodeId);
+assert.ok(
+  quarryWorkPlan.workDistance != null
+    && quarryWorkPlan.workDistance > 0
+    && quarryWorkPlan.workDistance < quarryWorkPlan.path.length * quarryCamp.workRadius,
+);
+
+const lumberTargets = collectWorkerTargets(lumberMill, targetInputs);
+const lumberWorkPlan = Array.from({ length: 32 }, (_, seed) =>
+  pickWorkerWalkPlan(lumberMill, 0, lumberTargets, seed)
+).find((plan) => plan?.activity === 'chop');
+assert.ok(lumberWorkPlan, 'lumberjacks should schedule chopping stops at mature trees');
+assert.equal(lumberWorkPlan.target?.id, 'tree-mature');
+
+for (const [activity, clips] of Object.entries(WORKER_ACTIVITY_CLIPS)) {
+  assert.equal(clips.length, 4, `${activity} should have four randomized sound variants`);
+  for (const clip of clips) {
+    const assetPath = `public${clip.path}`;
+    assert.ok(fs.statSync(assetPath).size > 20_000, `${assetPath} should be a real audio asset`);
+  }
+}
+const closeSoundView = buildCrowdViewState(
+  0,
+  0,
+  WORKER_SOUND_MAX_ZOOM_DISTANCE,
+  0,
+  0,
+);
+assert.equal(
+  workerActivitySoundGain(WORKER_SOUND_FULL_VOLUME_DISTANCE, 0, closeSoundView),
+  1,
+  'nearby extraction sounds should play at their configured volume',
+);
+assert.ok(
+  workerActivitySoundGain(22, 0, closeSoundView) > 0
+    && workerActivitySoundGain(22, 0, closeSoundView) < 1,
+  'worker sounds should fade with listener distance',
+);
+assert.equal(
+  workerActivitySoundGain(WORKER_SOUND_CUTOFF_DISTANCE, 0, closeSoundView),
+  0,
+  'worker sounds should be silent beyond their distance cutoff',
+);
+assert.equal(
+  workerActivitySoundGain(
+    0,
+    0,
+    buildCrowdViewState(0, 0, WORKER_SOUND_MAX_ZOOM_DISTANCE + 0.01),
+  ),
+  0,
+  'worker sounds should be disabled as soon as the camera zooms outside close range',
+);
+
+const stableName = villagerDisplayName('residence-a:person:0', 'man');
+assert.equal(
+  villagerDisplayName('residence-a:person:0', 'man'),
+  stableName,
+  'a person identity should always resolve to the same name',
+);
+assert.match(stableName, /^\S+ \S+$/, 'villagers should receive a first and family name');
+assert.equal(villagerOccupation('stone_quarry'), 'Stonecutter');
+assert.equal(villagerOccupation('lumber_mill', true), 'Builder');
+assert.equal(villagerOccupation(null), 'Available labor');
 
 console.log('production worker agent tests passed');
 

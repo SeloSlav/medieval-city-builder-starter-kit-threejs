@@ -17,6 +17,7 @@ import {
 } from '../residences/householdRoutine.ts';
 import { polylineLengthXZ, samplePolylineXZ, type PointXZ } from '../utils/pathGeometry.ts';
 import type { GameClock } from '../world/gameCalendar.ts';
+import { WorkerActivityAudio } from '../audio/WorkerActivityAudio.ts';
 import {
   CROWD_SIM_DT,
   isWithinCrowdView,
@@ -26,6 +27,7 @@ import {
   SettlementCrowdRenderer,
   type CrowdRenderAgent,
   type VillagerModelVariant,
+  type VillagerRenderMode,
 } from './SettlementCrowdRenderer.ts';
 import {
   MAX_VILLAGERS_TOTAL,
@@ -45,16 +47,18 @@ import {
   allocateProductionWorkers,
   collectWorkerTargets,
   pickWorkerCommutePath,
-  pickWorkerWalkPath,
+  pickWorkerWalkPlan,
   workplaceYardPosition,
+  type WorkerActivityKind,
   type WorkerTarget,
 } from './workerPaths.ts';
+import type { WorkerToolKind } from './workerTools.ts';
 import {
   villagerDisplayName,
   villagerOccupation,
 } from './villagerIdentity.ts';
 
-type VillagerMode = 'idle' | 'walk';
+type VillagerMode = VillagerRenderMode;
 type VillagerRole = 'resident' | 'worker';
 type VillagerRoutinePhase =
   | 'work'
@@ -67,6 +71,8 @@ type VillagerPathPurpose =
   | 'commute_to_work'
   | 'return_home'
   | null;
+
+const WORKER_ACTIVITY_SECONDS = 3.2;
 
 type VillagerAgent = {
   id: string;
@@ -84,6 +90,11 @@ type VillagerAgent = {
   pathCursor: number;
   simPathCursor: number;
   displayPathCursor: number;
+  workActivity: WorkerActivityKind | null;
+  workTarget: PointXZ | null;
+  workStopDistance: number;
+  workRemaining: number;
+  workPerformed: boolean;
   idleRemaining: number;
   walkSpeed: number;
   appearanceSeed: number;
@@ -127,6 +138,7 @@ export type VillagerRendererOptions = {
 
 export class VillagerRenderer {
   private readonly renderer: SettlementCrowdRenderer;
+  private readonly activityAudio = new WorkerActivityAudio();
   private readonly getHeightAt: (x: number, z: number) => number;
   private readonly getRoadDeckY: ((x: number, z: number) => number | null) | null;
   private readonly agents = new Map<string, VillagerAgent>();
@@ -228,6 +240,11 @@ export class VillagerRenderer {
             pathCursor: 0,
             simPathCursor: 0,
             displayPathCursor: 0,
+            workActivity: null,
+            workTarget: null,
+            workStopDistance: 0,
+            workRemaining: 0,
+            workPerformed: false,
             idleRemaining: pickIdleDuration(appearanceSeed),
             walkSpeed: pickWalkSpeed(appearanceSeed),
             appearanceSeed,
@@ -309,6 +326,11 @@ export class VillagerRenderer {
           pathCursor: 0,
           simPathCursor: 0,
           displayPathCursor: 0,
+          workActivity: null,
+          workTarget: null,
+          workStopDistance: 0,
+          workRemaining: 0,
+          workPerformed: false,
           idleRemaining: pickIdleDuration(appearanceSeed) * 0.55,
           walkSpeed: pickWalkSpeed(appearanceSeed),
           appearanceSeed,
@@ -468,12 +490,17 @@ export class VillagerRenderer {
 
   dispose(): void {
     this.agents.clear();
+    this.activityAudio.dispose();
     this.renderer.dispose();
   }
 
   private describeAgent(agent: VillagerAgent): VillagerInspection {
-    const workplace = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
-    const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+    const workplace = agent.workplaceId
+      ? this.buildings.get(agent.workplaceId) ?? null
+      : null;
+    const residence = agent.residenceId
+      ? this.residences.get(agent.residenceId) ?? null
+      : null;
     const name = villagerDisplayName(agent.personIdentity, agent.modelVariant);
     const onDuty = agent.role === 'worker'
       && (
@@ -553,13 +580,37 @@ export class VillagerRenderer {
         tunicColor: agent.tunicColor,
         skinColor: agent.skinColor,
         hairColor: agent.hairColor,
+        tool: this.workerToolFor(agent),
         active: true,
       });
     }
-    this.renderer.syncAgents(renderAgents, view ?? this.lastView, dt);
+    const activeView = view ?? this.lastView;
+    this.renderer.syncAgents(renderAgents, activeView, dt);
+    if (dt > 0) {
+      this.activityAudio.tick(
+        dt,
+        renderAgents.flatMap((agent) => (
+          agent.mode === 'chop' || agent.mode === 'mine'
+            ? [{
+                id: agent.id,
+                mode: agent.mode,
+                x: agent.x,
+                z: agent.z,
+              }]
+            : []
+        )),
+        activeView,
+      );
+    }
   }
 
   private simStep(agent: VillagerAgent, dt: number): void {
+    if (agent.mode === 'chop' || agent.mode === 'mine') {
+      agent.workRemaining -= dt;
+      if (agent.workRemaining <= 0) this.finishWorkerActivity(agent);
+      return;
+    }
+
     if (agent.mode === 'idle') {
       agent.idleRemaining -= dt;
       if (agent.idleRemaining <= 0) {
@@ -577,7 +628,22 @@ export class VillagerRenderer {
       return;
     }
 
-    agent.simPathCursor += agent.walkSpeed * dt;
+    const nextPathCursor = Math.min(
+      agent.pathDistance,
+      agent.simPathCursor + agent.walkSpeed * dt,
+    );
+    if (
+      agent.pathPurpose === 'worker_work_loop'
+      && agent.workActivity
+      && agent.workTarget
+      && !agent.workPerformed
+      && nextPathCursor >= agent.workStopDistance
+    ) {
+      this.beginWorkerActivity(agent);
+      return;
+    }
+
+    agent.simPathCursor = nextPathCursor;
     agent.pathCursor = agent.simPathCursor;
     if (agent.simPathCursor >= agent.pathDistance) {
       switch (agent.pathPurpose) {
@@ -603,31 +669,63 @@ export class VillagerRenderer {
   }
 
   private interpolateDisplay(agent: VillagerAgent, dt: number): void {
-    if (agent.mode === 'idle') return;
+    if (agent.mode !== 'walk') return;
     const blend = 1 - Math.exp(-dt * 18);
     agent.displayPathCursor += (agent.simPathCursor - agent.displayPathCursor) * blend;
   }
 
   private readDisplayX(agent: VillagerAgent): number {
-    if (agent.mode === 'idle') return agent.x;
+    if (agent.mode !== 'walk') return agent.x;
     const sample = samplePolylineXZ(agent.path, agent.displayPathCursor);
     return sample?.x ?? agent.x;
   }
 
   private readDisplayZ(agent: VillagerAgent): number {
-    if (agent.mode === 'idle') return agent.z;
+    if (agent.mode !== 'walk') return agent.z;
     const sample = samplePolylineXZ(agent.path, agent.displayPathCursor);
     return sample?.z ?? agent.z;
   }
 
   private readDisplayYaw(agent: VillagerAgent): number {
-    if (agent.mode === 'idle') {
+    if (agent.mode !== 'walk') {
       if (agent.routinePhase === 'work') return agent.yaw;
       const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
       return residence ? residence.yaw + agent.idleOffset.yaw : agent.yaw;
     }
     const sample = samplePolylineXZ(agent.path, agent.displayPathCursor);
     return sample?.yaw ?? agent.yaw;
+  }
+
+  private beginWorkerActivity(agent: VillagerAgent): void {
+    if (!agent.workActivity || !agent.workTarget) return;
+    agent.mode = agent.workActivity;
+    agent.simPathCursor = agent.workStopDistance;
+    agent.pathCursor = agent.workStopDistance;
+    agent.displayPathCursor = agent.workStopDistance;
+    agent.workRemaining = WORKER_ACTIVITY_SECONDS;
+
+    const sample = samplePolylineXZ(agent.path, agent.workStopDistance);
+    if (sample) {
+      agent.x = sample.x;
+      agent.z = sample.z;
+    }
+    agent.yaw = Math.atan2(
+      agent.workTarget.x - agent.x,
+      agent.workTarget.z - agent.z,
+    );
+    agent.y = this.resolveGroundY(agent.x, agent.z) + 0.02;
+  }
+
+  private finishWorkerActivity(agent: VillagerAgent): void {
+    agent.mode = 'walk';
+    agent.workRemaining = 0;
+    agent.workPerformed = true;
+    agent.simPathCursor = Math.min(
+      agent.pathDistance,
+      agent.workStopDistance + 0.01,
+    );
+    agent.pathCursor = agent.simPathCursor;
+    agent.displayPathCursor = agent.simPathCursor;
   }
 
   private tryBeginWalk(agent: VillagerAgent, residence: ResidenceState): void {
@@ -658,6 +756,7 @@ export class VillagerRenderer {
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
     agent.displayPathCursor = 0;
+    this.clearWorkerActivity(agent);
     agent.idleDirty = false;
   }
 
@@ -665,7 +764,7 @@ export class VillagerRenderer {
     const building = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
     if (!building) return;
     const targets = this.workerTargets.get(building.id) ?? [];
-    const path = pickWorkerWalkPath(
+    const plan = pickWorkerWalkPlan(
       building,
       agent.workplaceSlot,
       targets,
@@ -673,6 +772,7 @@ export class VillagerRenderer {
     );
     agent.pathSeed = (agent.pathSeed * 1_664_525) ^ 0x165667b1;
 
+    const path = plan?.path ?? null;
     const pathDistance = path ? polylineLengthXZ(path) : 0;
     if (!path || pathDistance < 4) {
       agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.5;
@@ -686,6 +786,13 @@ export class VillagerRenderer {
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
     agent.displayPathCursor = 0;
+    agent.workActivity = plan?.activity ?? null;
+    agent.workTarget = plan?.target
+      ? { x: plan.target.x, z: plan.target.z }
+      : null;
+    agent.workStopDistance = plan?.workDistance ?? 0;
+    agent.workRemaining = 0;
+    agent.workPerformed = false;
     agent.idleDirty = false;
   }
 
@@ -796,6 +903,7 @@ export class VillagerRenderer {
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
     agent.displayPathCursor = 0;
+    this.clearWorkerActivity(agent);
     agent.idleDirty = false;
     return true;
   }
@@ -808,6 +916,11 @@ export class VillagerRenderer {
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
     agent.displayPathCursor = 0;
+    agent.workActivity = null;
+    agent.workTarget = null;
+    agent.workStopDistance = 0;
+    agent.workRemaining = 0;
+    agent.workPerformed = false;
   }
 
   private resetToIdle(agent: VillagerAgent, residence: ResidenceState): void {
@@ -818,6 +931,7 @@ export class VillagerRenderer {
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
     agent.displayPathCursor = 0;
+    this.clearWorkerActivity(agent);
     agent.idleRemaining = pickIdleDuration(agent.pathSeed);
     agent.idleDirty = true;
     this.placeIdle(agent, residence);
@@ -834,10 +948,19 @@ export class VillagerRenderer {
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
     agent.displayPathCursor = 0;
+    this.clearWorkerActivity(agent);
     agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.45;
     agent.idleDirty = true;
     if (building) this.placeWorkerIdle(agent, building);
     agent.idleDirty = false;
+  }
+
+  private clearWorkerActivity(agent: VillagerAgent): void {
+    agent.workActivity = null;
+    agent.workTarget = null;
+    agent.workStopDistance = 0;
+    agent.workRemaining = 0;
+    agent.workPerformed = false;
   }
 
   private placeIdle(agent: VillagerAgent, residence: ResidenceState): void {
@@ -865,6 +988,14 @@ export class VillagerRenderer {
     if (deckY != null) return deckY;
     return this.getHeightAt(x, z);
   }
+
+  private workerToolFor(agent: VillagerAgent): WorkerToolKind | null {
+    if (agent.role !== 'worker' || !agent.workplaceId) return null;
+    const kind = this.buildings.get(agent.workplaceId)?.kind;
+    if (kind === 'lumber_mill') return 'hatchet';
+    if (kind === 'stone_quarry') return 'pickaxe';
+    return null;
+  }
 }
 
 function describeVillagerActivity(
@@ -881,6 +1012,8 @@ function describeVillagerActivity(
     case 'returning_home':
       return 'Walking home';
     case 'work':
+      if (agent.mode === 'chop') return `Chopping timber near ${workplaceLabel}`;
+      if (agent.mode === 'mine') return `Quarrying stone near ${workplaceLabel}`;
       if (workplace?.constructionComplete === false) {
         return agent.mode === 'walk'
           ? `Building ${workplaceLabel}`

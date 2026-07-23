@@ -227,12 +227,15 @@ function addSteppingStones(group: THREE.Group, z0: number, z1: number, seed: num
 }
 
 function addLowWattleFence(group: THREE.Group, width: number, z: number, seed: number): void {
+  const fence = new THREE.Group();
+  fence.name = 'Backyard wattle fence';
+  group.add(fence);
   const postCount = Math.max(4, Math.floor(width / 1.25));
   const span = width * 0.88;
   for (let i = 0; i < postCount; i++) {
     const x = -span * 0.5 + (span * i) / (postCount - 1);
     addMesh(
-      group,
+      fence,
       new THREE.CylinderGeometry(0.045, 0.06, 0.68, 6),
       MATERIALS.darkTimber,
       x,
@@ -243,7 +246,7 @@ function addLowWattleFence(group: THREE.Group, width: number, z: number, seed: n
   }
   for (let row = 0; row < 3; row++) {
     addMesh(
-      group,
+      fence,
       new THREE.CylinderGeometry(0.035, 0.035, span, 6),
       MATERIALS.wicker,
       0,

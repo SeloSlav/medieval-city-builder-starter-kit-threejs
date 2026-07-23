@@ -10,6 +10,8 @@ export type AudioClipDefinition = {
   loop?: boolean;
 };
 
+export type WorkerActivitySoundKind = 'chop' | 'mine';
+
 export const AMBIENT_LAYERS: Record<AmbientLayerId, AudioClipDefinition> = {
   birds_wind_day: { path: '/sounds/ambient/birds_wind_day.mp3', volume: 0.2, loop: true },
   village_day: { path: '/sounds/ambient/village_day.mp3', volume: 0.12, loop: true },
@@ -21,4 +23,22 @@ export const AMBIENT_LAYERS: Record<AmbientLayerId, AudioClipDefinition> = {
 export const CHURCH_BELL_CLIP: AudioClipDefinition = {
   path: '/sounds/ambient/church_bells.mp3',
   volume: 0.35,
+};
+
+function workerActivityVariants(
+  baseName: string,
+  count = 4,
+): readonly AudioClipDefinition[] {
+  return Array.from({ length: count }, (_, index) => ({
+    path: `/sounds/workers/${baseName}_${index + 1}.mp3`,
+    volume: 0.12,
+  }));
+}
+
+export const WORKER_ACTIVITY_CLIPS: Record<
+  WorkerActivitySoundKind,
+  readonly AudioClipDefinition[]
+> = {
+  chop: workerActivityVariants('chop_wood'),
+  mine: workerActivityVariants('mine_stone'),
 };

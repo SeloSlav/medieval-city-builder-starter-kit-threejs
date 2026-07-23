@@ -525,6 +525,21 @@ export class SceneManager {
     return this.forestManager;
   }
 
+  getFirstPersonCollisionRoots(): readonly THREE.Object3D[] {
+    const solidRootNames = new Set([
+      'Building markers',
+      'Residences',
+      'Backyard gardens',
+      'Burgage fencing',
+      'Fenced pastures',
+    ]);
+    return this.selectionGroup.children.filter((child) => solidRootNames.has(child.name));
+  }
+
+  getRockObstaclesNear(x: number, z: number, radius: number): readonly import('../utils/pathGeometry.ts').RockObstacle[] {
+    return this.rockSpatialIndex?.rocksInRadius(x, z, radius) ?? [];
+  }
+
   setForestClearanceSources(
     buildings: Iterable<BuildingTerrainSource>,
     burgageParcelPolygons: Iterable<Point2[]>,

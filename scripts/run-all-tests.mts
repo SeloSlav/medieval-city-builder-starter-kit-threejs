@@ -23,6 +23,7 @@ const tests = [
   'test:residence-terrain',
   'test:building-art',
   'test:camera-controller',
+  'test:first-person-collision',
   'test:client-sync',
   'test:placement-regressions',
   'test:deer-wildlife',

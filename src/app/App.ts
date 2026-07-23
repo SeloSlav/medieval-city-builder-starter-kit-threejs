@@ -31,6 +31,7 @@ import { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
 import { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
 import { BuildToolbar, type ToolbarStats } from '../ui/BuildToolbar.ts';
 import { ToastManager } from '../ui/ToastManager.ts';
+import { VillagerInspector } from '../ui/VillagerInspector.ts';
 import { SettlementPresentationController } from './settlementSchedulePresentation.ts';
 import { SpacetimeSnapshotApplier, type SpacetimeSnapshotApplierDeps } from './spacetimeSnapshotApplier.ts';
 import { bootstrapAppSession, type BootstrappedSession, type SessionLiveContext } from './appBootstrap.ts';
@@ -75,6 +76,7 @@ export class App {
   private toastManager: ToastManager | null = null;
   private disposeTooltips: (() => void) | null = null;
   private resourceInspector: ResourceInspector | null = null;
+  private villagerInspector: VillagerInspector | null = null;
   private worldMapUi: WorldMapUiBundle | null = null;
   private deliveryAgents: DeliveryAgentRenderer | null = null;
   private villagers: VillagerRenderer | null = null;
@@ -138,6 +140,7 @@ export class App {
     this.toastManager = session.toastManager;
     this.disposeTooltips = session.disposeTooltips;
     this.resourceInspector = session.resourceInspector;
+    this.villagerInspector = session.villagerInspector;
     this.worldMapUi = session.worldMapUi;
     this.ambientAudio = session.ambientAudio;
     this.spacetimeStore = session.spacetimeStore;
@@ -237,6 +240,7 @@ export class App {
         getTreeRegistry: () => this.treeRegistry,
       },
       onForestClearanceChanged: () => this.syncForestClearance(),
+      onFirstPersonCollisionChanged: () => this.firstPersonController?.invalidateCollisionWorld(),
     };
 
     this.gameRuntime.start();
@@ -303,6 +307,7 @@ export class App {
     this.burgageTool?.dispose();
     this.farmFieldTool?.dispose();
     this.buildingMarkers?.dispose();
+    this.villagerInspector?.dispose();
     disposeSettlementWorld({
       residenceMarkers: this.residenceMarkers,
       farmFieldMarkers: this.farmFieldMarkers,
@@ -394,6 +399,7 @@ export class App {
       crowdView,
       this.gameState ?? undefined,
     );
+    this.villagerInspector?.tick();
     this.ambientAudio?.tick(dt);
     this.animationId = requestAnimationFrame(this.tick);
   };
@@ -428,6 +434,7 @@ export class App {
       (x, z) => this.sceneManager?.terrain.getHeightAt(x, z) ?? 0,
     );
     this.syncForestClearance();
+    this.firstPersonController?.invalidateCollisionWorld();
     this.syncResourceUi();
     this.exposeDevHandles();
   }
@@ -635,14 +642,35 @@ export class App {
   }
 
   private buildCrowdViewState() {
+    const camera = this.sceneManager?.camera.position;
     if (this.firstPersonController?.isActive()) {
       const pos = this.firstPersonController.getPosition();
-      return buildCrowdViewState(pos.x, pos.z, 48);
+      return buildCrowdViewState(
+        pos.x,
+        pos.z,
+        12,
+        camera?.x ?? pos.x,
+        camera?.z ?? pos.z,
+      );
     }
     const target = this.cameraController?.getTargetPosition();
     const orbit = this.cameraController?.getOrbitDistance() ?? 240;
-    if (!target) return buildCrowdViewState(0, 0, orbit);
-    return buildCrowdViewState(target.x, target.z, orbit);
+    if (!target) {
+      return buildCrowdViewState(
+        0,
+        0,
+        orbit,
+        camera?.x ?? 0,
+        camera?.z ?? 0,
+      );
+    }
+    return buildCrowdViewState(
+      target.x,
+      target.z,
+      orbit,
+      camera?.x ?? target.x,
+      camera?.z ?? target.z,
+    );
   }
 }
 

@@ -20,6 +20,10 @@ playwright-report/
 test-results/
 blob-report/
 
+# Download-only asset source archives
+artifacts/kenney-survival-kit-extracted/
+artifacts/kenney_survival-kit.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

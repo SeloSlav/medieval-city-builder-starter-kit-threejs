@@ -49,7 +49,30 @@ export type RockObstacle = {
   x: number;
   z: number;
   scale: number;
+  /** Optional visual-derived collision radius for first-person movement. */
+  collisionRadius?: number;
+  /** Optional visual-derived bottom/top, in world-space metres. */
+  collisionMinY?: number;
+  collisionMaxY?: number;
 };
+
+export function setRockObstacleCollisionBounds(
+  rock: RockObstacle,
+  geometry: THREE.BufferGeometry,
+  worldMatrix: THREE.Matrix4,
+): void {
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  if (!geometry.boundingBox) return;
+  const bounds = geometry.boundingBox.clone().applyMatrix4(worldMatrix);
+  rock.collisionRadius = Math.max(
+    Math.abs(bounds.min.x - rock.x),
+    Math.abs(bounds.max.x - rock.x),
+    Math.abs(bounds.min.z - rock.z),
+    Math.abs(bounds.max.z - rock.z),
+  );
+  rock.collisionMinY = bounds.min.y;
+  rock.collisionMaxY = bounds.max.y;
+}
 
 export function distancePointToPolylineXZ(x: number, z: number, path: THREE.Vector3[]): number {
   let minDistance = Infinity;

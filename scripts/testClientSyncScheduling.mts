@@ -295,6 +295,7 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
   let buildingSyncCalls = 0;
   let fenceSyncCalls = 0;
   let forestClearanceCalls = 0;
+  let collisionInvalidations = 0;
   const deps = {
     sceneManager: null,
     buildingMarkers: {
@@ -334,6 +335,9 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
     onForestClearanceChanged: () => {
       forestClearanceCalls += 1;
     },
+    onFirstPersonCollisionChanged: () => {
+      collisionInvalidations += 1;
+    },
   };
   const applier = new SpacetimeSnapshotApplier();
   applier.apply(deps as never, first, null);
@@ -342,6 +346,7 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
   assert.equal(buildingSyncCalls, 0);
   assert.equal(fenceSyncCalls, 1);
   assert.equal(forestClearanceCalls, 1);
+  assert.equal(collisionInvalidations, 1);
 
   const tickOnly = { ...first, tick: 1 };
   applier.apply(deps as never, tickOnly, first);
@@ -350,6 +355,11 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
   assert.equal(buildingSyncCalls, 0);
   assert.equal(fenceSyncCalls, 1);
   assert.equal(forestClearanceCalls, 1);
+  assert.equal(
+    collisionInvalidations,
+    1,
+    'tick-only snapshots should not rebuild first-person static collision geometry',
+  );
 
   const changedTrees = new Map(tickOnly.trees);
   changedTrees.set('tree-1', {
@@ -360,6 +370,11 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
   const treeChanged = { ...tickOnly, tick: 2, trees: changedTrees };
   applier.apply(deps as never, treeChanged, tickOnly);
   assert.equal(syncTreeCalls, 1);
+  assert.equal(
+    collisionInvalidations,
+    1,
+    'tree phases use the nearby tree registry and should not rebuild static geometry',
+  );
 
   const changedBuildings = new Map(treeChanged.buildings);
   changedBuildings.set('building-1', {
@@ -400,6 +415,7 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
   const buildingAdded = { ...treeChanged, tick: 3, buildings: changedBuildings };
   applier.apply(deps as never, buildingAdded, treeChanged);
   assert.equal(buildingSyncCalls, 1);
+  assert.equal(collisionInvalidations, 2);
 
   const laborChanged = new Map(buildingAdded.buildings);
   laborChanged.set('building-1', {
@@ -415,6 +431,11 @@ function testTreeVisualSyncSkipsUnchangedSnapshots(): void {
     buildingSyncCalls,
     1,
     'labor-only updates should not rebuild building geometry or terrain pads',
+  );
+  assert.equal(
+    collisionInvalidations,
+    2,
+    'labor-only updates should keep the first-person collision cache intact',
   );
 
   const progressChanged = new Map(laborChanged);

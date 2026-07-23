@@ -45,6 +45,7 @@ A real-time Three.js sandbox for growing a **medieval settlement** on a procedur
 - **Building storage** — the village storehouse centralizes timber, stone, and firewood and provides much larger construction-cart batches when staffed; its capacity and stored stock remain useful without assigned labor. Mills, lodges, quarries, wells, granaries, and processors retain specialized capped inventories. Construction spending protects reserved stock from trade and other orders until it is delivered or the site is cancelled.
 - **Salvage on demolish** — removing buildings, residence zones, or backyard gardens refunds a fraction of placement cost plus stored resources.
 - **Labor assignment** — assign workers to production buildings via the inspector; labor speeds harvest cycles and is capped by available population.
+- **Visible extraction crews** — lumber-mill workers walk to mature trees and chop with hand-jointed hatchets; stonecutters walk to live quarry nodes and mine with pickaxes. Skeletal work animation is limited to a 64 m viewing radius, with instanced villager LODs beyond it. Randomized extraction impacts fade out from 12–32 m and are disabled outside the close 32 m camera zoom.
 - **Population & housing** — starting population plus occupants from placed residences; settlers arrive gradually per home; unassigned workers form the free-labor pool.
 - **Treasury gold** — backyard gardens linked to a marketplace generate village trade; earnings split between **household wealth** (saved per home, capped) and **mayor tax** (Laffer productivity curve). A staffed **chapel** on the road collects flat tithes from household savings when villagers attend.
 - **Lumber mill** — harvests the nearest mature tree within a 210 m work extent when road-connected to a well; stores timber and consumes water per harvest; up to 3 laborers scale the 9 s harvest cycle.
@@ -390,14 +391,16 @@ On the server, `server/src/reducers/simulation.rs` runs each 200 ms tick: constr
 
 Texture assets are stored under `public/assets/textures`. The road surface uses a medieval dirt texture set with albedo, normal, roughness, ambient occlusion, height, rut mask, and edge mask maps. River bridge decks use a separate wood-log PBR set (procedurally generated via `scripts/generate_wood_logs_texture.py`). Terrain uses multiple manor grass PBR sets (meadow, dense, dry, blend) and prop textures for pine foliage and rocks. Build menu cards use Croatian naive art PNGs under `public/assets/ui/build-menu/`. Building meshes use procedural geometry with timber, stone, and shingle materials guided by [building visual language](docs/design/building-visual-language.md). Everything is loaded locally at runtime — no external asset CDN required.
 
-## Third-Party Libraries
+## Third-Party Libraries and Assets
 
-Vegetation and sky rendering use vendored libraries (Git submodules under `vendor/`). Full license texts are kept alongside each package.
+Vegetation and sky rendering use vendored libraries (Git submodules under `vendor/`), while adapted third-party art is stored locally under `public/assets/third-party/`. License and attribution records are kept alongside each package or asset.
 
 | Library | Author / project | Used for | License |
 | --- | --- | --- | --- |
 | [SeedThree](https://github.com/SkyeShark/SeedThree) | [SkyeShark](https://github.com/SkyeShark) | Procedural forest trees, grass tufts (WebGPU), undergrowth cards, wind | [MIT](vendor/seedthree/LICENSE) |
 | [sky-cloud-3d](vendor/sky-cloud-3d/) | sky-cloud-3d | Volumetric sky and cloud dome (WebGL + WebGPU) | [Non-commercial](vendor/sky-cloud-3d/LICENSE) — see also [`public/assets/third-party/sky-cloud-3d-LICENSE.txt`](public/assets/third-party/sky-cloud-3d-LICENSE.txt) |
+| [Kenney Survival Kit](https://kenney.nl/assets/survival-kit) | Kenney | Low-poly worker hatchet and pickaxe models | [CC0 1.0](public/assets/models/worker-tools/LICENSE.txt) |
+| [Game-icons.net](https://game-icons.net/) | Delapouite, Caro Asercion | Adapted quarry, game, and berry map-marker glyphs | [CC BY 3.0](public/assets/third-party/game-icons-LICENSE.txt) |
 
 After cloning, initialize submodules so `vendor/seedthree` is present:
 

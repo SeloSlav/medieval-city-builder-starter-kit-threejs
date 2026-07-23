@@ -173,6 +173,13 @@ export class ForestManager {
     return this.activeRockPlacements;
   }
 
+  isTreeLayoutActiveForCollision(layoutIndex: number): boolean {
+    return layoutIndex >= 0
+      && layoutIndex < this.placements.length
+      && !this.removedTrees.has(layoutIndex)
+      && !this.missingTreeEntities.has(layoutIndex);
+  }
+
   applyTreePhase(layoutIndex: number, phase: TreePhase, growthProgress: number): void {
     if (this.applyTreePhaseWithoutCommit(layoutIndex, phase, growthProgress)) {
       this.commitTreeInstanceUpdates();
