@@ -65,7 +65,7 @@ function swayAt(phaseWorld: TslNode, phaseScale: number): TslNode {
  * Rooted grass sway for instanced tufts.
  * Must bend from positionLocal (post-instance-matrix), not positionGeometry.
  */
-function createPinnedGrassWindPosition(): TslNode {
+export function createPinnedGrassWindPosition(): TslNode {
   const local = tsl.positionLocal;
   const k = tsl.uv().y.mul(tsl.uv().y);
   const amp = tsl.windStrength.mul(0.16);
