@@ -10,6 +10,7 @@ mod farming;
 mod hydrology;
 mod hydrology_grid_generated;
 mod placement_validation;
+mod quarry_balance;
 mod tables;
 mod types;
 mod world_gen;

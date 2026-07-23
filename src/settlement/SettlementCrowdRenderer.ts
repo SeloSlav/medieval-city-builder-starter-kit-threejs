@@ -4,8 +4,16 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import {
   isWithinCrowdView,
   isWithinShadowRange,
+  isWithinWorkAnimationRange,
   type CrowdViewState,
 } from './crowdView.ts';
+import {
+  attachWorkerTool,
+  disposeWorkerToolSources,
+  loadWorkerToolSources,
+  type WorkerToolKind,
+  type WorkerToolSources,
+} from './workerTools.ts';
 
 const MAX_INSTANCES = 1024;
 const MAX_ANIMATED_VILLAGERS = 72;
@@ -25,7 +33,7 @@ const TARGET_HEIGHTS = {
 } as const;
 
 export type VillagerModelVariant = keyof typeof MODEL_URLS;
-export type VillagerRenderMode = 'idle' | 'walk';
+export type VillagerRenderMode = 'idle' | 'walk' | 'chop' | 'mine';
 
 type FallbackPartLayer = {
   mesh: THREE.InstancedMesh;
@@ -52,6 +60,8 @@ type ProxyLayer = {
 type AnimatedVillager = {
   id: string;
   variant: VillagerModelVariant;
+  toolKind: WorkerToolKind | null;
+  tool: THREE.Group | null;
   root: THREE.Group;
   model: THREE.Group;
   mixer: THREE.AnimationMixer;
@@ -73,6 +83,7 @@ export type CrowdRenderAgent = {
   tunicColor: number;
   skinColor: number;
   hairColor: number;
+  tool: WorkerToolKind | null;
   active: boolean;
 };
 
@@ -100,6 +111,7 @@ export class SettlementCrowdRenderer {
   private readonly fallbackHead: FallbackPartLayer;
   private readonly animated = new Map<string, AnimatedVillager>();
   private sources: Record<VillagerModelVariant, VillagerSource> | null = null;
+  private toolSources: WorkerToolSources | null = null;
   private proxyLayers: ProxyLayer[] = [];
   private latestAgents: CrowdRenderAgent[] = [];
   private lastView: CrowdViewState | undefined;
@@ -164,21 +176,26 @@ export class SettlementCrowdRenderer {
       for (const source of Object.values(this.sources)) disposeModelResources(source.scene);
     }
     this.sources = null;
+    if (this.toolSources) disposeWorkerToolSources(this.toolSources);
+    this.toolSources = null;
     this.group.removeFromParent();
   }
 
   private async loadSources(): Promise<void> {
     try {
-      const [man, woman] = await Promise.all([
+      const [man, woman, tools] = await Promise.all([
         loadVillagerSource(MODEL_URLS.man, TARGET_HEIGHTS.man),
         loadVillagerSource(MODEL_URLS.woman, TARGET_HEIGHTS.woman),
+        loadWorkerToolSources(),
       ]);
       if (this.disposed) {
         disposeModelResources(man.scene);
         disposeModelResources(woman.scene);
+        disposeWorkerToolSources(tools);
         return;
       }
       this.sources = { man, woman };
+      this.toolSources = tools;
       this.proxyLayers = [
         ...this.createProxyLayers('man', man),
         ...this.createProxyLayers('woman', woman),
@@ -270,7 +287,9 @@ export class SettlementCrowdRenderer {
     view?: CrowdViewState,
   ): Set<string> {
     const candidates = agents.filter((agent) =>
-      isWithinShadowRange(agent.x, agent.z, view)
+      isWorkMode(agent.mode)
+        ? isWithinWorkAnimationRange(agent.x, agent.z, view)
+        : isWithinShadowRange(agent.x, agent.z, view)
     );
     if (view) {
       candidates.sort((a, b) => {
@@ -299,7 +318,11 @@ export class SettlementCrowdRenderer {
     for (const agent of agents) {
       if (!animatedIds.has(agent.id)) continue;
       let visual = this.animated.get(agent.id);
-      if (!visual || visual.variant !== agent.variant) {
+      if (
+        !visual
+        || visual.variant !== agent.variant
+        || visual.toolKind !== agent.tool
+      ) {
         if (visual) this.removeAnimatedVillager(agent.id);
         visual = this.createAnimatedVillager(agent);
         this.animated.set(agent.id, visual);
@@ -349,16 +372,25 @@ export class SettlementCrowdRenderer {
     root.add(model);
     this.animatedGroup.add(root);
 
+    const tool = agent.tool && this.toolSources
+      ? attachWorkerTool(model, this.toolSources[agent.tool])
+      : null;
+    if (tool) tool.visible = isWorkMode(agent.mode);
+
     const mixer = new THREE.AnimationMixer(model);
     const actions: Record<VillagerRenderMode, THREE.AnimationAction> = {
       idle: mixer.clipAction(source.clips.idle, model),
       walk: mixer.clipAction(source.clips.walk, model),
+      chop: mixer.clipAction(source.clips.chop, model),
+      mine: mixer.clipAction(source.clips.mine, model),
     };
     for (const action of Object.values(actions)) {
       action.enabled = true;
       action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
     }
     actions.walk.setEffectiveTimeScale(1.06);
+    actions.chop.setEffectiveTimeScale(1.08);
+    actions.mine.setEffectiveTimeScale(0.9);
     actions[agent.mode].play();
     actions[agent.mode].time =
       (agent.appearanceSeed % 997) / 997 * actions[agent.mode].getClip().duration;
@@ -366,6 +398,8 @@ export class SettlementCrowdRenderer {
     return {
       id: agent.id,
       variant: agent.variant,
+      toolKind: agent.tool,
+      tool,
       root,
       model,
       mixer,
@@ -382,6 +416,7 @@ export class SettlementCrowdRenderer {
     if (visual.mode === nextMode) return;
     visual.actions[visual.mode].fadeOut(0.18);
     visual.actions[nextMode].reset().fadeIn(0.18).play();
+    if (visual.tool) visual.tool.visible = isWorkMode(nextMode);
     visual.mode = nextMode;
   }
 
@@ -483,14 +518,25 @@ async function loadVillagerSource(
   }
   const idle = findAnimationClip(gltf.animations, 'idle');
   const walk = findAnimationClip(gltf.animations, 'walk');
-  if (!idle || !walk) throw new Error(`Missing idle/walk clips in ${url}`);
+  const swing = findAnimationClip(gltf.animations, 'swordslash');
+  if (!idle || !walk || !swing) {
+    throw new Error(`Missing idle/walk/swing clips in ${url}`);
+  }
+  const chop = swing.clone();
+  chop.name = `${swing.name}:worker-chop`;
+  const mine = swing.clone();
+  mine.name = `${swing.name}:worker-mine`;
   return {
     scene: gltf.scene,
     bounds,
     sourceHeight,
     targetHeight,
-    clips: { idle, walk },
+    clips: { idle, walk, chop, mine },
   };
+}
+
+function isWorkMode(mode: VillagerRenderMode): mode is 'chop' | 'mine' {
+  return mode === 'chop' || mode === 'mine';
 }
 
 function findAnimationClip(

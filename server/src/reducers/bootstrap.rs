@@ -1,6 +1,7 @@
 use spacetimedb::{reducer, ReducerContext};
 
 use crate::db::*;
+use crate::quarry_balance::preserve_extracted_stone;
 use crate::tables::{ForagingNode, Quarry, TreeEntity};
 use crate::types::{ForagingBootstrap, QuarryBootstrap, TreeBootstrap};
 
@@ -11,11 +12,18 @@ pub fn bootstrap_quarries(ctx: &ReducerContext, quarries: Vec<QuarryBootstrap>) 
             continue;
         }
         if let Some(existing) = ctx.db.quarry().quarry_id().find(&quarry.quarry_id) {
+            // Preserve the absolute amount already extracted when a balance update
+            // expands a deposit, so existing worlds receive the additional reserve.
+            let rebalanced_remaining = preserve_extracted_stone(
+                existing.max_yield,
+                existing.remaining,
+                quarry.max_yield,
+            );
             ctx.db.quarry().quarry_id().update(Quarry {
                 x: quarry.x,
                 z: quarry.z,
                 max_yield: quarry.max_yield,
-                remaining: existing.remaining.min(quarry.max_yield),
+                remaining: rebalanced_remaining,
                 ..existing
             });
         } else {

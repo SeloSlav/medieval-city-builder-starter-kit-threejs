@@ -217,6 +217,10 @@ export type GameBalance = {
     deliveryUnloadSec: number;
     treasuryTransferPerSecond: number;
   };
+  quarries: {
+    largeMaxYield: number;
+    smallMaxYield: number;
+  };
   production: {
     lodgeTimberPerCycle: number;
     lodgeTimberPerDelivery: number;
@@ -464,6 +468,9 @@ function generateRust(): string {
     `pub const CONSTRUCTION_DELIVERY_SPEED_MPS: f64 = ${rustF64(b.construction.deliverySpeedMps)};`,
     `pub const CONSTRUCTION_DELIVERY_UNLOAD_SEC: f64 = ${rustF64(b.construction.deliveryUnloadSec)};`,
     `pub const CONSTRUCTION_TREASURY_TRANSFER_PER_SEC: f64 = ${rustF64(b.construction.treasuryTransferPerSecond)};`,
+    '',
+    `pub const LARGE_QUARRY_MAX_YIELD: f64 = ${rustF64(b.quarries.largeMaxYield)};`,
+    `pub const SMALL_QUARRY_MAX_YIELD: f64 = ${rustF64(b.quarries.smallMaxYield)};`,
     '',
     `pub const LODGE_TIMBER_PER_CYCLE: f64 = ${rustF64(b.production.lodgeTimberPerCycle)};`,
     `pub const LODGE_TIMBER_PER_DELIVERY: f64 = ${rustF64(b.production.lodgeTimberPerDelivery)};`,
@@ -886,6 +893,9 @@ function generateTypeScript(): string {
     `export const CONSTRUCTION_DELIVERY_SPEED_MPS = ${b.construction.deliverySpeedMps};`,
     `export const CONSTRUCTION_DELIVERY_UNLOAD_SEC = ${b.construction.deliveryUnloadSec};`,
     `export const CONSTRUCTION_TREASURY_TRANSFER_PER_SEC = ${b.construction.treasuryTransferPerSecond};`,
+    '',
+    `export const LARGE_QUARRY_MAX_YIELD = ${b.quarries.largeMaxYield};`,
+    `export const SMALL_QUARRY_MAX_YIELD = ${b.quarries.smallMaxYield};`,
     '',
     `export const LODGE_TIMBER_PER_CYCLE = ${b.production.lodgeTimberPerCycle};`,
     `export const LODGE_TIMBER_PER_DELIVERY = ${b.production.lodgeTimberPerDelivery};`,

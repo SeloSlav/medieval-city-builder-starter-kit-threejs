@@ -66,6 +66,15 @@ export type WorkerTarget = PointXZ & {
   kind: WorkerTargetKind;
 };
 
+export type WorkerActivityKind = 'chop' | 'mine';
+
+export type WorkerWalkPlan = {
+  path: PointXZ[];
+  activity: WorkerActivityKind | null;
+  workDistance: number | null;
+  target: WorkerTarget | null;
+};
+
 export type WorkerTargetInputs = {
   quarries: Iterable<ResourceNodeState>;
   foragingNodes: Iterable<ForagingNodeState>;
@@ -251,6 +260,15 @@ export function pickWorkerWalkPath(
   targets: readonly WorkerTarget[],
   seed: number,
 ): PointXZ[] | null {
+  return pickWorkerWalkPlan(building, slotIndex, targets, seed)?.path ?? null;
+}
+
+export function pickWorkerWalkPlan(
+  building: BuildingState,
+  slotIndex: number,
+  targets: readonly WorkerTarget[],
+  seed: number,
+): WorkerWalkPlan | null {
   const start = workplaceYardPosition(building, slotIndex);
   const rng = mulberry32(seed ^ hashStringSeed(building.id));
 
@@ -263,12 +281,22 @@ export function pickWorkerWalkPath(
     const target = pool[Math.floor(rng() * pool.length)] ?? pool[0];
     if (target) {
       const path = resourceWorkLoop(building, start, target, rng);
-      if (polylineLengthXZ(path) >= 4) return path;
+      if (polylineLengthXZ(path) >= 4) {
+        const activity = workerActivityFor(building, target);
+        return {
+          path,
+          activity,
+          workDistance: activity ? polylineLengthXZ(path.slice(0, 3)) : null,
+          target: activity ? target : null,
+        };
+      }
     }
   }
 
   const localPath = workplaceLoop(building, start, slotIndex, rng);
-  return polylineLengthXZ(localPath) >= 4 ? localPath : null;
+  return polylineLengthXZ(localPath) >= 4
+    ? { path: localPath, activity: null, workDistance: null, target: null }
+    : null;
 }
 
 export function pickWorkerCommutePath(
@@ -316,6 +344,15 @@ function collectTreeTargets(
     if (!entity || !acceptsPhase(entity.phase)) continue;
     targets.push({ id: tree.id, kind: 'tree', x: tree.x, z: tree.z });
   }
+}
+
+function workerActivityFor(
+  building: BuildingState,
+  target: WorkerTarget,
+): WorkerActivityKind | null {
+  if (building.kind === 'lumber_mill' && target.kind === 'tree') return 'chop';
+  if (building.kind === 'stone_quarry' && target.kind === 'quarry') return 'mine';
+  return null;
 }
 
 function pushNodeInsideExtent(

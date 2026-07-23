@@ -1,0 +1,26 @@
+Worker tool model assets
+========================
+
+The GLB files and shared colormap texture in this directory are from Kenney's
+Survival Kit 2.0, distributed under Creative Commons Zero v1.0 Universal
+(CC0 1.0):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Creator and source:
+
+- Kenney (https://kenney.nl/)
+- Survival Kit (https://kenney.nl/assets/survival-kit)
+- Release date: 2024-04-03
+
+Files used by this project:
+
+- kenney-tool-hatchet.glb
+  Renamed from `Models/GLB format/tool-axe.glb`.
+- kenney-tool-pickaxe.glb
+  Renamed from `Models/GLB format/tool-pickaxe.glb`.
+- Textures/colormap.png
+  Shared palette texture referenced by both GLB files.
+
+Kenney permits personal, educational, and commercial use. Attribution is not
+required by CC0, but this record is kept with the assets so their provenance
+and reuse terms remain auditable.

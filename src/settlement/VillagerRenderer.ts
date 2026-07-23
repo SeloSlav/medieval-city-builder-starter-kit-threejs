@@ -10,6 +10,7 @@ import type {
   TreeEntityState,
   TreeLayoutEntry,
 } from '../resources/types.ts';
+import { getBuildingDefinition } from '../resources/buildings.ts';
 import {
   householdMemberHomeState,
   type HouseholdHomeState,
@@ -48,6 +49,10 @@ import {
   workplaceYardPosition,
   type WorkerTarget,
 } from './workerPaths.ts';
+import {
+  villagerDisplayName,
+  villagerOccupation,
+} from './villagerIdentity.ts';
 
 type VillagerMode = 'idle' | 'walk';
 type VillagerRole = 'resident' | 'worker';
@@ -96,6 +101,22 @@ type VillagerAgent = {
   yaw: number;
   simAccumulator: number;
   frozen: boolean;
+};
+
+export type VillagerInspection = {
+  personIdentity: string;
+  name: string;
+  initials: string;
+  eyebrow: string;
+  occupation: string;
+  activity: string;
+  activityState: 'active' | 'ready';
+  workplace: string;
+  household: string;
+  crew: string;
+  pace: string;
+  position: { x: number; y: number; z: number };
+  visible: boolean;
 };
 
 export type VillagerRendererOptions = {
@@ -402,9 +423,107 @@ export class VillagerRenderer {
     this.pushRenderState(view, dt);
   }
 
+  pickVillager(
+    clientX: number,
+    clientY: number,
+    camera: THREE.Camera,
+    domElement: HTMLElement,
+  ): VillagerInspection | null {
+    const bounds = domElement.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
+
+    let nearest: { distance: number; inspection: VillagerInspection } | null = null;
+    for (const agent of this.agents.values()) {
+      if (!this.isVisibleAgent(agent)) continue;
+
+      const feet = projectWorldPoint(agent.x, agent.y + 0.08, agent.z, camera, bounds);
+      const head = projectWorldPoint(agent.x, agent.y + 1.72, agent.z, camera, bounds);
+      if (!feet || !head) continue;
+
+      const projectedHeight = Math.hypot(feet.x - head.x, feet.y - head.y);
+      const hitRadius = Math.min(30, Math.max(11, projectedHeight * 0.34));
+      const distance = distanceToScreenSegment(
+        clientX,
+        clientY,
+        feet.x,
+        feet.y,
+        head.x,
+        head.y,
+      );
+      if (distance > hitRadius || (nearest && distance >= nearest.distance)) continue;
+      nearest = {
+        distance,
+        inspection: this.describeAgent(agent),
+      };
+    }
+    return nearest?.inspection ?? null;
+  }
+
+  inspectVillager(personIdentity: string): VillagerInspection | null {
+    for (const agent of this.agents.values()) {
+      if (agent.personIdentity === personIdentity) return this.describeAgent(agent);
+    }
+    return null;
+  }
+
   dispose(): void {
     this.agents.clear();
     this.renderer.dispose();
+  }
+
+  private describeAgent(agent: VillagerAgent): VillagerInspection {
+    const workplace = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
+    const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+    const name = villagerDisplayName(agent.personIdentity, agent.modelVariant);
+    const onDuty = agent.role === 'worker'
+      && (
+        agent.routinePhase === 'work'
+        || agent.routinePhase === 'commuting_to_work'
+      );
+
+    return {
+      personIdentity: agent.personIdentity,
+      name,
+      initials: name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0] ?? '')
+        .join('')
+        .toLocaleUpperCase(),
+      eyebrow: agent.role === 'worker'
+        ? `Worker · ${onDuty ? 'On duty' : 'Off duty'}`
+        : 'Villager · Available labor',
+      occupation: villagerOccupation(
+        workplace?.kind ?? null,
+        workplace?.constructionComplete === false,
+      ),
+      activity: describeVillagerActivity(agent, workplace),
+      activityState: onDuty ? 'active' : 'ready',
+      workplace: workplace ? getBuildingDefinition(workplace.kind).label : 'Unassigned',
+      household: residence
+        ? `Tier ${residence.tier} home · ${residence.population} ${
+          residence.population === 1 ? 'resident' : 'residents'
+        }`
+        : 'No fixed household',
+      crew: workplace
+        ? `${workplace.assignedLabor} / ${getBuildingDefinition(workplace.kind).maxLabor} assigned`
+        : 'Free labor pool',
+      pace: `${agent.walkSpeed.toFixed(1)} m/s`,
+      position: { x: agent.x, y: agent.y, z: agent.z },
+      visible: this.isVisibleAgent(agent),
+    };
+  }
+
+  private isVisibleAgent(agent: VillagerAgent): boolean {
+    if (agent.routinePhase === 'indoors' || agent.routinePhase === 'asleep') {
+      return false;
+    }
+    if (agent.role === 'worker') {
+      const workplace = agent.workplaceId ? this.buildings.get(agent.workplaceId) : null;
+      return Boolean(workplace && workplace.assignedLabor > agent.workplaceSlot);
+    }
+    const residence = agent.residenceId ? this.residences.get(agent.residenceId) : null;
+    return Boolean(residence && !residence.abandoned && residence.population > 0);
   }
 
   private pushRenderState(view?: CrowdViewState, dt = 0): void {
@@ -746,4 +865,83 @@ export class VillagerRenderer {
     if (deckY != null) return deckY;
     return this.getHeightAt(x, z);
   }
+}
+
+function describeVillagerActivity(
+  agent: VillagerAgent,
+  workplace: BuildingState | null,
+): string {
+  const workplaceLabel = workplace
+    ? getBuildingDefinition(workplace.kind).label
+    : 'their workplace';
+
+  switch (agent.routinePhase) {
+    case 'commuting_to_work':
+      return `Walking to ${workplaceLabel}`;
+    case 'returning_home':
+      return 'Walking home';
+    case 'work':
+      if (workplace?.constructionComplete === false) {
+        return agent.mode === 'walk'
+          ? `Building ${workplaceLabel}`
+          : `Working on ${workplaceLabel}`;
+      }
+      return agent.mode === 'walk'
+        ? `Working around ${workplaceLabel}`
+        : `Working at ${workplaceLabel}`;
+    case 'home_outdoors':
+      return agent.mode === 'walk' ? 'Walking near home' : 'Outside at home';
+    case 'indoors':
+      return 'At home';
+    case 'asleep':
+      return 'Sleeping';
+  }
+}
+
+function projectWorldPoint(
+  x: number,
+  y: number,
+  z: number,
+  camera: THREE.Camera,
+  bounds: DOMRect,
+): { x: number; y: number } | null {
+  const projected = new THREE.Vector3(x, y, z).project(camera);
+  if (
+    !Number.isFinite(projected.x)
+    || !Number.isFinite(projected.y)
+    || !Number.isFinite(projected.z)
+    || projected.z < -1
+    || projected.z > 1
+  ) {
+    return null;
+  }
+  return {
+    x: bounds.left + (projected.x * 0.5 + 0.5) * bounds.width,
+    y: bounds.top + (-projected.y * 0.5 + 0.5) * bounds.height,
+  };
+}
+
+function distanceToScreenSegment(
+  pointX: number,
+  pointY: number,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): number {
+  const segmentX = endX - startX;
+  const segmentY = endY - startY;
+  const lengthSq = segmentX * segmentX + segmentY * segmentY;
+  if (lengthSq <= 0.0001) return Math.hypot(pointX - startX, pointY - startY);
+  const t = Math.min(
+    1,
+    Math.max(
+      0,
+      ((pointX - startX) * segmentX + (pointY - startY) * segmentY) / lengthSq,
+    ),
+  );
+  return Math.hypot(
+    pointX - (startX + segmentX * t),
+    pointY - (startY + segmentY * t),
+  );
 }

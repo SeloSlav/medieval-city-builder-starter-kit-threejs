@@ -8,6 +8,7 @@ export type CrowdViewState = {
 export const CROWD_SIM_HZ = 15;
 export const CROWD_SIM_DT = 1 / CROWD_SIM_HZ;
 export const AGENT_SHADOW_DISTANCE = 80;
+export const AGENT_WORK_ANIMATION_DISTANCE = 64;
 export const FRUSTUM_SIM_MARGIN = 40;
 
 export function buildCrowdViewState(
@@ -44,4 +45,16 @@ export function isWithinShadowRange(
   const dx = x - view.centerX;
   const dz = z - view.centerZ;
   return dx * dx + dz * dz <= view.shadowRadius * view.shadowRadius;
+}
+
+export function isWithinWorkAnimationRange(
+  x: number,
+  z: number,
+  view: CrowdViewState | undefined,
+): boolean {
+  if (!view) return true;
+  const dx = x - view.centerX;
+  const dz = z - view.centerZ;
+  return dx * dx + dz * dz
+    <= AGENT_WORK_ANIMATION_DISTANCE * AGENT_WORK_ANIMATION_DISTANCE;
 }

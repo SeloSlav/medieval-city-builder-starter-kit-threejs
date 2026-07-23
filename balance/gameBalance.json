@@ -210,12 +210,16 @@
     "deliveryUnloadSec": 6,
     "treasuryTransferPerSecond": 2
   },
+  "quarries": {
+    "largeMaxYield": 10000,
+    "smallMaxYield": 4000
+  },
   "production": {
     "lodgeTimberPerCycle": 3,
     "lodgeTimberPerDelivery": 3,
     "lodgeFirewoodPerCycle": 3,
     "lodgeFirewoodPerDelivery": 2,
-    "stonePerHarvest": 3,
+    "stonePerHarvest": 2,
     "gamePerHarvest": 4,
     "berriesPerHarvest": 3,
     "foodPerDelivery": 2,

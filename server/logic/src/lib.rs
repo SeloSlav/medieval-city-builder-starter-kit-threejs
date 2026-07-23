@@ -21,3 +21,6 @@ pub mod hydrology;
 
 #[path = "../../src/simulation/game_calendar.rs"]
 pub mod game_calendar;
+
+#[path = "../../src/quarry_balance.rs"]
+pub mod quarry_balance;
