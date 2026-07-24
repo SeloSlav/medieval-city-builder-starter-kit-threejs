@@ -330,7 +330,6 @@ export async function bootstrapAppSession(
     sceneManager,
     selection: roadSelection,
     terrainProjector: sceneManager.terrainProjector,
-    getGameState: () => liveContext.gameState,
     onToggle: toggleRoadTool,
     onNetworkChanged: () => {
       sceneManager.syncRoadNetwork(roadNetwork);

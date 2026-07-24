@@ -10,8 +10,6 @@ import {
   type RoadPlacementResult,
 } from './RoadPlacementValidation.ts';
 import { downsamplePath } from '../utils/pathGeometry.ts';
-import { computePendingRoadAutoCurve, mergeManualAndAutoCurve } from './roadAutoCurve.ts';
-import type { GameState } from '../resources/types.ts';
 
 const ROAD_WIDTH = 4.2;
 const MIN_POINT_DISTANCE = 1.05;
@@ -49,7 +47,6 @@ export class RoadTool {
     onDeleteRequested: (request: RoadDeleteRequest | null) => void;
     onPlacementRejected?: (event: RoadPlacementRejectedEvent) => void;
     onToggle?: () => void;
-    getGameState?: () => GameState | undefined;
     isBlocked: () => boolean;
   };
   private enabled = false;
@@ -75,7 +72,6 @@ export class RoadTool {
   private readonly anchorScratch: THREE.Vector3[] = [];
   private readonly curveScratch: number[] = [];
   private readonly projectScratch = new THREE.Vector3();
-  private cachedPendingAutoCurve = 0;
   private cachedPreviewSignature = '';
   private readonly cachedPreviewPath: THREE.Vector3[] = [];
 
@@ -90,7 +86,6 @@ export class RoadTool {
     onDeleteRequested: (request: RoadDeleteRequest | null) => void;
     onPlacementRejected?: (event: RoadPlacementRejectedEvent) => void;
     onToggle?: () => void;
-    getGameState?: () => GameState | undefined;
     isBlocked: () => boolean;
   }) {
     this.options = options;
@@ -336,9 +331,7 @@ export class RoadTool {
     const last = this.points[this.points.length - 1];
     if (last) {
       if (distanceXZ(last, point) < MIN_POINT_DISTANCE) return;
-      this.segmentCurves.push(
-        clampCurve(mergeManualAndAutoCurve(this.pendingCurve, this.computePendingAutoCurve(last, point))),
-      );
+      this.segmentCurves.push(this.pendingCurve);
     }
     this.points.push(point.clone());
     this.pendingCurve = 0;
@@ -390,7 +383,7 @@ export class RoadTool {
       return;
     }
 
-    const { anchors, path } = this.buildPreviewAnchors(false);
+    const { anchors, path } = this.buildPreviewAnchors();
     const valid = this.cachedDraftValidation?.ok ?? true;
     if (path.length < 2) {
       this.preview.update(path, valid, ROAD_WIDTH, this.latestSnapPoint, anchors);
@@ -426,7 +419,7 @@ export class RoadTool {
 
   private runValidation(_force: boolean): void {
     if (!this.hasDraft()) return;
-    const { path } = this.buildPreviewAnchors(true);
+    const { path } = this.buildPreviewAnchors();
     if (path.length < 2) {
       this.cachedDraftValidation = { ok: false, reason: 'too_short' };
       this.validationDirty = false;
@@ -456,7 +449,7 @@ export class RoadTool {
     this.preview.setValidity(validation.ok);
   }
 
-  private buildPreviewAnchors(computeAutoCurve: boolean): { anchors: THREE.Vector3[]; path: THREE.Vector3[] } {
+  private buildPreviewAnchors(): { anchors: THREE.Vector3[]; path: THREE.Vector3[] } {
     const signature = this.previewAnchorSignature();
     if (signature === this.cachedPreviewSignature && this.cachedPreviewPath.length >= 1) {
       return { anchors: this.anchorScratch, path: this.cachedPreviewPath };
@@ -469,18 +462,7 @@ export class RoadTool {
 
     this.curveScratch.length = 0;
     this.curveScratch.push(...this.segmentCurves);
-    if (hover) {
-      const lastAnchor = this.anchorScratch[this.anchorScratch.length - 2];
-      if (computeAutoCurve && lastAnchor) {
-        const autoCurve = this.computePendingAutoCurve(lastAnchor, hover);
-        this.cachedPendingAutoCurve = clampCurve(mergeManualAndAutoCurve(this.pendingCurve, autoCurve));
-        this.curveScratch.push(this.cachedPendingAutoCurve);
-      } else if (lastAnchor) {
-        this.curveScratch.push(this.cachedPendingAutoCurve);
-      } else {
-        this.curveScratch.push(this.pendingCurve);
-      }
-    }
+    if (hover) this.curveScratch.push(this.pendingCurve);
 
     this.cachedPreviewPath.length = 0;
     const path = this.buildPathFromAnchorsInto(this.anchorScratch, this.curveScratch, this.cachedPreviewPath);
@@ -507,16 +489,6 @@ export class RoadTool {
     return `${hash}`;
   }
 
-  private computePendingAutoCurve(start: THREE.Vector3, end: THREE.Vector3): number {
-    return computePendingRoadAutoCurve(
-      start,
-      end,
-      this.options.getGameState?.(),
-      ROAD_WIDTH * 0.5,
-      MAX_CURVE_OFFSET,
-    );
-  }
-
   private shouldSkipHoverPreview(point: THREE.Vector3): boolean {
     const dx = point.x - this.lastHoverPreviewX;
     const dz = point.z - this.lastHoverPreviewZ;
@@ -530,7 +502,6 @@ export class RoadTool {
     this.pointerDirty = false;
     this.cachedPreviewSignature = '';
     this.cachedPreviewPath.length = 0;
-    this.cachedPendingAutoCurve = 0;
   }
 
   private applySnap(point: THREE.Vector3): THREE.Vector3 {
@@ -631,10 +602,9 @@ export class RoadTool {
   private getInvalidClickExitReason(): RoadPlacementFailureReason | null {
     const hover = this.getUsableHoverPoint();
     if (!hover || !this.hasDraft()) return null;
-    const last = this.points[this.points.length - 1];
     const path = this.buildPathFromAnchors(
       [...this.points, hover],
-      [...this.segmentCurves, clampCurve(mergeManualAndAutoCurve(this.pendingCurve, this.computePendingAutoCurve(last, hover)))],
+      [...this.segmentCurves, this.pendingCurve],
     );
     if (path.length < 2) return null;
 

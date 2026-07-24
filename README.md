@@ -33,7 +33,7 @@ A real-time Three.js sandbox for growing a **medieval settlement** on a procedur
 - Terrain projection so roads follow hills, slopes, and ground variation.
 - Snapping to existing road nodes and road segments.
 - Automatic edge splitting when new roads connect to existing segments.
-- Wheel-adjusted curvature per segment (`Ctrl + scroll`), merged with automatic curve suggestions that route around building and residence footprints.
+- Wheel-adjusted curvature per segment (`Ctrl + scroll`).
 - Junction classification for endpoints, bends, T-junctions, cross-junctions, and complex junctions.
 - Junction and endpoint cap meshes that blend road ribbons into clean intersections.
 - Textured medieval dirt road materials with irregular blended shoulders.
@@ -358,7 +358,7 @@ The terrain is generated as a continuous heightfield in `src/terrain/Terrain.ts`
 
 `QuarryLayout.ts` places one large and two small rock quarries on the playable terrain, carving pit depressions into the heightfield and scattering instanced boulders via `QuarrySystem.ts`. Quarry yields and remaining stone are tracked server-side in the `quarry` table. Wild-resource nodes (game, berries, mushrooms, and water-bound fish shoals) are bootstrapped from `world_foraging.json`; `foraging_respawn.rs` now advances their persistent lifecycle rather than deleting or rerolling them. Berry fruit and close-zoom mushroom models vanish as stock is gathered and return in the growing season; deer actors disappear one-for-one as hunters kill them and move with a migrating habitat.
 
-Road placement is handled by `src/roads/RoadTool.ts`. Pointer input is projected onto the terrain by `TerrainProjector`, collected as clicked road nodes with optional wheel-adjusted curvature merged with `roadAutoCurve.ts` suggestions around building and residence footprints, validated against slope and minimum length rules, and committed into a `RoadNetwork`.
+Road placement is handled by `src/roads/RoadTool.ts`. Pointer input is projected onto the terrain by `TerrainProjector`, collected as clicked road nodes with optional wheel-adjusted curvature, validated against slope and minimum length rules, and committed into a `RoadNetwork`.
 
 `src/roads/RoadNetwork.ts` stores roads as nodes and edges. It resolves endpoint snapping, splits existing road segments when new paths connect into them, detects crossings, prunes orphan nodes, and classifies junction types.
 
@@ -374,7 +374,7 @@ Road placement is handled by `src/roads/RoadTool.ts`. Pointer input is projected
 
 `src/logistics/` mirrors server delivery logic on the client for inspector displays — runway days, trip durations, lodge/well/food-supplier targets, and residence needs status. `DeliveryAgentRenderer.ts` animates replicated `delivery_trip` rows as wooden carts along the road network, with rigged villagers walking at the handles and keeping their hands planted through a lightweight IK pass. `src/roads/roadConnectivity.ts` and `server/src/roads/network.rs` compute Dijkstra road-path distances for building access and supplier routing.
 
-`src/placement/` maintains a spatial index of building, residence zone, and road footprints for fast overlap checks during placement and auto-curve obstacle queries.
+`src/placement/` maintains a spatial index of building, residence zone, and road footprints for fast overlap checks during placement.
 
 `src/grass/GrassBladeField.ts` streams instanced 3D grass tufts in camera-relative chunks. Tufts fade in at close zoom (aligned with the terrain dirt LOD band) and are cleared near committed roads. `TerrainRoadWear.ts` updates a per-vertex `roadWearBlend` attribute so the TSL grass material tints to packed dirt along road corridors.
 
