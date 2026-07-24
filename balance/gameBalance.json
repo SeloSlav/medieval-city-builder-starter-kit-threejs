@@ -2,8 +2,8 @@
   "sim": {
     "tickMicros": 200000,
     "tickDt": 0.2,
-    "baseSpeedNumerator": 2,
-    "baseSpeedDenominator": 5
+    "baseSpeedNumerator": 1,
+    "baseSpeedDenominator": 30
   },
   "calendar": {
     "secondsPerDay": 120,
@@ -243,20 +243,20 @@
     "buildingRoadAccessDistance": 20,
     "burgageRoadFrontageDistance": 16,
     "minDeliveryTripSec": 4,
-    "firewoodDeliverySpeedMps": 0.95,
-    "waterDeliverySpeedMps": 1.15,
-    "foodDeliverySpeedMps": 1.25,
+    "firewoodDeliverySpeedMps": 2.1,
+    "waterDeliverySpeedMps": 2.2,
+    "foodDeliverySpeedMps": 2.4,
     "firewoodDeliveryUnloadSec": 10,
     "waterDeliveryUnloadSec": 5,
     "foodDeliveryUnloadSec": 6,
-    "timberDeliverySpeedMps": 0.85,
+    "timberDeliverySpeedMps": 2,
     "timberDeliveryUnloadSec": 8
   },
   "construction": {
     "maxBuilders": 4,
     "workPerWorkerPerSecond": 1,
     "haulPerWorker": 8,
-    "deliverySpeedMps": 0.9,
+    "deliverySpeedMps": 2.1,
     "deliveryUnloadSec": 6,
     "treasuryTransferPerSecond": 2
   },

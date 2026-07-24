@@ -4,12 +4,25 @@ import type {
   VillagerRenderer,
 } from '../settlement/VillagerRenderer.ts';
 import { disposeObject3D } from '../utils/dispose.ts';
+import type {
+  DeliveryAgentInspection,
+  DeliveryAgentRenderer,
+} from '../logistics/DeliveryAgentRenderer.ts';
+import type { GameState } from '../resources/types.ts';
+import { getBuildingDefinition } from '../resources/buildings.ts';
+import {
+  cargoKindLabel,
+  formatTripPhaseLabel,
+} from '../logistics/deliveryTrips.ts';
+import { villagerDisplayName } from '../settlement/villagerIdentity.ts';
 
 type VillagerInspectorOptions = {
   domElement: HTMLElement;
   uiRoot: HTMLElement;
   camera: THREE.Camera;
   villagers: VillagerRenderer;
+  deliveryAgents: DeliveryAgentRenderer;
+  getState: () => GameState;
   selectionParent: THREE.Group;
   isBlocked: () => boolean;
   onSelectionChange?: (selected: boolean) => void;
@@ -24,12 +37,17 @@ export class VillagerInspector {
   private readonly initials: HTMLElement;
   private readonly occupation: HTMLElement;
   private readonly workplace: HTMLElement;
+  private readonly workplaceLabel: HTMLElement;
   private readonly household: HTMLElement;
+  private readonly householdLabel: HTMLElement;
   private readonly crew: HTMLElement;
+  private readonly crewLabel: HTMLElement;
   private readonly pace: HTMLElement;
+  private readonly paceLabel: HTMLElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly marker: THREE.Mesh;
   private selectedPersonIdentity: string | null = null;
+  private selectedDeliveryTripId: string | null = null;
 
   constructor(options: VillagerInspectorOptions) {
     this.options = options;
@@ -56,19 +74,19 @@ export class VillagerInspector {
               <dd data-villager-occupation>—</dd>
             </div>
             <div>
-              <dt>Workplace</dt>
+              <dt data-villager-workplace-label>Workplace</dt>
               <dd data-villager-workplace>—</dd>
             </div>
             <div>
-              <dt>Household</dt>
+              <dt data-villager-household-label>Household</dt>
               <dd data-villager-household>—</dd>
             </div>
             <div>
-              <dt>Crew</dt>
+              <dt data-villager-crew-label>Crew</dt>
               <dd data-villager-crew>—</dd>
             </div>
             <div>
-              <dt>Walking pace</dt>
+              <dt data-villager-pace-label>Walking pace</dt>
               <dd data-villager-pace>—</dd>
             </div>
           </dl>
@@ -83,9 +101,13 @@ export class VillagerInspector {
     this.initials = mustElement(this.panel, '[data-villager-initials]');
     this.occupation = mustElement(this.panel, '[data-villager-occupation]');
     this.workplace = mustElement(this.panel, '[data-villager-workplace]');
+    this.workplaceLabel = mustElement(this.panel, '[data-villager-workplace-label]');
     this.household = mustElement(this.panel, '[data-villager-household]');
+    this.householdLabel = mustElement(this.panel, '[data-villager-household-label]');
     this.crew = mustElement(this.panel, '[data-villager-crew]');
+    this.crewLabel = mustElement(this.panel, '[data-villager-crew-label]');
     this.pace = mustElement(this.panel, '[data-villager-pace]');
+    this.paceLabel = mustElement(this.panel, '[data-villager-pace-label]');
     this.closeButton = mustButton(this.panel, '[data-villager-close]');
 
     this.marker = createVillagerMarker();
@@ -98,18 +120,32 @@ export class VillagerInspector {
   }
 
   tick(): void {
+    if (this.selectedDeliveryTripId) {
+      const delivery = this.options.deliveryAgents.inspectDeliveryAgent(
+        this.selectedDeliveryTripId,
+      );
+      if (!delivery) {
+        this.clearSelection();
+        return;
+      }
+      this.renderDelivery(delivery);
+      return;
+    }
     if (!this.selectedPersonIdentity) return;
     const inspection = this.options.villagers.inspectVillager(this.selectedPersonIdentity);
     if (!inspection) {
       this.clearSelection();
       return;
     }
-    this.render(inspection);
+    this.renderVillager(inspection);
   }
 
   clearSelection(notify = false): void {
-    const hadSelection = this.selectedPersonIdentity !== null;
+    const hadSelection = this.selectedPersonIdentity !== null
+      || this.selectedDeliveryTripId !== null;
     this.selectedPersonIdentity = null;
+    this.selectedDeliveryTripId = null;
+    this.options.deliveryAgents.selectDeliveryAgent(null);
     this.panel.hidden = true;
     this.marker.visible = false;
     if (notify && hadSelection) this.options.onSelectionChange?.(false);
@@ -126,6 +162,24 @@ export class VillagerInspector {
 
   private readonly onPointerDown = (event: MouseEvent): void => {
     if (event.button !== 0 || event.altKey || this.options.isBlocked()) return;
+    const delivery = this.options.deliveryAgents.pickDeliveryAgent(
+      event.clientX,
+      event.clientY,
+      this.options.camera,
+      this.options.domElement,
+    );
+    if (delivery) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.selectedPersonIdentity = null;
+      this.selectedDeliveryTripId = delivery.tripId;
+      this.options.deliveryAgents.selectDeliveryAgent(delivery.tripId);
+      this.panel.hidden = false;
+      this.renderDelivery(delivery);
+      this.options.onSelectionChange?.(true);
+      return;
+    }
+
     const inspection = this.options.villagers.pickVillager(
       event.clientX,
       event.clientY,
@@ -136,9 +190,11 @@ export class VillagerInspector {
 
     event.preventDefault();
     event.stopImmediatePropagation();
+    this.options.deliveryAgents.selectDeliveryAgent(null);
+    this.selectedDeliveryTripId = null;
     this.selectedPersonIdentity = inspection.personIdentity;
     this.panel.hidden = false;
-    this.render(inspection);
+    this.renderVillager(inspection);
     this.options.onSelectionChange?.(true);
   };
 
@@ -147,7 +203,11 @@ export class VillagerInspector {
     this.clearSelection(true);
   };
 
-  private render(inspection: VillagerInspection): void {
+  private renderVillager(inspection: VillagerInspection): void {
+    this.workplaceLabel.textContent = 'Workplace';
+    this.householdLabel.textContent = 'Household';
+    this.crewLabel.textContent = 'Crew';
+    this.paceLabel.textContent = 'Walking pace';
     this.name.textContent = inspection.name;
     this.eyebrow.textContent = inspection.eyebrow;
     this.activity.textContent = inspection.activity;
@@ -166,6 +226,86 @@ export class VillagerInspector {
     this.marker.rotation.y += 0.035;
     this.marker.visible = inspection.visible;
   }
+
+  private renderDelivery(inspection: DeliveryAgentInspection): void {
+    const trip = inspection.trip;
+    const state = this.options.getState();
+    const origin = state.buildings.get(trip.buildingId);
+    const originLabel = origin
+      ? getBuildingDefinition(origin.kind).label
+      : 'Unknown origin';
+    const destination = deliveryDestinationLabel(inspection, state);
+    const cargo = cargoKindLabel(trip.cargoKind);
+    const cargoAmount = formatCargoAmount(trip.amount);
+    const phase = formatTripPhaseLabel(trip.phase);
+    const name = villagerDisplayName(
+      inspection.personIdentity,
+      inspection.modelVariant,
+    );
+    const returning = trip.phase === 'inbound';
+
+    this.workplaceLabel.textContent = 'Origin';
+    this.householdLabel.textContent = 'Route target';
+    this.crewLabel.textContent = 'Cargo';
+    this.paceLabel.textContent = 'Cart speed';
+    this.name.textContent = name;
+    this.eyebrow.textContent = `Delivery agent · ${phase}`;
+    this.activity.textContent = returning
+      ? `Returning to ${originLabel} after the ${cargo.toLocaleLowerCase()} delivery`
+      : trip.phase === 'unloading'
+        ? `Unloading ${cargo.toLocaleLowerCase()} at ${destination}`
+        : `Delivering ${cargoAmount} ${cargo.toLocaleLowerCase()} to ${destination}`;
+    this.activity.dataset.state = 'active';
+    this.initials.textContent = name
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0] ?? '')
+      .join('')
+      .toLocaleUpperCase();
+    this.occupation.textContent = 'Cart hauler';
+    this.workplace.textContent = originLabel;
+    this.household.textContent = returning ? originLabel : destination;
+    this.crew.textContent = returning
+      ? `Empty · ${cargo} run`
+      : `${cargoAmount} ${cargo.toLocaleLowerCase()} · ${trip.deliveryWorkers} ${
+        trip.deliveryWorkers === 1 ? 'hauler' : 'haulers'
+      }`;
+    const speed = trip.speedMps
+      * Math.max(1, trip.deliveryWorkers)
+      * Math.max(1, trip.travelSpeedMultiplier);
+    this.pace.textContent = `${speed.toFixed(1)} m/s`;
+    this.marker.position.set(
+      inspection.position.x,
+      inspection.position.y + 2.12,
+      inspection.position.z,
+    );
+    this.marker.rotation.y += 0.035;
+    this.marker.visible = inspection.visible;
+  }
+}
+
+function deliveryDestinationLabel(
+  inspection: DeliveryAgentInspection,
+  state: GameState,
+): string {
+  const trip = inspection.trip;
+  if (trip.destinationKind === 'building' && trip.targetBuildingId) {
+    const building = state.buildings.get(trip.targetBuildingId);
+    return building ? getBuildingDefinition(building.kind).label : 'Building';
+  }
+  if (trip.residenceId) {
+    const residence = state.residences.get(trip.residenceId);
+    if (residence) return `Parcel #${residence.parcelIndex + 1}`;
+  }
+  if (trip.destinationKind === 'fire') return 'Structure fire';
+  return 'Unknown destination';
+}
+
+function formatCargoAmount(amount: number): string {
+  if (Math.abs(amount - Math.round(amount)) < 0.05) {
+    return Math.round(amount).toLocaleString();
+  }
+  return amount.toFixed(1);
 }
 
 function mustElement(root: ParentNode, selector: string): HTMLElement {

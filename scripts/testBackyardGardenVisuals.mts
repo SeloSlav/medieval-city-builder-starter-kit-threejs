@@ -28,8 +28,17 @@ const signatures: Record<BackyardGardenKind, string> = {
   hen_yard: 'HenCoopDoor',
 };
 
+const terrainBackedKinds = new Set<BackyardGardenKind>([
+  'apple_orchard',
+  'cherry_orchard',
+  'flower_garden',
+  'hen_yard',
+]);
+
 for (const kind of kinds) {
-  const garden = createBackyardGardenMesh(kind, { width: 6.2, depth: 5.4, seed: 4271 });
+  const width = 6.2;
+  const depth = 5.4;
+  const garden = createBackyardGardenMesh(kind, { width, depth, seed: 4271 });
   garden.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(garden);
   const size = bounds.getSize(new THREE.Vector3());
@@ -47,6 +56,27 @@ for (const kind of kinds) {
   assert.ok(size.x <= 7.5, `${kind} should stay inside a 6.2m parcel with modest foliage overhang`);
   assert.ok(size.z <= 7.5, `${kind} should stay inside a 5.4m backyard with modest foliage overhang`);
   assert.ok(size.y > 0.4, `${kind} should have readable vertical structure`);
+
+  if (terrainBackedKinds.has(kind)) {
+    let hasArtificialGroundPlane = false;
+    garden.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh || mesh.geometry.type !== 'BoxGeometry') return;
+      const parameters = mesh.geometry.parameters as { width?: number; depth?: number };
+      if (
+        Number(parameters.width) >= width * 0.95
+        && Number(parameters.depth) >= depth * 0.95
+        && mesh.position.y < 0.1
+      ) {
+        hasArtificialGroundPlane = true;
+      }
+    });
+    assert.equal(
+      hasArtificialGroundPlane,
+      false,
+      `${kind} should let the terrain system provide its grass`,
+    );
+  }
 
   disposeBackyardGardenMesh(garden);
 }

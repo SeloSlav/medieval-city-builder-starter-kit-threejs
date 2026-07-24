@@ -33,7 +33,7 @@ const TARGET_HEIGHTS = {
 } as const;
 
 export type VillagerModelVariant = keyof typeof MODEL_URLS;
-export type VillagerRenderMode = 'idle' | 'walk' | 'chop' | 'mine';
+export type VillagerRenderMode = 'idle' | 'walk' | 'chop' | 'mine' | 'gather';
 
 type FallbackPartLayer = {
   mesh: THREE.InstancedMesh;
@@ -383,6 +383,7 @@ export class SettlementCrowdRenderer {
       walk: mixer.clipAction(source.clips.walk, model),
       chop: mixer.clipAction(source.clips.chop, model),
       mine: mixer.clipAction(source.clips.mine, model),
+      gather: mixer.clipAction(source.clips.gather, model),
     };
     for (const action of Object.values(actions)) {
       action.enabled = true;
@@ -391,6 +392,7 @@ export class SettlementCrowdRenderer {
     actions.walk.setEffectiveTimeScale(1.06);
     actions.chop.setEffectiveTimeScale(1.08);
     actions.mine.setEffectiveTimeScale(0.9);
+    actions.gather.setEffectiveTimeScale(0.92);
     actions[agent.mode].play();
     actions[agent.mode].time =
       (agent.appearanceSeed % 997) / 997 * actions[agent.mode].getClip().duration;
@@ -526,17 +528,70 @@ async function loadVillagerSource(
   chop.name = `${swing.name}:worker-chop`;
   const mine = swing.clone();
   mine.name = `${swing.name}:worker-mine`;
+  const gather = createGatherAnimationClip(gltf.scene);
   return {
     scene: gltf.scene,
     bounds,
     sourceHeight,
     targetHeight,
-    clips: { idle, walk, chop, mine },
+    clips: { idle, walk, chop, mine, gather },
   };
 }
 
-function isWorkMode(mode: VillagerRenderMode): mode is 'chop' | 'mine' {
-  return mode === 'chop' || mode === 'mine';
+/**
+ * The CC0 villager pack has no harvesting clip, so build a small skeletal
+ * crouch-and-reach cycle from the rig's own rest pose. This keeps feet planted
+ * while the abdomen, torso, and arms bend toward low berry and mushroom props.
+ */
+function createGatherAnimationClip(scene: THREE.Object3D): THREE.AnimationClip {
+  const times = [0, 0.32, 0.72, 1.02, 1.3, 1.62, 2.02, 2.4];
+  const bend = [0, 0.2, 0.62, 0.74, 0.58, 0.73, 0.28, 0];
+  const reach = [0, 0.12, 0.5, 0.7, 0.42, 0.68, 0.18, 0];
+  const tracks: THREE.KeyframeTrack[] = [];
+
+  const addRotation = (
+    boneName: string,
+    xScale: number,
+    zScale = 0,
+  ): void => {
+    const bone = scene.getObjectByName(boneName);
+    if (!bone) return;
+    const values: number[] = [];
+    for (let index = 0; index < times.length; index++) {
+      const offset = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+        bend[index]! * xScale,
+        0,
+        reach[index]! * zScale,
+        'XYZ',
+      ));
+      const pose = bone.quaternion.clone().multiply(offset).normalize();
+      values.push(pose.x, pose.y, pose.z, pose.w);
+    }
+    tracks.push(new THREE.QuaternionKeyframeTrack(
+      `${boneName}.quaternion`,
+      times,
+      values,
+    ));
+  };
+
+  addRotation('Hips', 0.18);
+  addRotation('Abdomen', 0.62);
+  addRotation('Torso', 0.48);
+  addRotation('Neck', -0.22);
+  addRotation('UpperLegL', -0.28);
+  addRotation('UpperLegR', -0.28);
+  addRotation('LowerLegL', 0.36);
+  addRotation('LowerLegR', 0.36);
+  addRotation('UpperArmL', 0.5, -0.16);
+  addRotation('UpperArmR', 0.5, 0.16);
+  addRotation('LowerArmL', 0.34);
+  addRotation('LowerArmR', 0.34);
+
+  return new THREE.AnimationClip('Worker_Gather', 2.4, tracks).optimize();
+}
+
+function isWorkMode(mode: VillagerRenderMode): mode is 'chop' | 'mine' | 'gather' {
+  return mode === 'chop' || mode === 'mine' || mode === 'gather';
 }
 
 function findAnimationClip(

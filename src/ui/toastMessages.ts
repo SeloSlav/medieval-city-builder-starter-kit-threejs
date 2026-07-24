@@ -21,7 +21,7 @@ export const TOAST_MESSAGES = {
   'building.placement.no_quarry_in_range': 'No quarry stone within work range',
   'building.placement.requires_rich_deposit': 'Large Quarries must be placed directly over a rich stone deposit',
   'building.placement.no_game_in_range': 'No game within work range',
-  'building.placement.no_berries_in_range': 'No berries or mushrooms within work range',
+  'building.placement.no_berries_in_range': 'Place within 48 m of a berry patch or mushroom bed (dormant and depleted patches still count)',
   'building.placement.no_fish_in_range': 'No fish shoal within work range',
   'building.placement.no_trees_in_range': 'No mature trees within work range',
   'building.placement.on_road': 'Cannot build on a road',

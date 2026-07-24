@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import type { DeliveryTripState, DeliveryTripPhase } from '../logistics/deliveryTrips.ts';
+import {
+  deliveryWorkerPersonIdentity,
+  type DeliveryTripState,
+  type DeliveryTripPhase,
+} from '../logistics/deliveryTrips.ts';
 import { decodeRoutePolyline } from '../logistics/routePolyline.ts';
 import {
   createDeliveryCartMesh,
@@ -24,8 +28,14 @@ import type { Terrain } from '../terrain/Terrain.ts';
 import { samplePolylineXZ, type PointXZ } from '../utils/pathGeometry.ts';
 import { isWithinShadowRange, type CrowdViewState } from '../settlement/crowdView.ts';
 import { hashStringSeed } from '../utils/random.ts';
+import {
+  pickVillagerModelVariant,
+} from '../settlement/villagerPaths.ts';
+import type { VillagerModelVariant } from '../settlement/SettlementCrowdRenderer.ts';
 
 const DISPLAY_BLEND_RATE = 14;
+const DELIVERY_ROUTE_COLOR = 0xff5ea8;
+const DELIVERY_ROUTE_Y_OFFSET = 0.24;
 
 type TripVisual = {
   mesh: THREE.Group;
@@ -46,11 +56,25 @@ type DeliveryAgentRendererOptions = {
   parent: THREE.Group;
 };
 
+export type DeliveryAgentInspection = {
+  tripId: string;
+  personIdentity: string;
+  modelVariant: VillagerModelVariant;
+  trip: DeliveryTripState;
+  position: { x: number; y: number; z: number };
+  visible: boolean;
+};
+
 export class DeliveryAgentRenderer {
   private readonly terrain: Terrain;
   private readonly group = new THREE.Group();
   private readonly visuals = new Map<string, TripVisual>();
+  private readonly selectedRoute: THREE.Line<
+    THREE.BufferGeometry,
+    THREE.LineDashedMaterial
+  >;
   private latestTrips = new Map<string, DeliveryTripState>();
+  private selectedTripId: string | null = null;
   private cartSource: DeliveryCartModelSource | null = null;
   private workerSources: DeliveryCartWorkerSources | null = null;
   private disposed = false;
@@ -58,6 +82,8 @@ export class DeliveryAgentRenderer {
   constructor(options: DeliveryAgentRendererOptions) {
     this.terrain = options.terrain;
     this.group.name = 'Delivery agents';
+    this.selectedRoute = createSelectedDeliveryRoute();
+    this.group.add(this.selectedRoute);
     options.parent.add(this.group);
     void this.loadCartSource();
     void this.loadWorkerSources();
@@ -114,10 +140,13 @@ export class DeliveryAgentRenderer {
       if (nextIds.has(id)) continue;
       this.removeTrip(id);
     }
+    if (this.selectedTripId && !nextIds.has(this.selectedTripId)) {
+      this.selectDeliveryAgent(null);
+    }
   }
 
   update(dt: number, view?: CrowdViewState): void {
-    for (const visual of this.visuals.values()) {
+    for (const [tripId, visual] of this.visuals) {
       if (visual.phase !== 'unloading') {
         visual.displayProgress += visual.travelSpeed * dt;
         const maxLead = Math.max(0.6, visual.travelSpeed * 0.35);
@@ -162,6 +191,7 @@ export class DeliveryAgentRenderer {
         const mesh = object as THREE.Mesh;
         if (mesh.isMesh) mesh.castShadow = castShadow;
       });
+      if (this.selectedTripId === tripId) this.updateSelectedRoute(visual);
     }
   }
 
@@ -182,6 +212,65 @@ export class DeliveryAgentRenderer {
     }
   }
 
+  pickDeliveryAgent(
+    clientX: number,
+    clientY: number,
+    camera: THREE.Camera,
+    domElement: HTMLElement,
+  ): DeliveryAgentInspection | null {
+    const bounds = domElement.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
+
+    let nearest: { distance: number; inspection: DeliveryAgentInspection } | null = null;
+    for (const [tripId, visual] of this.visuals) {
+      const trip = this.latestTrips.get(tripId);
+      if (!trip || !visual.mesh.visible) continue;
+      const feet = projectWorldPoint(
+        visual.mesh.position.x,
+        visual.mesh.position.y + 0.08,
+        visual.mesh.position.z,
+        camera,
+        bounds,
+      );
+      const head = projectWorldPoint(
+        visual.mesh.position.x,
+        visual.mesh.position.y + 1.9,
+        visual.mesh.position.z,
+        camera,
+        bounds,
+      );
+      if (!feet || !head) continue;
+
+      const projectedHeight = Math.hypot(feet.x - head.x, feet.y - head.y);
+      const hitRadius = Math.min(36, Math.max(14, projectedHeight * 0.48));
+      const distance = distanceToScreenSegment(
+        clientX,
+        clientY,
+        feet.x,
+        feet.y,
+        head.x,
+        head.y,
+      );
+      if (distance > hitRadius || (nearest && distance >= nearest.distance)) continue;
+      nearest = { distance, inspection: this.describeTrip(trip, visual) };
+    }
+    return nearest?.inspection ?? null;
+  }
+
+  inspectDeliveryAgent(tripId: string): DeliveryAgentInspection | null {
+    const trip = this.latestTrips.get(tripId);
+    const visual = this.visuals.get(tripId);
+    return trip && visual ? this.describeTrip(trip, visual) : null;
+  }
+
+  selectDeliveryAgent(tripId: string | null): void {
+    this.selectedTripId = tripId && this.visuals.has(tripId) ? tripId : null;
+    this.selectedRoute.visible = false;
+    if (!this.selectedTripId) return;
+    const visual = this.visuals.get(this.selectedTripId);
+    if (visual) this.updateSelectedRoute(visual);
+  }
+
   private tripTravelSpeed(trip: DeliveryTripState): number {
     const workers = Math.max(1, trip.deliveryWorkers);
     return trip.speedMps * workers * Math.max(1, trip.travelSpeedMultiplier);
@@ -197,6 +286,8 @@ export class DeliveryAgentRenderer {
     this.cartSource = null;
     this.workerSources = null;
     this.latestTrips.clear();
+    this.selectedRoute.geometry.dispose();
+    this.selectedRoute.material.dispose();
     this.group.removeFromParent();
   }
 
@@ -262,10 +353,52 @@ export class DeliveryAgentRenderer {
   private ensureWorker(visual: TripVisual, trip: DeliveryTripState): void {
     if (visual.worker || !this.cartSource || !this.workerSources) return;
     visual.worker = createDeliveryCartWorkerVisual(
-      hashStringSeed(`delivery-worker:${trip.id}`),
+      hashStringSeed(deliveryWorkerPersonIdentity(trip)),
       this.workerSources,
     );
     visual.mesh.add(visual.worker.root);
+  }
+
+  private describeTrip(
+    trip: DeliveryTripState,
+    visual: TripVisual,
+  ): DeliveryAgentInspection {
+    const personIdentity = deliveryWorkerPersonIdentity(trip);
+    return {
+      tripId: trip.id,
+      personIdentity,
+      modelVariant: pickVillagerModelVariant(hashStringSeed(personIdentity)),
+      trip,
+      position: {
+        x: visual.mesh.position.x,
+        y: visual.mesh.position.y,
+        z: visual.mesh.position.z,
+      },
+      visible: visual.mesh.visible,
+    };
+  }
+
+  private updateSelectedRoute(visual: TripVisual): void {
+    if (visual.polyline.length < 2 || visual.pathDistance <= 1e-6) {
+      this.selectedRoute.visible = false;
+      return;
+    }
+    const sampleDistance = this.phaseSampleDistance(visual);
+    const route = visual.phase === 'inbound'
+      ? polylineToDistance(visual.polyline, sampleDistance)
+      : polylineFromDistance(visual.polyline, sampleDistance);
+    if (route.length < 2) {
+      this.selectedRoute.visible = false;
+      return;
+    }
+    const points = route.map((point) => new THREE.Vector3(
+      point.x,
+      this.terrain.getHeightAt(point.x, point.z) + DELIVERY_ROUTE_Y_OFFSET,
+      point.z,
+    ));
+    this.selectedRoute.geometry.setFromPoints(points);
+    this.selectedRoute.computeLineDistances();
+    this.selectedRoute.visible = true;
   }
 
   private async loadCartSource(): Promise<void> {
@@ -301,4 +434,109 @@ export class DeliveryAgentRenderer {
       console.warn('[Delivery carts] Rigged cart workers failed to load.', error);
     }
   }
+}
+
+function createSelectedDeliveryRoute(): THREE.Line<
+  THREE.BufferGeometry,
+  THREE.LineDashedMaterial
+> {
+  const material = new THREE.LineDashedMaterial({
+    color: DELIVERY_ROUTE_COLOR,
+    dashSize: 1.1,
+    gapSize: 0.72,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const line = new THREE.Line(new THREE.BufferGeometry(), material);
+  line.name = 'Selected delivery destination route';
+  line.renderOrder = 14;
+  line.visible = false;
+  line.frustumCulled = false;
+  return line;
+}
+
+function polylineFromDistance(
+  polyline: readonly PointXZ[],
+  startDistance: number,
+): PointXZ[] {
+  const sample = samplePolylineXZ(polyline, startDistance);
+  if (!sample) return [];
+  const result: PointXZ[] = [{ x: sample.x, z: sample.z }];
+  let traversed = 0;
+  for (let index = 0; index < polyline.length - 1; index++) {
+    const start = polyline[index]!;
+    const end = polyline[index + 1]!;
+    traversed += Math.hypot(end.x - start.x, end.z - start.z);
+    if (traversed > startDistance + 1e-5) {
+      result.push({ x: end.x, z: end.z });
+    }
+  }
+  return result;
+}
+
+function polylineToDistance(
+  polyline: readonly PointXZ[],
+  endDistance: number,
+): PointXZ[] {
+  const sample = samplePolylineXZ(polyline, endDistance);
+  if (!sample) return [];
+  const prefix: PointXZ[] = [{ x: polyline[0]!.x, z: polyline[0]!.z }];
+  let traversed = 0;
+  for (let index = 0; index < polyline.length - 1; index++) {
+    const start = polyline[index]!;
+    const end = polyline[index + 1]!;
+    traversed += Math.hypot(end.x - start.x, end.z - start.z);
+    if (traversed >= endDistance - 1e-5) break;
+    prefix.push({ x: end.x, z: end.z });
+  }
+  const last = prefix[prefix.length - 1]!;
+  if (Math.hypot(last.x - sample.x, last.z - sample.z) > 1e-5) {
+    prefix.push({ x: sample.x, z: sample.z });
+  }
+  return prefix.reverse();
+}
+
+function projectWorldPoint(
+  x: number,
+  y: number,
+  z: number,
+  camera: THREE.Camera,
+  bounds: DOMRect,
+): { x: number; y: number } | null {
+  const projected = new THREE.Vector3(x, y, z).project(camera);
+  if (
+    !Number.isFinite(projected.x)
+    || !Number.isFinite(projected.y)
+    || !Number.isFinite(projected.z)
+    || projected.z < -1
+    || projected.z > 1
+  ) return null;
+  return {
+    x: bounds.left + (projected.x * 0.5 + 0.5) * bounds.width,
+    y: bounds.top + (-projected.y * 0.5 + 0.5) * bounds.height,
+  };
+}
+
+function distanceToScreenSegment(
+  pointX: number,
+  pointY: number,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): number {
+  const segmentX = endX - startX;
+  const segmentY = endY - startY;
+  const lengthSq = segmentX * segmentX + segmentY * segmentY;
+  if (lengthSq <= 0.0001) return Math.hypot(pointX - startX, pointY - startY);
+  const t = Math.min(1, Math.max(
+    0,
+    ((pointX - startX) * segmentX + (pointY - startY) * segmentY) / lengthSq,
+  ));
+  return Math.hypot(
+    pointX - (startX + segmentX * t),
+    pointY - (startY + segmentY * t),
+  );
 }

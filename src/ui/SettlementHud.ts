@@ -32,10 +32,13 @@ const SETTLEMENT_HUD_HTML = `
             type="button"
             class="settlement-hud__speed-button"
             data-game-speed="${speed}"
-            data-tooltip="${gameSpeedLabel(speed)} (${speed === 1 ? 1 : speed === 4 ? 2 : 3})"
+            data-tooltip="${gameSpeedLabel(speed)} · ${speed === 1 ? '60-minute day' : speed === 5 ? '12-minute day' : speed === 20 ? '3-minute day' : '30-second day'} · Key ${speed === 1 ? 1 : speed === 5 ? 2 : speed === 20 ? 3 : 4}"
             aria-label="${gameSpeedLabel(speed)}"
             aria-pressed="${speed === 1}"
-          >${speed}×</button>
+          >
+            <span class="settlement-hud__speed-name">${gameSpeedLabel(speed)}</span>
+            <span class="settlement-hud__speed-value">${speed}×</span>
+          </button>
         `).join('')}
       </div>
     </div>

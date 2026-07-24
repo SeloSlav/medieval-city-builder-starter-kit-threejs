@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { validateBuildingPlacement } from '../src/buildings/BuildingPlacementValidation.ts';
+import {
+  foragerPlacementCandidates,
+  validateBuildingPlacement,
+} from '../src/buildings/BuildingPlacementValidation.ts';
 import {
   GAME_MIN_BREEDING_POPULATION,
   MUSHROOMS_PER_HARVEST,
@@ -23,7 +26,10 @@ import {
   type ResidenceState,
 } from '../src/resources/types.ts';
 import { resolveWorldDimensions } from '../src/world/worldGenerationSettings.ts';
-import { collectWorkerTargets } from '../src/settlement/workerPaths.ts';
+import {
+  collectWorkerTargets,
+  pickWorkerWalkPlan,
+} from '../src/settlement/workerPaths.ts';
 
 assert.ok(RESOURCE_KINDS.includes('mushrooms'));
 assert.equal(createEmptyStockpile().mushrooms, 0);
@@ -92,6 +98,22 @@ const mushroomStates: ForagingNodeState[] = mushroomDefinitions.map((node) => ({
   z: node.z,
 }));
 const firstMushroom = mushroomStates[0];
+const snappedForagerSites = foragerPlacementCandidates(
+  firstMushroom.x,
+  firstMushroom.z,
+  mushroomStates,
+);
+assert.ok(snappedForagerSites.length >= 24, 'clicking mushrooms should offer nearby hut sites');
+assert.ok(
+  snappedForagerSites.every((site) => {
+    const distance = Math.hypot(
+      site.x - firstMushroom.x,
+      site.z - firstMushroom.z,
+    );
+    return distance > 8 && distance < 48;
+  }),
+  'forager snap candidates should preserve the patch while staying inside work range',
+);
 assert.deepEqual(
   validateBuildingPlacement('foragers_shed', firstMushroom.x + 12, firstMushroom.z, {
     buildings: [] as BuildingState[],
@@ -151,6 +173,14 @@ assert.ok(
     .some((target) => target.kind === 'mushrooms'),
   'forager actors should walk to mushroom beds during the growing season',
 );
+const gatherTargets = collectWorkerTargets(
+  forager,
+  { ...workerTargetInputs, foragingMonth: 4 },
+);
+const gatherPlan = Array.from({ length: 32 }, (_, seed) =>
+  pickWorkerWalkPlan(forager, 0, gatherTargets, seed)
+).find((plan) => plan?.activity === 'gather');
+assert.ok(gatherPlan, 'foragers should stop and gather at berry or mushroom targets');
 
 assert.ok(MUSHROOM_ICON_SVG.includes('currentColor'));
 assert.ok(!MUSHROOM_ICON_SVG.includes('<image'));

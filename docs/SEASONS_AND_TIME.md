@@ -18,20 +18,21 @@ The calendar is deliberately fictional and fixed:
 
 | Speed | Day | Month | Season | Year |
 | --- | ---: | ---: | ---: | ---: |
-| Leisurely, 1× | 5 min | 50 min | 2 hr 30 min | 10 hr |
-| Fast, 4× | 1 min 15 sec | 12 min 30 sec | 37 min 30 sec | 2 hr 30 min |
-| Very fast, 12× | 25 sec | 4 min 10 sec | 12 min 30 sec | 50 min |
+| Scenic, 1× | 60 min | 10 hr | 30 hr | 5 days |
+| Normal, 5× | 12 min | 2 hr | 6 hr | 24 hr |
+| Fast, 20× | 3 min | 30 min | 1 hr 30 min | 6 hr |
+| Ultra, 120× | 30 sec | 5 min | 15 min | 1 hr |
 
 The scheduler still fires every 200 milliseconds and every completed substep retains
 its established 0.2-second meaning, so existing save clocks do not jump when this
-pacing is deployed. A persistent fixed-point budget completes two substeps per five
-scheduler callbacks at 1×. Fast modes receive 4 or 12 times that budget, making 1× a
-deliberately leisurely baseline. Faster modes accelerate movement,
+pacing is deployed. A persistent fixed-point budget completes one substep per thirty
+scheduler callbacks at 1×. Faster modes receive 5, 20, or 120 times that budget, making 1×
+a deliberately scenic baseline. Faster modes accelerate movement,
 labor, construction, production, deliveries, consumption, regrowth, reproduction,
 weather damage, and the calendar together.
 
-Controls are in the settlement clock. `1`, `2`, and `3` select Leisurely, Fast, and
-Very fast. Pause remains supported by the server reducer for administration and
+Controls are in the settlement clock. `1`, `2`, `3`, and `4` select Scenic, Normal,
+Fast, and Ultra. Pause remains supported by the server reducer for administration and
 recovery, but is not exposed as a player control. Speed is server authoritative and
 global to the world. In the current shared-world model, any connected player can
 change it; host-only authority should be added before a competitive multiplayer mode.
@@ -176,7 +177,7 @@ mirrored in `server/src/season_policy.rs` and `src/world/seasonPolicy.ts`.
 
 The most important tuning sequence is:
 
-1. Observe whether a 150-minute season at Leisurely creates meaningful preparation.
+1. Observe whether a 30-hour season at Scenic creates a satisfying slow-play option.
 2. Tune work requirements so an appropriately staffed farm can harvest in September
    and plough/sow in October–November without making failure impossible.
 3. Tune winter firewood and pasture multipliers against one full four-hour year.

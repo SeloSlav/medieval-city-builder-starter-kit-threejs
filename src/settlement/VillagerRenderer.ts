@@ -72,7 +72,7 @@ type VillagerPathPurpose =
   | 'return_home'
   | null;
 
-const WORKER_ACTIVITY_SECONDS = 3.2;
+const WORKER_ACTIVITY_SECONDS = 9.5;
 
 type VillagerAgent = {
   id: string;
@@ -607,7 +607,11 @@ export class VillagerRenderer {
   }
 
   private simStep(agent: VillagerAgent, dt: number): void {
-    if (agent.mode === 'chop' || agent.mode === 'mine') {
+    if (
+      agent.mode === 'chop'
+      || agent.mode === 'mine'
+      || agent.mode === 'gather'
+    ) {
       agent.workRemaining -= dt;
       if (agent.workRemaining <= 0) this.finishWorkerActivity(agent);
       return;
@@ -1016,6 +1020,7 @@ function describeVillagerActivity(
     case 'work':
       if (agent.mode === 'chop') return `Chopping timber near ${workplaceLabel}`;
       if (agent.mode === 'mine') return `Quarrying stone near ${workplaceLabel}`;
+      if (agent.mode === 'gather') return `Gathering wild food near ${workplaceLabel}`;
       if (workplace?.constructionComplete === false) {
         return agent.mode === 'walk'
           ? `Building ${workplaceLabel}`

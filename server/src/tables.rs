@@ -15,7 +15,7 @@ pub struct WorldConfig {
     pub seed: u64,
     pub next_building_id: u64,
     pub sim_tick: u64,
-    /// Authoritative whole-simulation multiplier: 0 (paused), 1, 4, or 12.
+    /// Authoritative whole-simulation multiplier: 0 (paused), 1, 5, 20, or 120.
     #[default(1)]
     pub game_speed: u8,
     /// 0 = small, 1 = medium, 2 = large

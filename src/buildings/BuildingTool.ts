@@ -4,7 +4,11 @@ import type { BuildingKind, GameState } from '../resources/types.ts';
 import { computeResourceTotals } from '../resources/resourceTotals.ts';
 import { getBuildingDefinition } from '../resources/buildings.ts';
 import type { BuildingPlacementFailureReason, BuildingPlacementResult } from './BuildingPlacementValidation.ts';
-import { resolveBuildingPlacementPoint, validateBuildingPlacement } from './BuildingPlacementValidation.ts';
+import {
+  foragerPlacementCandidates,
+  resolveBuildingPlacementPoint,
+  validateBuildingPlacement,
+} from './BuildingPlacementValidation.ts';
 import type { BuildingMarkers } from './BuildingMarkers.ts';
 import type { BuildingTerrainSource } from './BuildingTerrainLayout.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
@@ -394,12 +398,27 @@ export class BuildingTool {
   }
 
   private resolvePoint(kind: BuildingKind, x: number, z: number): { x: number; z: number } {
-    return resolveBuildingPlacementPoint(
+    const state = this.options.getState();
+    const resolved = resolveBuildingPlacementPoint(
       kind,
       x,
       z,
-      this.options.getState().quarries.values(),
+      state.quarries.values(),
     );
+    if (kind !== 'foragers_shed') return resolved;
+
+    const initialValidation = this.validate(kind, resolved.x, resolved.z);
+    if (initialValidation.ok || initialValidation.reason === 'insufficient_resources') {
+      return resolved;
+    }
+    for (const candidate of foragerPlacementCandidates(
+      x,
+      z,
+      state.foragingNodes.values(),
+    )) {
+      if (this.validate(kind, candidate.x, candidate.z).ok) return candidate;
+    }
+    return resolved;
   }
 
   private clearPreview(): void {

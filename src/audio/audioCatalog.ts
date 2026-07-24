@@ -19,10 +19,10 @@ export const AMBIENT_LAYERS: Record<AmbientLayerId, AudioClipDefinition> = {
   open_wind_overview: { path: '/sounds/ambient/open_wind_overview.mp3', volume: 0.28, loop: true },
 };
 
-/** Chapel bell at 6 AM and 6 PM when a chapel is placed. ~30s clip, plays once per ring. */
+/** Chapel bell at 6 AM and 6 PM. Distance and end fades are applied by ChapelBellPlayer. */
 export const CHURCH_BELL_CLIP: AudioClipDefinition = {
   path: '/sounds/ambient/church_bells.mp3',
-  volume: 0.35,
+  volume: 0.32,
 };
 
 function workerActivityVariants(

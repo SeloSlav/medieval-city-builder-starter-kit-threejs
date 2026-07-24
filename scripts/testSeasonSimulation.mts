@@ -29,12 +29,16 @@ assert.equal(seasonForMonth(8), 'summer');
 assert.equal(seasonForMonth(9), 'autumn');
 assert.equal(seasonForMonth(12), 'winter');
 
-assert.deepEqual(GAME_SPEEDS, [0, 1, 4, 12]);
-assert.deepEqual(PLAYER_GAME_SPEEDS, [1, 4, 12]);
+assert.deepEqual(GAME_SPEEDS, [0, 1, 5, 20, 120]);
+assert.deepEqual(PLAYER_GAME_SPEEDS, [1, 5, 20, 120]);
 assert.equal(normalizeGameSpeed(99), 1);
+assert.equal(normalizeGameSpeed(4), 5);
+assert.equal(normalizeGameSpeed(12), 20);
 assert.equal(gameSpeedLabel(0), 'Paused');
-assert.equal(gameSpeedLabel(1), 'Leisurely');
-assert.equal(gameSpeedLabel(12), 'Very fast');
+assert.equal(gameSpeedLabel(1), 'Scenic');
+assert.equal(gameSpeedLabel(5), 'Normal');
+assert.equal(gameSpeedLabel(20), 'Fast');
+assert.equal(gameSpeedLabel(120), 'Ultra');
 
 const dayTicks = CALENDAR_SECONDS_PER_DAY / 0.2;
 const springClock = gameClock(2 * dayTicks);
@@ -62,17 +66,23 @@ for (let year = 1; year <= 20 && !droughtFound; year += 1) {
 assert.equal(droughtFound, true, 'deterministic climate should produce drought years');
 
 const durations = {
-  leisurely: {
+  scenic: {
     dayMinutes: CALENDAR_SECONDS_PER_DAY / SIM_REALTIME_RATE / 60,
     monthMinutes: CALENDAR_SECONDS_PER_DAY * CALENDAR_DAYS_PER_MONTH / SIM_REALTIME_RATE / 60,
     yearMinutes: CALENDAR_SECONDS_PER_DAY * CALENDAR_DAYS_PER_MONTH * CALENDAR_MONTHS_PER_YEAR / SIM_REALTIME_RATE / 60,
   },
-  veryFastYearMinutes:
-    CALENDAR_SECONDS_PER_DAY * CALENDAR_DAYS_PER_MONTH * CALENDAR_MONTHS_PER_YEAR / SIM_REALTIME_RATE / 60 / 12,
+  fastYearMinutes:
+    CALENDAR_SECONDS_PER_DAY * CALENDAR_DAYS_PER_MONTH * CALENDAR_MONTHS_PER_YEAR / SIM_REALTIME_RATE / 60 / 20,
+  ultraDaySeconds:
+    CALENDAR_SECONDS_PER_DAY / SIM_REALTIME_RATE / 120,
+  ultraYearMinutes:
+    CALENDAR_SECONDS_PER_DAY * CALENDAR_DAYS_PER_MONTH * CALENDAR_MONTHS_PER_YEAR / SIM_REALTIME_RATE / 60 / 120,
 };
-assert.ok(Math.abs(durations.leisurely.dayMinutes - 5) < 1e-9);
-assert.ok(Math.abs(durations.leisurely.monthMinutes - 50) < 1e-9);
-assert.ok(Math.abs(durations.leisurely.yearMinutes - 600) < 1e-9);
-assert.ok(Math.abs(durations.veryFastYearMinutes - 50) < 1e-9);
+assert.ok(Math.abs(durations.scenic.dayMinutes - 60) < 1e-9);
+assert.ok(Math.abs(durations.scenic.monthMinutes - 600) < 1e-9);
+assert.ok(Math.abs(durations.scenic.yearMinutes - 7200) < 1e-9);
+assert.ok(Math.abs(durations.fastYearMinutes - 360) < 1e-9);
+assert.ok(Math.abs(durations.ultraDaySeconds - 30) < 1e-9);
+assert.ok(Math.abs(durations.ultraYearMinutes - 60) < 1e-9);
 
 console.log('season and simulation-speed tests passed');

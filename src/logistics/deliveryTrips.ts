@@ -53,6 +53,11 @@ export type TripEndpoint = {
   destinationZ: number;
 };
 
+/** Stable identity for the regular hauler attached to a producer between trips. */
+export function deliveryWorkerPersonIdentity(trip: DeliveryTripState): string {
+  return `delivery:${trip.buildingId}:hauler:0`;
+}
+
 export function cargoKindFromId(value: number): DeliveryCargoKind | null {
   switch (value) {
     case 0:

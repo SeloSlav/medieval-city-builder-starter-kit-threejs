@@ -137,7 +137,15 @@ export class BuildToolbar {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     const key = event.key.toLowerCase();
-    const speed = key === '1' ? 1 : key === '2' ? 4 : key === '3' ? 12 : null;
+    const speed = key === '1'
+      ? 1
+      : key === '2'
+        ? 5
+        : key === '3'
+          ? 20
+          : key === '4'
+            ? 120
+            : null;
     if (speed !== null) {
       event.preventDefault();
       event.stopPropagation();

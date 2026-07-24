@@ -7,6 +7,10 @@ import {
   CONSTRUCTION_MAX_BUILDERS,
   CONSTRUCTION_TREASURY_TRANSFER_PER_SEC,
   CONSTRUCTION_WORK_PER_WORKER_PER_SEC,
+  FIREWOOD_DELIVERY_SPEED_MPS,
+  FOOD_DELIVERY_SPEED_MPS,
+  TIMBER_DELIVERY_SPEED_MPS,
+  WATER_DELIVERY_SPEED_MPS,
 } from '../src/generated/gameBalance.ts';
 import { getBuildingDefinition } from '../src/resources/buildings.ts';
 import { getBuildingCost } from '../src/resources/buildingEconomy.ts';
@@ -15,6 +19,7 @@ import {
   createConstructionSiteMesh,
 } from '../src/buildings/ConstructionSiteMesh.ts';
 import {
+  deliveryWorkerPersonIdentity,
   findInboundSupplyTripForBuilding,
   type DeliveryTripState,
 } from '../src/logistics/deliveryTrips.ts';
@@ -29,6 +34,16 @@ assert.ok(CONSTRUCTION_HAUL_PER_WORKER > 0);
 assert.ok(CONSTRUCTION_DELIVERY_SPEED_MPS > 0);
 assert.ok(CONSTRUCTION_TREASURY_TRANSFER_PER_SEC > 0);
 assert.ok(CONSTRUCTION_WORK_PER_WORKER_PER_SEC > 0);
+assert.ok(
+  Math.min(
+    FIREWOOD_DELIVERY_SPEED_MPS,
+    WATER_DELIVERY_SPEED_MPS,
+    FOOD_DELIVERY_SPEED_MPS,
+    TIMBER_DELIVERY_SPEED_MPS,
+    CONSTRUCTION_DELIVERY_SPEED_MPS,
+  ) >= 2,
+  'delivery carts should move materially faster than villagers on foot',
+);
 
 for (const kind of ['lumber_mill', 'stone_quarry'] as const) {
   const definition = getBuildingDefinition(kind);
@@ -133,6 +148,15 @@ assert.equal(
 );
 const outboundTrip: DeliveryTripState = { ...returningTrip, amount: 8, phase: 'outbound' };
 assert.equal(findInboundSupplyTripForBuilding([outboundTrip], 'building-2'), outboundTrip);
+assert.equal(
+  deliveryWorkerPersonIdentity({ ...outboundTrip, id: 'the-next-trip' }),
+  deliveryWorkerPersonIdentity(outboundTrip),
+  'a building hauler should keep the same identity and name between deliveries',
+);
+assert.notEqual(
+  deliveryWorkerPersonIdentity({ ...outboundTrip, buildingId: 'another-origin' }),
+  deliveryWorkerPersonIdentity(outboundTrip),
+);
 
 const buildingState = (
   overrides: Partial<BuildingState> & Pick<BuildingState, 'id' | 'kind'>,

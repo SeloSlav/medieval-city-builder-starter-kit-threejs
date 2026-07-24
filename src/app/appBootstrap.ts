@@ -671,6 +671,8 @@ export async function bootstrapAppSession(
     uiRoot,
     camera: sceneManager.camera,
     villagers,
+    deliveryAgents,
+    getState: () => liveContext.gameState,
     selectionParent: sceneManager.selectionGroup,
     isBlocked: () => isWorldInspectionBlocked(placementGate),
     onSelectionChange: (selected) => {

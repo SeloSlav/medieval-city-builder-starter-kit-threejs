@@ -26,10 +26,12 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
     if !config.configured || config.game_speed == 0 {
         return;
     }
-    let speed = if matches!(config.game_speed, 1 | 4 | 12) {
-        config.game_speed
-    } else {
-        1
+    let speed = match config.game_speed {
+        1 | 5 | 20 | 120 => config.game_speed,
+        // Preserve the nearest intent for worlds saved with the old 1x / 4x / 12x controls.
+        4 => 5,
+        12 => 20,
+        _ => 1,
     };
     let previous_credit = ctx
         .db

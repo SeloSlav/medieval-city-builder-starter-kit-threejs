@@ -50,10 +50,20 @@ export class AmbientAudioController {
 
     const schedule = this.schedule;
     if (schedule) {
+      const chapels = placedChapels(this.config.getBuildings());
       this.chapelBell.tick(
-        schedule.clock.hour,
-        hasPlacedChapel(this.config.getBuildings()),
-        true,
+        {
+          dtSeconds,
+          clockHour: schedule.clock.hour,
+          calendarMinute:
+            schedule.clock.totalDays * 24 * 60
+            + schedule.clock.hour * 60
+            + schedule.clock.minute,
+          chapels,
+          listener: this.config.getCameraTarget(),
+          orbitDistance: this.config.getOrbitDistance(),
+          enabled: true,
+        },
       );
     }
 
@@ -108,11 +118,14 @@ export class AmbientAudioController {
   }
 }
 
-function hasPlacedChapel(buildings: Iterable<BuildingState>): boolean {
+function placedChapels(buildings: Iterable<BuildingState>): Array<{ x: number; z: number }> {
+  const chapels: Array<{ x: number; z: number }> = [];
   for (const building of buildings) {
-    if (building.kind === 'chapel' && building.constructionComplete !== false) return true;
+    if (building.kind === 'chapel' && building.constructionComplete !== false) {
+      chapels.push({ x: building.x, z: building.z });
+    }
   }
-  return false;
+  return chapels;
 }
 
 function settlementSignature(buildings: BuildingState[], burgageZones: BurgageZoneState[]): string {

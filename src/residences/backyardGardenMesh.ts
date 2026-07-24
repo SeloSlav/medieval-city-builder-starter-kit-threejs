@@ -20,7 +20,6 @@ const MATERIALS = {
   soil: new THREE.MeshStandardMaterial({ color: 0x4b3828, roughness: 0.97 }),
   darkSoil: new THREE.MeshStandardMaterial({ color: 0x35271d, roughness: 0.98 }),
   path: new THREE.MeshStandardMaterial({ color: 0x8a795f, roughness: 0.98 }),
-  grass: new THREE.MeshStandardMaterial({ color: 0x607b42, roughness: 0.96 }),
   timber: sharedBuildingMaterial('timberMid'),
   darkTimber: sharedBuildingMaterial('timberDark'),
   wicker: sharedBuildingMaterial('timberLight'),
@@ -422,7 +421,6 @@ function addOrchard(
   seed: number,
   plants: BackyardPlantCatalog | null,
 ): void {
-  addMesh(group, new THREE.BoxGeometry(width, 0.045, depth), MATERIALS.grass, 0, 0.022, 0);
   const shallow = depth < 3.9;
   const treeCount = width > 5.3 && depth > 4.6 ? 3 : 2;
   const positions = treeCount === 3
@@ -560,7 +558,6 @@ function addFlowerGarden(
   seed: number,
   plants: BackyardPlantCatalog | null,
 ): void {
-  addMesh(group, new THREE.BoxGeometry(width, 0.04, depth), MATERIALS.grass, 0, 0.02, 0);
   const sideWidth = Math.max(1.25, width * 0.34);
   addSoilBed(group, -width * 0.29, 0, sideWidth, depth * 0.82, false);
   addSoilBed(group, width * 0.29, 0, sideWidth, depth * 0.82, false);
@@ -673,7 +670,6 @@ function addHerbGarden(group: THREE.Group, width: number, depth: number, seed: n
 
 function addHenYard(group: THREE.Group, width: number, depth: number, seed: number): void {
   const rng = mulberry32(seed ^ 0x4e57a11);
-  addMesh(group, new THREE.BoxGeometry(width, 0.035, depth), MATERIALS.grass, 0, 0.018, 0);
   const coopWidth = Math.min(2.4, width * 0.42);
   const coopDepth = Math.min(1.9, depth * 0.38);
   const coopX = -width * 0.24;

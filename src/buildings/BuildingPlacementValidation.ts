@@ -39,6 +39,9 @@ export type BuildingPlacementResult =
   | { ok: false; reason: BuildingPlacementFailureReason };
 
 const MAX_FOOTPRINT_HEIGHT_DELTA = 9.5;
+const FORAGER_RESOURCE_CLICK_SNAP_RADIUS = 22;
+const FORAGER_RESOURCE_BUILDING_OFFSETS = [13, 21, 31, 39] as const;
+const FORAGER_RESOURCE_ANGLE_STEPS = 12;
 
 type BuildingPlacementContext = {
   buildings: Iterable<BuildingState>;
@@ -196,6 +199,48 @@ export function resolveBuildingPlacementPoint(
     nearestDistance = distance;
   }
   return nearest ? { x: nearest.x, z: nearest.z } : { x, z };
+}
+
+/**
+ * Clicking a dense berry or mushroom bed is an intuitive request to place its
+ * hut nearby, not directly on top of the resource. Return a ring of candidate
+ * sites for BuildingTool to validate against terrain and existing structures.
+ */
+export function foragerPlacementCandidates(
+  x: number,
+  z: number,
+  nodes: Iterable<ForagingNodeState>,
+): Array<{ x: number; z: number }> {
+  let nearest: ForagingNodeState | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const node of nodes) {
+    if (node.kind !== 'berries' && node.kind !== 'mushrooms') continue;
+    const distance = Math.hypot(node.x - x, node.z - z);
+    if (
+      distance > FORAGER_RESOURCE_CLICK_SNAP_RADIUS
+      || distance >= nearestDistance
+    ) continue;
+    nearest = node;
+    nearestDistance = distance;
+  }
+  if (!nearest) return [];
+
+  const preferredAngle = Math.atan2(x - nearest.x, z - nearest.z);
+  const candidates: Array<{ x: number; z: number }> = [];
+  for (const radius of FORAGER_RESOURCE_BUILDING_OFFSETS) {
+    for (let step = 0; step < FORAGER_RESOURCE_ANGLE_STEPS; step++) {
+      const alternatingStep = step === 0
+        ? 0
+        : Math.ceil(step / 2) * (step % 2 === 0 ? -1 : 1);
+      const angle = preferredAngle
+        + alternatingStep * Math.PI * 2 / FORAGER_RESOURCE_ANGLE_STEPS;
+      candidates.push({
+        x: nearest.x + Math.sin(angle) * radius,
+        z: nearest.z + Math.cos(angle) * radius,
+      });
+    }
+  }
+  return candidates;
 }
 
 function hasRichQuarryAtCenter(

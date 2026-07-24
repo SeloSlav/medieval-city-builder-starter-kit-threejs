@@ -2,7 +2,18 @@
 
 A real-time Three.js sandbox for growing a **medieval settlement** on a procedural 3D landscape. On a fresh game, choose map size, topography, hydrology, forest density, and world seed before generation begins. Draw dirt road networks across rolling hills, pine forests, and winding rivers — wooden bridges and graded ramps appear automatically when a path crosses water. Place production buildings to harvest timber, stone, game, berries, and fish; connect wells and woodcutter's lodges along those roads; then lay out residence zones along your roads so settlers move in over time. Homes need firewood, water, and food — road-based delivery crews haul supplies from lodges, wells, hunter's halls, forager's sheds, and fishing camps while you watch wooden carts travel the network. Assign workers from your labor pool, plant backyard gardens for local food and village gold, and keep the supply chain running before homes are abandoned. A [SpacetimeDB](https://spacetimedb.com/) Rust module runs the authoritative economy simulation; the client renders replicated state in real time. Toggle the hydrology overlay to scout well sites, inspect foraging nodes and quarries from map icons, and drop into first-person walk mode to explore on foot.
 
-![A functioning medieval city built in cheat mode, with roads, homes, workshops, and WebGPU forest](docs/screenshots/medieval-city-cheat-mode-webgpu.png)
+<p align="center">
+  <img src="docs/screenshots/medieval-settlement-first-person-garden.png" alt="Walking through a cultivated medieval settlement garden" width="49%">
+  <img src="docs/screenshots/medieval-settlement-valley-overview.png" alt="Overhead view of a medieval settlement in a forested river valley" width="49%">
+</p>
+
+## Recent updates (July 2026)
+
+- **Scenic simulation pacing** — server-authoritative 1×/5×/20× controls now provide 60-, 12-, and 3-minute days while keeping movement, logistics, production, ecology, weather, and the calendar synchronized.
+- **Seasons and visible weather** — the fixed calendar drives planting and harvest windows, winter heating, seasonal ecology, rain, snow, drought lighting, fog, and atmospheric color.
+- **Structural fires and firefighting** — lightning and workplace accidents can start spreading fires; staffed wells dispatch bucket responders, and damaged or destroyed structures remain inspectable.
+- **Richer vegetation** — cultivated SeedThree orchards, wind-animated flowers, textured rose blossoms, and raspberry foliage cards replace earlier placeholder vegetation. Backyard lawns now use the world terrain instead of separate green slabs.
+- **Faster startup and lighter UI assets** — generated terrain is cached and prepared off the main thread, detailed vegetation is deferred until the world is playable, and build-menu artwork loads lazily from compressed cards.
 
 ## Setting & visual direction
 
@@ -65,8 +76,8 @@ A real-time Three.js sandbox for growing a **medieval settlement** on a procedur
 - **Delivery trips** — server-spawned road agents travel outbound, unload at the residence, and return; client renders worker-hauled wooden carts with recognizable commodity loads such as bundled firewood, water barrels, food baskets, sacks, kegs, amphorae, timber poles, and quarried stone.
 - **Persistent wild-resource ecology** — procedural game habitats, forest-edge berry patches, deep-forest mushroom beds, and water-bound fish shoals are bootstrapped once. Harvesting reduces current stock without replacing the node: plants recover seasonally, fish reproduce in spring, and game reproduce continuously above their two-animal breeding floor.
 - **Tree lifecycle** — server-driven `mature → stump → growing → mature` phases with client visual sync (instanced forest, animated saplings, stumps).
-- Server-authoritative simulation tick (200 ms) in the Rust module — buildings, trees, quarries, foraging, delivery trips, residence needs, backyard gardens, and settlement growth all run server-side. Player-facing 1×/4×/12× controls apply one, four, or twelve times the leisurely pacing budget so every system remains synchronized; pause remains available to the server reducer for administration and recovery.
-- **In-game calendar and seasons** — fixed 10-day months, twelve months, no leap years or drift, and a five-minute day at leisurely 1× speed. Spring rain and ecological recovery, summer droughts, September harvest, autumn sowing, and winter heating/dormancy all affect authoritative simulation systems. See [Seasons, calendar, weather, and simulation speed](docs/SEASONS_AND_TIME.md).
+- Server-authoritative simulation tick (200 ms) in the Rust module — buildings, trees, quarries, foraging, delivery trips, residence needs, backyard gardens, and settlement growth all run server-side. Player-facing 1×/5×/20× controls apply one, five, or twenty times the scenic pacing budget so every system remains synchronized; pause remains available to the server reducer for administration and recovery.
+- **In-game calendar and seasons** — fixed 10-day months, twelve months, no leap years or drift, and a 60-minute day at scenic 1× speed. Spring rain and ecological recovery, summer droughts, September harvest, autumn sowing, and winter heating/dormancy all affect authoritative simulation systems. See [Seasons, calendar, weather, and simulation speed](docs/SEASONS_AND_TIME.md).
 - Construction dock UI — `R` for roads, `B` for settlement essentials (residences, well, chapel, monastery, marketplace, ferry), `V` for industry and provisioning (grain chain, food processing, forestry, extraction, carpenter, apiary, vineyard), `M` for the hydrology overlay. **City administration** (main menu → gear) sets mayor tax, parish coffer policy, and Pauline monastery tithe share / feast-day charity.
 - Building placement tool with terrain-following preview, flattened terrain pads, functional extent overlays for spatial buildings, and validation (water, slope, overlap, trees, quarry stone, and foraging nodes). Buildings may be constructed without road access; roads are connected afterward to enable transport, services, and other network-dependent bonuses.
 - Building and residence demolish actions from the inspector panel.
@@ -83,7 +94,7 @@ A real-time Three.js sandbox for growing a **medieval settlement** on a procedur
 - **Procedural residence meshes** — timber-and-stone houses with varied facade and roof colors per parcel; instanced fence posts and rails along zone boundaries.
 - **Residence needs** — residents consume firewood, water, and food per person per tick; homes track per-need stock and deficit timers server-side.
 - **Abandonment & recovery** — prolonged shortage of any need abandons a residence (population drops to zero); homes can recover once all needs are restocked and road-connected suppliers are available.
-- **Backyard gardens** — click an occupied home's backyard to plant apple/cherry orchards, vegetable gardens, flower beds, or herb plots; food gardens partially self-supply the household; surplus and ornamental gardens sell at a road-linked marketplace — after-tax profit builds **household wealth**, while the mayor's tax flows to treasury. Planted gardens render as small 3D plots behind each home.
+- **Backyard gardens** — click an occupied home's backyard to plant apple/cherry orchards, vegetable gardens, flower beds, herb plots, or a hen yard; food gardens partially self-supply the household; surplus and ornamental gardens sell at a road-linked marketplace — after-tax profit builds **household wealth**, while the mayor's tax flows to treasury. Planted gardens render as small 3D plots behind each home and let the underlying terrain provide natural ground cover.
 - **Household economy** — each occupied home tracks saved gold (`household_wealth`, capped); residence and backyard inspectors show wealth, savings rate, and parish tithe exposure; City administration summarizes village wealth, mayor tax, and chapel tithe income.
 - **Residence inspector** — firewood/water/food stock, runway days, household wealth, serving lodge/well/food supplier, chapel link, road access, settlers pending, and demolish options for a single home or entire zone.
 
@@ -116,8 +127,9 @@ A real-time Three.js sandbox for growing a **medieval settlement** on a procedur
 - Procedural foraging nodes — game trails in woodland, berry patches near forest edges, and small/rich fish shoals in river water.
 - **Hydrology overlay** — toggle a groundwater map (`M`) to grade well placement sites before building.
 - Animated volumetric-style sky and cloud dome with wind-driven motion.
+- Season-aware rain and snow particles with matching sunlight, fog, and color treatment.
 - Directional sun lighting, exponential fog, soft shadow maps, and shadow bounds fitting.
-- Ambient audio — wind and village ambience that intensifies when the camera nears your settlement.
+- Ambient audio — wind and village ambience that intensifies when the camera nears your settlement, plus distance- and zoom-aware chapel bells.
 
 ### Rendering & UI
 

@@ -71,7 +71,7 @@ export type WorkerTarget = PointXZ & {
   kind: WorkerTargetKind;
 };
 
-export type WorkerActivityKind = 'chop' | 'mine';
+export type WorkerActivityKind = 'chop' | 'mine' | 'gather';
 
 export type WorkerWalkPlan = {
   path: PointXZ[];
@@ -398,6 +398,10 @@ function workerActivityFor(
   if (building.kind === 'lumber_mill' && target.kind === 'tree') return 'chop';
   if (building.kind === 'stone_quarry' && target.kind === 'quarry') return 'mine';
   if (building.kind === 'large_quarry' && target.kind === 'quarry') return 'mine';
+  if (
+    building.kind === 'foragers_shed'
+    && (target.kind === 'berries' || target.kind === 'mushrooms')
+  ) return 'gather';
   return null;
 }
 
