@@ -5,6 +5,7 @@ import { TREE_SHADOW_CAST_LAYER } from '../scene/SceneLayers.ts';
 import { createRockShadowGeometry } from '../props/ForestProps.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { Point2 } from '../utils/polygonGeometry.ts';
+import { SpatialHash2D } from '../utils/SpatialHash2D.ts';
 import { distancePointToPolygon2 } from '../utils/polygonGeometry.ts';
 import {
   setRockObstacleCollisionBounds,
@@ -180,6 +181,7 @@ function indexSetsEqual(left: ReadonlySet<number>, right: ReadonlySet<number>): 
 
 function createShoreStonePlacements(riverField: RiverField, rng: () => number): StonePlacement[] {
   const placements: StonePlacement[] = [];
+  const placementIndex = new SpatialHash2D<StonePlacement>(3);
   const crossingGaps = buildRiverShoreCrossingGaps(riverField.layout);
   const { resolution, startX, startZ, stepX, stepZ } = riverField;
 
@@ -206,22 +208,14 @@ function createShoreStonePlacements(riverField: RiverField, rng: () => number): 
       if (rng() > chance) continue;
 
       const scale = THREE.MathUtils.lerp(0.42, 1.35, Math.pow(rng(), 1.55));
-      if (!hasMinimumDistance(placements, x, z, 1.8 + scale * 1.1)) continue;
-      placements.push({ x, z, scale });
+      if (placementIndex.hasPointWithin(x, z, 1.8 + scale * 1.1)) continue;
+      const placement = { x, z, scale };
+      placements.push(placement);
+      placementIndex.add(placement);
     }
   }
 
   return placements;
-}
-
-function hasMinimumDistance(points: StonePlacement[], x: number, z: number, minDistance: number): boolean {
-  const minDistanceSq = minDistance * minDistance;
-  for (const point of points) {
-    const dx = x - point.x;
-    const dz = z - point.z;
-    if (dx * dx + dz * dz < minDistanceSq) return false;
-  }
-  return true;
 }
 
 function createBoulderGeometry(seed: number): THREE.BufferGeometry {

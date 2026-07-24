@@ -157,7 +157,7 @@ assert.ok(!FISH_ICON_SVG.includes('<image'), 'resource marker should use the sam
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 assert.ok(
-  existsSync(`${projectRoot}public/assets/ui/build-menu/fishing-camp.png`),
+  existsSync(`${projectRoot}public/assets/ui/build-menu/cards/fishing-camp.webp`),
   'fishing camp build card should exist',
 );
 

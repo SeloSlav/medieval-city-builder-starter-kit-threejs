@@ -3,6 +3,8 @@ import { CameraController } from '../camera/CameraController.ts';
 import { FirstPersonController } from '../camera/FirstPersonController.ts';
 import { BuildingMarkers } from '../buildings/BuildingMarkers.ts';
 import { BuildingTool } from '../buildings/BuildingTool.ts';
+import { initializeBuildingMaterialLibrary } from '../buildings/buildingMaterials.ts';
+import { initializeVineyardVineResources } from '../vegetation/seedthree/vineyardVines.ts';
 import { FarmFieldMarkers } from '../farming/FarmFieldMarkers.ts';
 import { FarmFieldTool } from '../farming/FarmFieldTool.ts';
 import { PastureMarkers } from '../farming/PastureMarkers.ts';
@@ -58,6 +60,7 @@ import { clearAuthoritativeWorldGeneration } from '../world/worldGenerationConte
 import { createSmokeTestHooks, installSmokeTestHooks } from '../e2e/smokeTestHooks.ts';
 import { sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
 import { resolveWorldDimensions } from '../world/worldGenerationSettings.ts';
+import { markFirstPlayable, markVegetationReady } from './startupDiagnostics.ts';
 
 export class App {
   private readonly root: HTMLElement;
@@ -279,35 +282,51 @@ export class App {
       fraction: 0.35,
     });
     session.sceneManager.render(0, session.cameraController.getOrbitDistance());
-    window.setTimeout(() => {
+    void new Promise<void>((resolve) => requestAnimationFrame(() => resolve())).then(() => {
+      session.loadingScreen?.setProgress({
+        label: 'Entering world…',
+        detail: 'Terrain ready; vegetation will continue filling in',
+        phase: 'vegetation',
+        fraction: 1,
+      });
+      markFirstPlayable();
+      this.sessionLifecycle?.onPresentationReady();
+      void initializeBuildingMaterialLibrary(session.sceneManager.textureAnisotropy).catch((error) => {
+        console.warn('Detailed building textures are still unavailable:', error);
+      });
+      void initializeVineyardVineResources(
+        session.sceneManager.textureAnisotropy,
+        session.sceneManager.rendererBackend,
+      ).catch((error) => {
+        console.warn('Detailed vineyard foliage is still unavailable:', error);
+      });
+    });
+
+    const buildVegetation = () => {
       void (async () => {
         try {
-          session.loadingScreen?.setProgress({
-            label: 'Growing forest…',
-            detail: 'Building trees and ground cover',
-            phase: 'vegetation',
-            fraction: 0,
-          });
           await session.sceneManager.finishVegetation();
-          session.loadingScreen?.setProgress({
-            label: 'Growing forest…',
-            detail: 'Building trees and ground cover',
-            phase: 'vegetation',
-            fraction: 1,
-          });
+          if (this.disposed) return;
           if (this.roadNetwork) session.sceneManager.syncRoadNetwork(this.roadNetwork);
           this.onForestReady();
-          // Prime a frame so WebGPU tree materials compile before the overlay clears.
+          markVegetationReady();
           session.sceneManager.render(0, session.cameraController.getOrbitDistance());
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-          this.sessionLifecycle?.onPresentationReady();
         } catch (error) {
           console.error('Vegetation build failed:', error);
           this.toastManager?.show('Forest vegetation failed to load. Try refreshing the page.', { variant: 'error' });
-          this.sessionLifecycle?.onPresentationReady();
         }
       })();
-    }, 0);
+    };
+    // Leave a short, predictable interaction window before expensive detail
+    // generation starts, even when requestIdleCallback fires immediately.
+    window.setTimeout(() => {
+      if (this.disposed) return;
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(buildVegetation, { timeout: 1_200 });
+      } else {
+        buildVegetation();
+      }
+    }, 2_500);
     this.animationId = requestAnimationFrame(this.tick);
   }
 

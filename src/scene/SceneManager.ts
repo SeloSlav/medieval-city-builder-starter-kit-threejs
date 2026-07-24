@@ -8,6 +8,7 @@ import { createRiverSystem, type RiverSystem } from '../rivers/RiverSystem.ts';
 import { updateTerrainRoadWear } from '../terrain/TerrainRoadWear.ts';
 import { RiverField } from '../rivers/RiverField.ts';
 import { setActiveRiverLayout, setActiveQuarryLayout, getActivePlacedBuildingLayout } from '../terrain/TerrainHeight.ts';
+import { loadTerrainStartupData } from '../terrain/loadTerrainStartupData.ts';
 import { createQuarrySystem, type QuarrySystem } from '../quarries/QuarrySystem.ts';
 import { createWorldLayout, type WorldLayout } from '../resources/WorldLayout.ts';
 import type { ForagingNodeState, ResourceNodeState } from '../resources/types.ts';
@@ -36,7 +37,7 @@ import { createPreferredRenderer, type RendererBackend, type RendererBackendKind
 import { applyShadowPreferences as syncShadowCasters } from './applyShadowPreferences.ts';
 import { TREE_SHADOW_CAST_LAYER } from './SceneLayers.ts';
 import { subscribeShadowPreferences } from './shadowPreference.ts';
-import { applyMaxAnisotropy, beginStartupTextureLoad, type SceneStartupTextures } from './startupTextures.ts';
+import { applyMaxAnisotropy, beginProgressiveStartupTextureLoad, type SceneStartupTextures } from './startupTextures.ts';
 import { HydrologyOverlay } from '../hydrology/HydrologyOverlay.ts';
 import {
   isHydrologyOverlayEnabled,
@@ -52,16 +53,15 @@ import {
 import { gameClock } from '../world/gameCalendar.ts';
 import {
   disposeBuildingMaterialLibrary,
-  initializeBuildingMaterialLibrary,
   setBuildingIndirectLightIntensity,
 } from '../buildings/buildingMaterials.ts';
 import {
   disposeVineyardVineResources,
-  initializeVineyardVineResources,
 } from '../vegetation/seedthree/vineyardVines.ts';
 import { PrecipitationRenderer } from '../weather/PrecipitationRenderer.ts';
 import { precipitationProfile } from '../weather/precipitationPolicy.ts';
 import type { EnvironmentState } from '../world/seasonPolicy.ts';
+import { markStartupCheckpoint } from '../app/startupDiagnostics.ts';
 
 export type SceneLoadProgress = {
   label: string;
@@ -109,7 +109,7 @@ export class SceneManager {
   private lastForestClearanceSourceSignature = '';
   private readonly riverSystem: RiverSystem;
   private readonly quarrySystem: QuarrySystem;
-  private readonly hydrologyOverlay: HydrologyOverlay;
+  private hydrologyOverlay: HydrologyOverlay | null = null;
   readonly worldLayout: WorldLayout;
 
   get riverField() {
@@ -178,11 +178,6 @@ export class SceneManager {
     this.riverSystem = riverSystem;
     this.quarrySystem = quarrySystem;
     this.worldLayout = worldLayout;
-    this.hydrologyOverlay = new HydrologyOverlay({
-      terrain,
-      riverField: riverSystem.field,
-      parent: this.scene,
-    });
     this.unsubscribeHydrologyOverlayPreference = subscribeHydrologyOverlayPreference(() => {
       this.applyHydrologyOverlayPreference();
     });
@@ -226,12 +221,11 @@ export class SceneManager {
     });
     const [backend, materials, startupTextures] = await Promise.all([
       createPreferredRenderer(),
-      materialsPromise ?? RoadMaterialFactory.create(8),
-      startupTexturesPromise ?? beginStartupTextureLoad(),
-      initializeBuildingMaterialLibrary(8),
+      materialsPromise ?? Promise.resolve(RoadMaterialFactory.createProgressive(8)),
+      startupTexturesPromise ?? beginProgressiveStartupTextureLoad(),
     ]);
     applyMaxAnisotropy(startupTextures, backend.maxAnisotropy);
-    await initializeVineyardVineResources(backend.maxAnisotropy, backend.kind);
+    markStartupCheckpoint('renderer ready');
     container.appendChild(backend.renderer.domElement);
     onProgress?.({
       label: 'Loading graphics',
@@ -251,25 +245,29 @@ export class SceneManager {
     const { quarryLayout, riverLayout } = worldLayout;
     setActiveRiverLayout(riverLayout);
     setActiveQuarryLayout(quarryLayout);
-    const riverBounds = Terrain.fullBounds(dimensions.terrainSize);
-    const riverField = RiverField.fromLayout({ bounds: riverBounds, layout: riverLayout });
-    await yieldToMain();
-
-    const terrain = await Terrain.create(
-      materials.createTerrainMaterialWithRiverShore(),
-      riverField,
-      quarryLayout,
-      (completedRows, totalRows) => {
+    const startupData = await loadTerrainStartupData(
+      settings,
+      dimensions,
+      worldLayout,
+      (completedRows, totalRows, source) => {
         onProgress?.({
           label: 'Building world',
-          detail: `Shaping terrain (${completedRows}/${totalRows})`,
+          detail: source === 'cache'
+            ? 'Restoring generated terrain'
+            : `Shaping terrain (${completedRows}/${totalRows})`,
           phase: 'terrain',
           fraction: completedRows / totalRows,
         });
       },
+    );
+    const riverField = RiverField.fromSerialized(startupData.riverField, riverLayout);
+    const terrain = Terrain.fromGeometryData(
+      materials.createTerrainMaterialWithRiverShore(),
+      startupData.terrain,
       dimensions,
     );
     await yieldToMain();
+    markStartupCheckpoint('terrain mesh ready');
 
     onProgress?.({
       label: 'Building world',
@@ -288,6 +286,7 @@ export class SceneManager {
     );
     const quarrySystem = createQuarrySystem(terrain, quarryLayout, startupTextures.riverRock);
     await yieldToMain();
+    markStartupCheckpoint('river and quarry systems ready');
 
     onProgress?.({
       label: 'Building world',
@@ -296,6 +295,7 @@ export class SceneManager {
       fraction: 1,
     });
     const manager = new SceneManager(container, backend, materials, startupTextures, terrain, riverSystem, quarrySystem, worldLayout);
+    markStartupCheckpoint('scene manager ready');
     void manager.sky.ready.catch((error) => {
       console.warn('Sky volumetric shader still compiling:', error);
     });
@@ -318,6 +318,10 @@ export class SceneManager {
   }
 
   private async buildVegetation(): Promise<void> {
+    await Promise.all([
+      this.riverSystem.finishDetails(),
+      this.quarrySystem.finishDetails(),
+    ]);
     this.forestManager = await createForestProps(this.terrain, this.maxAnisotropy, {
       isBlockedAt: (x, z) => this.riverSystem.isBlockedAt(x, z) || this.quarrySystem.isBlockedAt(x, z),
       rendererBackend: this.rendererBackend,
@@ -397,15 +401,22 @@ export class SceneManager {
   }
 
   applyHydrologyOverlayPreference(): void {
-    this.hydrologyOverlay.setVisible(isHydrologyOverlayEnabled());
+    this.setHydrologyOverlayVisible(isHydrologyOverlayEnabled());
   }
 
   isHydrologyOverlayVisible(): boolean {
-    return this.hydrologyOverlay.isVisible();
+    return this.hydrologyOverlay?.isVisible() ?? false;
   }
 
   setHydrologyOverlayVisible(visible: boolean): void {
-    this.hydrologyOverlay.setVisible(visible);
+    if (visible && !this.hydrologyOverlay) {
+      this.hydrologyOverlay = new HydrologyOverlay({
+        terrain: this.terrain,
+        riverField: this.riverSystem.field,
+        parent: this.scene,
+      });
+    }
+    this.hydrologyOverlay?.setVisible(visible);
   }
 
   resize(): void {
@@ -742,7 +753,8 @@ export class SceneManager {
     this.unsubscribeShadowPreferences = null;
     this.unsubscribeHydrologyOverlayPreference?.();
     this.unsubscribeHydrologyOverlayPreference = null;
-    this.hydrologyOverlay.dispose();
+    this.hydrologyOverlay?.dispose();
+    this.hydrologyOverlay = null;
     for (const visual of this.edgeVisuals.values()) disposeObject3D(visual.group);
     this.edgeVisuals.clear();
     if (this.forestManager) {

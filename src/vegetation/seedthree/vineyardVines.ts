@@ -21,6 +21,7 @@ const SWEETGUM_LEAF_URLS = {
 let vineTextures: SeedThreeGroundCoverTextures | null = null;
 let vineMaterial: THREE.Material | null = null;
 let vineLoadPromise: Promise<void> | null = null;
+const pendingVineMeshes = new Set<THREE.InstancedMesh>();
 
 /**
  * Loads one shared SeedThree leaf set for every placed vineyard. SeedThree does
@@ -63,6 +64,8 @@ export function initializeVineyardVineResources(
         );
     vineMaterial.forceSinglePass = true;
     vineMaterial.userData.sharedBuildingMaterial = true;
+    for (const mesh of pendingVineMeshes) mesh.material = vineMaterial;
+    pendingVineMeshes.clear();
   })
     .catch((error) => {
       vineLoadPromise = null;
@@ -82,6 +85,7 @@ export function disposeVineyardVineResources(): void {
   vineMaterial = null;
   vineTextures = null;
   vineLoadPromise = null;
+  pendingVineMeshes.clear();
 }
 
 /** Builds one two-draw-call foliage-and-fruit set for a complete vineyard. */
@@ -107,6 +111,7 @@ export function createSeedThreeVineyardVines(
     vineMaterial ?? sharedBuildingDetailMaterial('foliage'),
     capacity,
   );
+  if (!vineMaterial) pendingVineMeshes.add(leaves);
   leaves.name = 'SeedThree cultivated grapevine cards';
   leaves.count = placements.length;
   leaves.castShadow = false;

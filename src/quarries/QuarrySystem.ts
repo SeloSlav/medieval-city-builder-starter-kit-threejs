@@ -10,6 +10,7 @@ import {
   setRockObstacleCollisionBounds,
   type RockObstacle,
 } from '../utils/pathGeometry.ts';
+import { SpatialHash2D } from '../utils/SpatialHash2D.ts';
 
 const TAU = Math.PI * 2;
 
@@ -33,6 +34,7 @@ export type QuarrySystem = {
   group: THREE.Group;
   /** Mutable-in-place so collision consumers retain one stable array reference. */
   rockPlacements: ReadonlyArray<RockObstacle>;
+  finishDetails: () => Promise<void>;
   syncNodes: (nodes: Iterable<ResourceNodeState>) => boolean;
   isBlockedAt: (x: number, z: number) => boolean;
   isGrassBlockedAt: (x: number, z: number) => boolean;
@@ -49,20 +51,15 @@ export function createQuarrySystem(
 
   const rockMaterial = createQuarryRockMaterial(rockTextures);
   const shadowMaterials = createPropShadowMaterials();
-  const rng = mulberry32(0x71a2e0d ^ 0x5151);
-  const placements = createQuarryRockPlacements(layout, rng);
-  const { group: rocksGroup, sites } = createQuarryRockMeshes(
-    terrain,
-    placements,
-    rockMaterial,
-    shadowMaterials,
-    rng,
-  );
-  group.add(rocksGroup);
+  const activePlacements: RockObstacle[] = [];
+  const sites: QuarrySiteVisual[] = [];
+  let latestNodes: ResourceNodeState[] = [];
+  let detailsPromise: Promise<void> | null = null;
+  let detailsReady = false;
+  let disposed = false;
 
-  const activePlacements: RockObstacle[] = [...placements];
-  const syncNodes = (nodes: Iterable<ResourceNodeState>): boolean => {
-    const byId = new Map(Array.from(nodes, (node) => [node.nodeId, node]));
+  const applyNodeState = (): boolean => {
+    const byId = new Map(latestNodes.map((node) => [node.nodeId, node]));
     const nextActive: RockObstacle[] = [];
     let changed = false;
 
@@ -92,7 +89,35 @@ export function createQuarrySystem(
     return false;
   };
 
+  const finishDetails = (): Promise<void> => {
+    if (detailsPromise) return detailsPromise;
+    detailsPromise = (async () => {
+      const rng = mulberry32(0x71a2e0d ^ 0x5151);
+      const placements = createQuarryRockPlacements(layout, rng);
+      const result = createQuarryRockMeshes(
+        terrain,
+        placements,
+        rockMaterial,
+        shadowMaterials,
+        rng,
+      );
+      if (disposed) return;
+      group.add(result.group);
+      sites.push(...result.sites);
+      activePlacements.splice(0, activePlacements.length, ...placements);
+      detailsReady = true;
+      applyNodeState();
+    })();
+    return detailsPromise;
+  };
+
+  const syncNodes = (nodes: Iterable<ResourceNodeState>): boolean => {
+    latestNodes = [...nodes];
+    return detailsReady ? applyNodeState() : false;
+  };
+
   const dispose = () => {
+    disposed = true;
     rockMaterial.dispose();
     rockMaterial.map?.dispose();
     rockMaterial.normalMap?.dispose();
@@ -105,6 +130,7 @@ export function createQuarrySystem(
     layout,
     group,
     rockPlacements: activePlacements,
+    finishDetails,
     syncNodes,
     isBlockedAt: (x, z) => layout.isBlockedForProps(x, z),
     isGrassBlockedAt: (x, z) => layout.isBlockedForGrass(x, z),
@@ -114,13 +140,14 @@ export function createQuarrySystem(
 
 function createQuarryRockPlacements(layout: QuarryLayout, rng: () => number): QuarryRockPlacement[] {
   const placements: QuarryRockPlacement[] = [];
+  const placementIndex = new SpatialHash2D<QuarryRockPlacement>(6);
   let largeIndex = 0;
   let smallIndex = 0;
   for (const site of layout.sites) {
     const quarryId = site.kind === 'large'
       ? `quarry-large-${largeIndex++}`
       : `quarry-small-${smallIndex++}`;
-    createSiteRockPlacements(site, quarryId, placements, rng);
+    createSiteRockPlacements(site, quarryId, placements, placementIndex, rng);
   }
   return placements;
 }
@@ -129,6 +156,7 @@ function createSiteRockPlacements(
   site: QuarrySite,
   quarryId: string,
   placements: QuarryRockPlacement[],
+  placementIndex: SpatialHash2D<QuarryRockPlacement>,
   rng: () => number,
 ): void {
   const targetCount =
@@ -157,9 +185,11 @@ function createSiteRockPlacements(
       site.kind === 'large'
         ? THREE.MathUtils.lerp(0.65, 3.2, Math.pow(rng(), 1.28))
         : THREE.MathUtils.lerp(0.55, 2.6, Math.pow(rng(), 1.35));
-    if (!hasMinimumRockDistance(placements, x, z, 1.8 + scale * 0.95)) continue;
+    if (placementIndex.hasPointWithin(x, z, 1.8 + scale * 0.95)) continue;
 
-    placements.push({ quarryId, x, z, scale });
+    const placement = { quarryId, x, z, scale };
+    placements.push(placement);
+    placementIndex.add(placement);
   }
 }
 
@@ -291,21 +321,6 @@ function createBoulderGeometry(seed: number): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   return geometry;
-}
-
-function hasMinimumRockDistance(
-  placements: QuarryRockPlacement[],
-  x: number,
-  z: number,
-  minDistance: number,
-): boolean {
-  const minDistanceSq = minDistance * minDistance;
-  for (const placement of placements) {
-    const dx = x - placement.x;
-    const dz = z - placement.z;
-    if (dx * dx + dz * dz < minDistanceSq) return false;
-  }
-  return true;
 }
 
 function stableSurfaceNoise(point: THREE.Vector3, seed: number): number {

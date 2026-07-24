@@ -1,4 +1,4 @@
-import { Terrain } from '../terrain/Terrain.ts';
+import { fullTerrainBounds } from '../terrain/terrainBounds.ts';
 import { RiverLayout } from '../rivers/RiverLayout.ts';
 import { ForagingLayout } from '../foraging/ForagingLayout.ts';
 import { QuarryLayout } from '../quarries/QuarryLayout.ts';
@@ -33,7 +33,7 @@ export type WorldLayout = {
 
 export function createWorldLayout(settings: WorldGenerationSettings = DEFAULT_WORLD_GENERATION_SETTINGS): WorldLayout {
   const dims = resolveWorldDimensions(settings.mapSize);
-  const riverBounds = Terrain.fullBounds(dims.terrainSize);
+  const riverBounds = fullTerrainBounds(dims.terrainSize);
   const riverSeed = deriveSubSeed(settings.seed, 'river');
   const forestSeed = deriveSubSeed(settings.seed, 'forest');
   const treeSeed = deriveSubSeed(settings.seed, 'trees');

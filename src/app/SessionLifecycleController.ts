@@ -53,12 +53,13 @@ export class SessionLifecycleController {
 
   onReady(): void {
     this.deps.sessionGate.markReady();
-    // Overlay stays until App finishes finishVegetation() and calls onPresentationReady().
+    // App clears the overlay after the first playable terrain frame. Vegetation
+    // continues progressively in the background.
     this.deps.loadingScreen?.setProgress({
-      label: 'Growing forest…',
-      detail: 'Building trees and ground cover',
+      label: 'Entering world…',
+      detail: 'Preparing the first playable frame',
       phase: 'vegetation',
-      fraction: 0.15,
+      fraction: 0.82,
     });
     this.deps.connectionOverlay.hide();
     this.deps.toolbar?.setGameplayEnabled(true);

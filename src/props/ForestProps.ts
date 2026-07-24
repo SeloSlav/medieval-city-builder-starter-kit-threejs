@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SpatialHash2D } from '../utils/SpatialHash2D.ts';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { Terrain } from '../terrain/Terrain.ts';
 import {
@@ -19,10 +20,8 @@ import {
   CENTRAL_CLEARING_RADIUS,
   createForestCores,
   createForestSpawnConfig,
-  distanceToNearest,
   fbm2,
   forestDensityAt,
-  hasMinimumDistance,
   isInsidePlayableExtent,
   mulberry32,
   samplePointInPlayableExtent,
@@ -295,6 +294,8 @@ function createRockPlacements(
 ): RockPlacement[] {
   const placements: RockPlacement[] = [];
   const outcrops = createRockOutcrops(rng, forestCores, spawnConfig);
+  const placementIndex = new SpatialHash2D<RockPlacement>(6);
+  const treeIndex = new SpatialHash2D<TreePlacement>(8, treePlacements);
 
   for (const outcrop of outcrops) {
     let placedInOutcrop = 0;
@@ -314,10 +315,12 @@ function createRockPlacements(
       if (forestDensity > 0.88 && rng() < 0.55) continue;
 
       const scale = THREE.MathUtils.lerp(0.55, 2.8, Math.pow(rng(), 1.35)) * THREE.MathUtils.lerp(0.92, 1.28, outcrop.strength);
-      if (distanceToNearest(treePlacements, x, z) < 2.7 + scale * 0.78) continue;
-      if (!hasMinimumDistance(placements, x, z, 2.8 + scale * 1.35)) continue;
+      if (treeIndex.hasPointWithin(x, z, 2.7 + scale * 0.78)) continue;
+      if (placementIndex.hasPointWithin(x, z, 2.8 + scale * 1.35)) continue;
 
-      placements.push({ x, z, scale, profile: rockProfileForScale(scale, rng) });
+      const placement = { x, z, scale, profile: rockProfileForScale(scale, rng) };
+      placements.push(placement);
+      placementIndex.add(placement);
       placedInOutcrop++;
     }
   }
@@ -333,9 +336,11 @@ function createRockPlacements(
     if (suitability < 0.28 || rng() > suitability * 0.92) continue;
 
     const scale = THREE.MathUtils.lerp(0.45, 2.2, Math.pow(rng(), 1.45));
-    if (distanceToNearest(treePlacements, x, z) < 3.2 + scale * 0.7) continue;
-    if (!hasMinimumDistance(placements, x, z, 5.4 + scale * 1.2)) continue;
-    placements.push({ x, z, scale, profile: rockProfileForScale(scale, rng) });
+    if (treeIndex.hasPointWithin(x, z, 3.2 + scale * 0.7)) continue;
+    if (placementIndex.hasPointWithin(x, z, 5.4 + scale * 1.2)) continue;
+    const placement = { x, z, scale, profile: rockProfileForScale(scale, rng) };
+    placements.push(placement);
+    placementIndex.add(placement);
   }
 
   return placements;
@@ -347,6 +352,7 @@ function createRockOutcrops(
   spawnConfig: ForestSpawnConfig,
 ): RockOutcrop[] {
   const outcrops: RockOutcrop[] = [];
+  const outcropIndex = new SpatialHash2D<RockOutcrop>(24);
   let attempts = 0;
   const minOutcropDistance = spawnConfig.extent * 0.11;
 
@@ -354,18 +360,20 @@ function createRockOutcrops(
     attempts++;
     const { x, z } = samplePointInPlayableExtent(rng, spawnConfig.extent);
     if (Math.hypot(x, z) < CENTRAL_CLEARING_RADIUS + 12) continue;
-    if (!hasMinimumDistance(outcrops, x, z, minOutcropDistance)) continue;
+    if (outcropIndex.hasPointWithin(x, z, minOutcropDistance)) continue;
 
     const suitability = rockSuitabilityAt(x, z, forestCores, spawnConfig.extent, spawnConfig.terrainExtent);
     if (suitability < 0.32 || rng() > suitability) continue;
 
-    outcrops.push({
+    const outcrop = {
       x,
       z,
       radius: THREE.MathUtils.lerp(10, 24, rng()),
       count: 5 + Math.floor(rng() * 7),
       strength: suitability,
-    });
+    };
+    outcrops.push(outcrop);
+    outcropIndex.add(outcrop);
   }
 
   return outcrops;

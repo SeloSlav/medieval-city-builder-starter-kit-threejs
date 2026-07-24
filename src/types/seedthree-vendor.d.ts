@@ -70,6 +70,7 @@ declare module '@seedthree/core/wind.js' {
   export const windStrength: { value: number };
   export const windSpeed: { value: number };
   export const WIND_DIR: THREE.Vector3;
+  export function foliageWindPosition(withFlutter?: boolean): unknown;
   export function grassWindPosition(bladeHeight?: number): unknown;
   export function groundCoverWindPosition(amount?: number): unknown;
 }

@@ -2,11 +2,9 @@ import {
   CENTRAL_CLEARING_RADIUS,
   createForestCores,
   createForestSpawnConfig,
-  distanceToNearest,
   fbm2,
   forestDensityAt,
   getEdgeHillFactor,
-  hasMinimumDistance,
   isInsidePlayableExtent,
   isInsideTerrainExtent,
   mulberry32,
@@ -17,6 +15,7 @@ import {
   type ForestCore,
   type ForestSpawnConfig,
 } from './forestField.ts';
+import { SpatialHash2D } from '../utils/SpatialHash2D.ts';
 
 const TAU = Math.PI * 2;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -81,6 +80,7 @@ function createTreePlacements(
   isBlockedAt?: (x: number, z: number) => boolean,
 ): TreePlacement[] {
   const placements: TreePlacement[] = [];
+  const placementIndex = new SpatialHash2D<TreePlacement>(8);
   let attempts = 0;
 
   while (placements.length < spawnConfig.treeTargetCount && attempts < spawnConfig.treeTargetCount * 48) {
@@ -103,11 +103,13 @@ function createTreePlacements(
     const form = pickTreeForm(rng, species, habitat, 'core', formNoise);
     const scale = pickTreeScale(rng, species, form, habitat);
     const minDistance = getTreePlacementSpacing(species, form, scale, habitat);
-    if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
+    if (placementIndex.hasPointWithin(x, z, minDistance)) continue;
 
     if (isTreePlacementBlocked(x, z, species, form, scale, isBlockedAt)) continue;
 
-    placements.push({ x, z, species, form, scale });
+    const placement = { x, z, species, form, scale };
+    placements.push(placement);
+    placementIndex.add(placement);
   }
 
   return placements;
@@ -120,6 +122,8 @@ function createHillEdgeTreePlacements(
   isBlockedAt?: (x: number, z: number) => boolean,
 ): TreePlacement[] {
   const placements: TreePlacement[] = [];
+  const placementIndex = new SpatialHash2D<TreePlacement>(8);
+  const existingIndex = new SpatialHash2D<TreePlacement>(8, existingTrees);
   let attempts = 0;
 
   while (placements.length < spawnConfig.hillEdgeTreeTargetCount && attempts < spawnConfig.hillEdgeTreeTargetCount * 52) {
@@ -146,12 +150,14 @@ function createHillEdgeTreePlacements(
     const form = pickTreeForm(rng, species, habitat, 'hillEdge', formNoise);
     const scale = pickTreeScale(rng, species, form, habitat);
     const minDistance = getTreePlacementSpacing(species, form, scale, habitat) * lerp(0.9, 0.62, hillFactor);
-    if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
-    if (distanceToNearest(existingTrees, x, z) < minDistance * 0.82) continue;
+    if (placementIndex.hasPointWithin(x, z, minDistance)) continue;
+    if (existingIndex.hasPointWithin(x, z, minDistance * 0.82)) continue;
 
     if (isTreePlacementBlocked(x, z, species, form, scale, isBlockedAt)) continue;
 
-    placements.push({ x, z, species, form, scale });
+    const placement = { x, z, species, form, scale };
+    placements.push(placement);
+    placementIndex.add(placement);
   }
 
   return placements;
@@ -165,6 +171,8 @@ function createSaplingPlacements(
   isBlockedAt?: (x: number, z: number) => boolean,
 ): TreePlacement[] {
   const placements: TreePlacement[] = [];
+  const placementIndex = new SpatialHash2D<TreePlacement>(3);
+  const existingIndex = new SpatialHash2D<TreePlacement>(8, existingTrees);
   let attempts = 0;
 
   while (placements.length < spawnConfig.saplingTargetCount && attempts < spawnConfig.saplingTargetCount * 42) {
@@ -179,21 +187,23 @@ function createSaplingPlacements(
     if (density < 0.42 || rng() > density * 1.06) continue;
 
     const minDistance = lerp(2.8, 1.9, density);
-    if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
-    if (distanceToNearest(existingTrees, x, z) < 2.4) continue;
+    if (placementIndex.hasPointWithin(x, z, minDistance)) continue;
+    if (existingIndex.hasPointWithin(x, z, 2.4)) continue;
     const habitat = sampleLocalForestHabitat(x, z, density, spawnConfig, forestCores);
     const species = pickTreeSpecies(rng, habitat, 'sapling');
     const form = pickTreeForm(rng, species, habitat, 'sapling', valueNoise2(x * 0.032, z * 0.032));
     const scale = pickTreeScale(rng, species, form, habitat);
     if (isTreePlacementBlocked(x, z, species, form, scale, isBlockedAt)) continue;
 
-    placements.push({
+    const placement = {
       x,
       z,
       species,
       form,
       scale,
-    });
+    };
+    placements.push(placement);
+    placementIndex.add(placement);
   }
 
   return placements;

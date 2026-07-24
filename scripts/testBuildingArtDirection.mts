@@ -13,7 +13,7 @@ import { BUILD_MENU_ENTRIES, renderBuildMenuCards } from '../src/ui/buildMenuCar
 import { disposeObject3D } from '../src/utils/dispose.ts';
 
 const html = renderBuildMenuCards();
-const urls = [...html.matchAll(/<img class="construction-card__art" src="([^"]+)"/g)].map((match) => match[1]);
+const urls = [...html.matchAll(/<img class="construction-card__art" data-src="([^"]+)"/g)].map((match) => match[1]);
 
 if (urls.length !== BUILD_MENU_ENTRIES.length) {
   throw new Error(`Expected ${BUILD_MENU_ENTRIES.length} build-card images, found ${urls.length}.`);
@@ -28,18 +28,21 @@ const hashes = new Map<string, string>();
 for (const url of urls) {
   const file = resolve('public', url.replace(/^\//, '').replace(/^assets\//, 'assets/'));
   const bytes = readFileSync(file);
-  if (bytes.toString('ascii', 1, 4) !== 'PNG') throw new Error(`${url} is not a PNG.`);
-
-  const width = bytes.readUInt32BE(16);
-  const height = bytes.readUInt32BE(20);
-  if (width !== 1024 || height !== 1536) {
-    throw new Error(`${url} must be a 1024x1536 portrait card; found ${width}x${height}.`);
+  if (bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WEBP') {
+    throw new Error(`${url} is not a WebP.`);
   }
+  if (bytes.length > 100_000) throw new Error(`${url} is too large for lazy menu art (${bytes.length} bytes).`);
 
   const hash = createHash('sha256').update(bytes).digest('hex');
   const duplicate = hashes.get(hash);
   if (duplicate) throw new Error(`${url} duplicates ${duplicate}; every building needs bespoke card art.`);
   hashes.set(hash, url);
+}
+if (!html.includes('width="320" height="480"') || !html.includes('loading="lazy"')) {
+  throw new Error('Construction-menu cards must reserve their 320x480 layout and lazy-load.');
+}
+if (/<img class="construction-card__art" src=/.test(html)) {
+  throw new Error('Hidden construction menus must not assign image src until opened.');
 }
 
 const modelNames = new Set<string>();

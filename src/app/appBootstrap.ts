@@ -47,7 +47,8 @@ import { buildBuildingWorldMapMarkers } from '../map/worldMapMarkers.ts';
 import { DeliveryAgentRenderer } from '../logistics/DeliveryAgentRenderer.ts';
 import { FireEffectsRenderer } from '../fires/FireEffectsRenderer.ts';
 import { VillagerRenderer } from '../settlement/VillagerRenderer.ts';
-import { beginStartupTextureLoad } from '../scene/startupTextures.ts';
+import { beginProgressiveStartupTextureLoad } from '../scene/startupTextures.ts';
+import { markDetailedWorldTexturesReady, markStartupCheckpoint } from './startupDiagnostics.ts';
 import { sampleNaturalTerrainHeight } from '../terrain/TerrainHeight.ts';
 import { BuildToolbar } from '../ui/BuildToolbar.ts';
 import type { BuildingKind } from '../generated/gameBalance.ts';
@@ -130,8 +131,19 @@ export async function bootstrapAppSession(
   bridge: AppBootstrapBridge,
 ): Promise<BootstrappedSession> {
   const loadingScreen = LoadingScreen.tryCreate();
-  const materialsPromise = RoadMaterialFactory.create(8);
-  const startupTexturesPromise = beginStartupTextureLoad();
+  const materials = RoadMaterialFactory.createProgressive(8);
+  void materials.whenTexturesReady().catch((error) => {
+    console.warn('Detailed road and terrain textures are still unavailable:', error);
+  });
+  const materialsPromise = Promise.resolve(materials);
+  const startupTexturesPromise = beginProgressiveStartupTextureLoad();
+  void startupTexturesPromise.then((textures) => textures.ready?.catch((error) => {
+    console.warn('Detailed rock and sky textures are still unavailable:', error);
+  }));
+  void Promise.all([
+    materials.whenTexturesReady(),
+    startupTexturesPromise.then((textures) => textures.ready),
+  ]).then(() => markDetailedWorldTexturesReady()).catch(() => undefined);
 
   root.innerHTML = `
       <div class="app-shell">
@@ -177,6 +189,7 @@ export async function bootstrapAppSession(
   const sceneManager = await SceneManager.create(sceneRoot, worldSettings, (progress) => {
     loadingScreen?.setProgress(progress);
   }, materialsPromise, startupTexturesPromise);
+  markStartupCheckpoint('scene bootstrap returned');
   const layoutRegistry = WorldLayoutRegistry.fromWorldLayout(sceneManager.worldLayout);
   const gameState = createInitialGameState(layoutRegistry, getDraftWorldGeneration().seed);
   const liveContext: SessionLiveContext = { gameState, treeRegistry: null };
@@ -767,6 +780,7 @@ export async function bootstrapAppSession(
     fraction: 0,
   });
 
+  markStartupCheckpoint('application services ready');
   return {
     loadingScreen,
     liveContext,

@@ -22,6 +22,11 @@ export type QuarryLayoutOptions = {
   playableHalf?: number;
 };
 
+export type SerializedQuarryLayout = {
+  seed: number;
+  sites: QuarrySite[];
+};
+
 const MIN_LARGE_QUARRY_SPACING = 200;
 const MIN_SMALL_QUARRY_SPACING = 110;
 const RIVER_AVOIDANCE_MASK = 0.08;
@@ -55,6 +60,14 @@ export class QuarryLayout {
     }
 
     return new QuarryLayout(seed, sites);
+  }
+
+  static fromSerialized(data: SerializedQuarryLayout): QuarryLayout {
+    return new QuarryLayout(data.seed, data.sites);
+  }
+
+  serialize(): SerializedQuarryLayout {
+    return { seed: this.seed, sites: this.sites };
   }
 
   getPitDepression(x: number, z: number): number {

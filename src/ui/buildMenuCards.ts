@@ -16,22 +16,22 @@ type PlacementArtKey = BuildingKind | 'residences';
 export type BuildMenuEntry = { kind: 'placement'; action: PlacementBuildMenuAction; artKey: PlacementArtKey };
 
 const BUILD_CARD_ART: Record<PlacementArtKey, string> = {
-  lumber_mill: '/assets/ui/build-menu/lumber-mill.png', reforester: '/assets/ui/build-menu/reforester.png',
-  woodcutters_lodge: '/assets/ui/build-menu/woodcutters-lodge.png', stone_quarry: '/assets/ui/build-menu/stonecutters-camp.png',
-  large_quarry: '/assets/ui/build-menu/large-quarry.png',
-  well: '/assets/ui/build-menu/water-well.png', hunters_hall: '/assets/ui/build-menu/hunter-hall.png',
-  foragers_shed: '/assets/ui/build-menu/foragers-hut.png', chapel: '/assets/ui/build-menu/chapel.png',
-  fishing_camp: '/assets/ui/build-menu/fishing-camp.png',
-  marketplace: '/assets/ui/build-menu/market.png', residences: '/assets/ui/build-menu/residence.png',
-  town_hall: '/assets/ui/build-menu/town-hall.png', village_storehouse: '/assets/ui/build-menu/village-storehouse.png',
-  threshing_barn: '/assets/ui/build-menu/threshing-barn.png',
-  monastery: '/assets/ui/build-menu/monastery.png', brewery: '/assets/ui/build-menu/brewery.png',
-  smokehouse: '/assets/ui/build-menu/smokehouse.png', granary: '/assets/ui/build-menu/granary.png',
-  apiary: '/assets/ui/build-menu/apiary.png', watermill: '/assets/ui/build-menu/watermill.png',
-  carpenter: '/assets/ui/build-menu/carpenter.png', ferry_landing: '/assets/ui/build-menu/ferry-landing.png',
-  vineyard: '/assets/ui/build-menu/vineyard.png',
-  pastoral_farmstead: '/assets/ui/build-menu/pastoral-farmstead.png',
-  swineherd: '/assets/ui/build-menu/swineherd.png',
+  lumber_mill: '/assets/ui/build-menu/cards/lumber-mill.webp', reforester: '/assets/ui/build-menu/cards/reforester.webp',
+  woodcutters_lodge: '/assets/ui/build-menu/cards/woodcutters-lodge.webp', stone_quarry: '/assets/ui/build-menu/cards/stonecutters-camp.webp',
+  large_quarry: '/assets/ui/build-menu/cards/large-quarry.webp',
+  well: '/assets/ui/build-menu/cards/water-well.webp', hunters_hall: '/assets/ui/build-menu/cards/hunter-hall.webp',
+  foragers_shed: '/assets/ui/build-menu/cards/foragers-hut.webp', chapel: '/assets/ui/build-menu/cards/chapel.webp',
+  fishing_camp: '/assets/ui/build-menu/cards/fishing-camp.webp',
+  marketplace: '/assets/ui/build-menu/cards/market.webp', residences: '/assets/ui/build-menu/cards/residence.webp',
+  town_hall: '/assets/ui/build-menu/cards/town-hall.webp', village_storehouse: '/assets/ui/build-menu/cards/village-storehouse.webp',
+  threshing_barn: '/assets/ui/build-menu/cards/threshing-barn.webp',
+  monastery: '/assets/ui/build-menu/cards/monastery.webp', brewery: '/assets/ui/build-menu/cards/brewery.webp',
+  smokehouse: '/assets/ui/build-menu/cards/smokehouse.webp', granary: '/assets/ui/build-menu/cards/granary.webp',
+  apiary: '/assets/ui/build-menu/cards/apiary.webp', watermill: '/assets/ui/build-menu/cards/watermill.webp',
+  carpenter: '/assets/ui/build-menu/cards/carpenter.webp', ferry_landing: '/assets/ui/build-menu/cards/ferry-landing.webp',
+  vineyard: '/assets/ui/build-menu/cards/vineyard.webp',
+  pastoral_farmstead: '/assets/ui/build-menu/cards/pastoral-farmstead.webp',
+  swineherd: '/assets/ui/build-menu/cards/swineherd.webp',
 };
 
 const DETAILS: Record<PlacementArtKey, [title: string, hotkey: string, description: string]> = {
@@ -108,11 +108,20 @@ export function renderBuildMenuCards(entries: readonly BuildMenuEntry[] = BUILD_
       ? `${formatBuildingCost(residenceZoneCost(1))} per home`
       : formatBuildingCost(getBuildingCost(entry.artKey as BuildingKind));
     return `<button type="button" class="construction-card" data-action="${entry.action}" data-hotkey="${hotkey}" aria-label="${title} (${hotkey})">
-      <img class="construction-card__art" src="${BUILD_CARD_ART[entry.artKey]}" alt="" draggable="false" />
+      <img class="construction-card__art" data-src="${BUILD_CARD_ART[entry.artKey]}" alt="" width="320" height="480" loading="lazy" decoding="async" draggable="false" />
       <span class="construction-card__hotkey" aria-hidden="true">${hotkey}</span>
       <span class="construction-card__tooltip" role="tooltip"><span class="construction-card__tooltip-title">${title} (${hotkey})</span><span class="construction-card__tooltip-desc">${description}</span><span class="construction-card__tooltip-cost">Cost: ${cost}</span></span>
     </button>`;
   }).join('');
+}
+
+export function hydrateBuildMenuImages(menu: ParentNode): void {
+  for (const image of menu.querySelectorAll<HTMLImageElement>('img[data-src]')) {
+    const source = image.dataset.src;
+    if (!source) continue;
+    image.src = source;
+    delete image.dataset.src;
+  }
 }
 
 export function resolveBuildMenuHotkey(key: string, entries: readonly BuildMenuEntry[] = BUILD_MENU_ENTRIES): BuildMenuAction | null {

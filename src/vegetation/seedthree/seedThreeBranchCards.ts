@@ -6,6 +6,10 @@ import {
   type BranchCardsSet,
 } from '@seedthree/core/branch-cards.js';
 import type { SeedThreeSpeciesAssets, SeedThreeSpeciesPreset } from './seedThreeAssets.ts';
+import {
+  readSeedThreeBranchCards,
+  writeSeedThreeBranchCards,
+} from './seedThreeBranchCardCache.ts';
 
 export type SeedThreeBranchCards = {
   byLevel: Map<string, BranchCardsSet>;
@@ -52,6 +56,11 @@ export async function ensureSeedThreeBranchCards(
   const key = cacheKey(species, mobileTarget);
   const cached = cardCache.get(key);
   if (cached) return cached;
+  const persisted = await readSeedThreeBranchCards(key);
+  if (persisted) {
+    cardCache.set(key, persisted);
+    return persisted;
+  }
 
   const maxLevel = skeletonLevels(species) - 1;
   const jobs: Array<{ level: number; foliageOnly: boolean }> = [{ level: maxLevel, foliageOnly: true }];
@@ -61,10 +70,12 @@ export async function ensureSeedThreeBranchCards(
   }
 
   const byLevel = new Map<string, BranchCardsSet>();
+  const noFlutterByLevel = new Map<string, boolean>();
   try {
     for (const job of jobs) {
       const jobKey = `${job.level}:${job.foliageOnly ? 'fol' : 'full'}`;
       if (byLevel.has(jobKey)) continue;
+      noFlutterByLevel.set(jobKey, job.level < maxLevel);
       const set = await bakeBranchCards(renderer, species, assets, {
         size: CARD_RES,
         variants: CARD_VARIANTS,
@@ -89,6 +100,7 @@ export async function ensureSeedThreeBranchCards(
   };
 
   cardCache.set(key, cards);
+  await writeSeedThreeBranchCards(key, cards, noFlutterByLevel);
   if (cardCache.size > 8) {
     const [oldKey, old] = cardCache.entries().next().value!;
     if (oldKey !== key) {

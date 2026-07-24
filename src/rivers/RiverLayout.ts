@@ -21,14 +21,28 @@ export type RiverLayoutOptions = {
   drain?: { x: number; z: number };
 };
 
+export type SerializedRiverLayout = {
+  bounds: TerrainBounds;
+  seed: number;
+  drain: { x: number; z: number };
+  corridors: RiverCorridor[];
+};
+
 const TAU = Math.PI * 2;
 const CONFLUENCE_LAKE_RADIUS = 54;
+const SEGMENT_CELL_SIZE = 32;
+
+type IndexedRiverSegment = {
+  a: RiverPoint;
+  b: RiverPoint;
+};
 
 export class RiverLayout {
   readonly corridors: RiverCorridor[];
   readonly drain: { x: number; z: number };
   readonly seed: number;
   private readonly bounds: TerrainBounds;
+  private readonly segmentCells: Map<string, IndexedRiverSegment[]>;
 
   private constructor(
     bounds: TerrainBounds,
@@ -40,6 +54,7 @@ export class RiverLayout {
     this.seed = seed;
     this.drain = drain;
     this.corridors = corridors;
+    this.segmentCells = buildRiverSegmentCells(corridors);
   }
 
   static create(options: RiverLayoutOptions): RiverLayout {
@@ -77,6 +92,19 @@ export class RiverLayout {
     return new RiverLayout(bounds, seed, drain, corridors);
   }
 
+  static fromSerialized(data: SerializedRiverLayout): RiverLayout {
+    return new RiverLayout(data.bounds, data.seed, data.drain, data.corridors);
+  }
+
+  serialize(): SerializedRiverLayout {
+    return {
+      bounds: this.bounds,
+      seed: this.seed,
+      drain: this.drain,
+      corridors: this.corridors,
+    };
+  }
+
   getValleyDepression(x: number, z: number): number {
     const lake = sampleConfluenceLake(x, z, this.drain, this.seed);
     const hit = this.sampleCorridor(x, z);
@@ -108,22 +136,17 @@ export class RiverLayout {
     let bestDx = 0;
     let bestDz = 0;
 
-    for (const corridor of this.corridors) {
-      const points = corridor.points;
-      for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i];
-        const b = points[i + 1];
-        const hit = distanceToSegment(x, z, a.x, a.z, b.x, b.z);
-        if (hit.distance >= bestDistance) continue;
-        bestDistance = hit.distance;
-        bestHalfWidth = lerp(a.halfWidth, b.halfWidth, hit.t);
-        const segDx = b.x - a.x;
-        const segDz = b.z - a.z;
-        const segLen = Math.hypot(segDx, segDz);
-        if (segLen > 1e-6) {
-          bestDx = segDx / segLen;
-          bestDz = segDz / segLen;
-        }
+    for (const { a, b } of this.segmentsAt(x, z)) {
+      const hit = distanceToSegment(x, z, a.x, a.z, b.x, b.z);
+      if (hit.distance >= bestDistance) continue;
+      bestDistance = hit.distance;
+      bestHalfWidth = lerp(a.halfWidth, b.halfWidth, hit.t);
+      const segDx = b.x - a.x;
+      const segDz = b.z - a.z;
+      const segLen = Math.hypot(segDx, segDz);
+      if (segLen > 1e-6) {
+        bestDx = segDx / segLen;
+        bestDz = segDz / segLen;
       }
     }
 
@@ -159,18 +182,13 @@ export class RiverLayout {
     let bestDepth = 0;
     let bestProgress = 0;
 
-    for (const corridor of this.corridors) {
-      const points = corridor.points;
-      for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i];
-        const b = points[i + 1];
-        const hit = distanceToSegment(x, z, a.x, a.z, b.x, b.z);
-        if (hit.distance >= bestDistance) continue;
-        bestDistance = hit.distance;
-        bestHalfWidth = lerp(a.halfWidth, b.halfWidth, hit.t);
-        bestDepth = lerp(a.channelDepth, b.channelDepth, hit.t);
-        bestProgress = lerp(a.progress, b.progress, hit.t);
-      }
+    for (const { a, b } of this.segmentsAt(x, z)) {
+      const hit = distanceToSegment(x, z, a.x, a.z, b.x, b.z);
+      if (hit.distance >= bestDistance) continue;
+      bestDistance = hit.distance;
+      bestHalfWidth = lerp(a.halfWidth, b.halfWidth, hit.t);
+      bestDepth = lerp(a.channelDepth, b.channelDepth, hit.t);
+      bestProgress = lerp(a.progress, b.progress, hit.t);
     }
 
     if (!Number.isFinite(bestDistance) || bestDistance > bestHalfWidth * 0.95) return null;
@@ -181,6 +199,45 @@ export class RiverLayout {
       progress: bestProgress,
     };
   }
+
+  private segmentsAt(x: number, z: number): ReadonlyArray<IndexedRiverSegment> {
+    return this.segmentCells.get(segmentCellKey(
+      Math.floor(x / SEGMENT_CELL_SIZE),
+      Math.floor(z / SEGMENT_CELL_SIZE),
+    )) ?? [];
+  }
+}
+
+function buildRiverSegmentCells(
+  corridors: ReadonlyArray<RiverCorridor>,
+): Map<string, IndexedRiverSegment[]> {
+  const cells = new Map<string, IndexedRiverSegment[]>();
+  for (const corridor of corridors) {
+    for (let i = 0; i < corridor.points.length - 1; i++) {
+      const segment = {
+        a: corridor.points[i],
+        b: corridor.points[i + 1],
+      };
+      const reach = Math.max(segment.a.halfWidth, segment.b.halfWidth) * 0.95;
+      const minCellX = Math.floor((Math.min(segment.a.x, segment.b.x) - reach) / SEGMENT_CELL_SIZE);
+      const maxCellX = Math.floor((Math.max(segment.a.x, segment.b.x) + reach) / SEGMENT_CELL_SIZE);
+      const minCellZ = Math.floor((Math.min(segment.a.z, segment.b.z) - reach) / SEGMENT_CELL_SIZE);
+      const maxCellZ = Math.floor((Math.max(segment.a.z, segment.b.z) + reach) / SEGMENT_CELL_SIZE);
+      for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
+        for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+          const key = segmentCellKey(cellX, cellZ);
+          const bucket = cells.get(key);
+          if (bucket) bucket.push(segment);
+          else cells.set(key, [segment]);
+        }
+      }
+    }
+  }
+  return cells;
+}
+
+function segmentCellKey(cellX: number, cellZ: number): string {
+  return `${cellX},${cellZ}`;
 }
 
 function buildCorridor(

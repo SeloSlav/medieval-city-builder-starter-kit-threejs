@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SpatialHash2D } from '../utils/SpatialHash2D.ts';
 import {
   CATTAIL_TEXTURE_FILES,
   createCattailGeometry,
@@ -236,6 +237,7 @@ export async function createRiverReeds(
 
 function createReedPlacements(riverField: RiverField, rng: () => number): ReedPlacement[] {
   const placements: ReedPlacement[] = [];
+  const placementIndex = new SpatialHash2D<ReedPlacement>(0.6);
   const shoreNodes = collectShoreNodes(riverField);
 
   for (const node of shoreNodes) {
@@ -253,10 +255,10 @@ function createReedPlacements(riverField: RiverField, rng: () => number): ReedPl
 
       if (riverField.isRenderedWetAt(px, pz)) continue;
       if (!riverField.isGrassBlockedAt(px, pz)) continue;
-      if (!hasMinimumDistance(placements, px, pz, 0.34 + rng() * 0.22)) continue;
+      if (placementIndex.hasPointWithin(px, pz, 0.34 + rng() * 0.22)) continue;
 
       const shore = riverField.sampleShoreDistance(px, pz);
-      placements.push({
+      const placement = {
         x: px,
         z: pz,
         scale: resolveReedScale(shore, rng),
@@ -266,11 +268,13 @@ function createReedPlacements(riverField: RiverField, rng: () => number): ReedPl
         hue: 0.24 + (rng() - 0.5) * 0.03,
         sat: 0.34 + rng() * 0.1,
         light: 0.3 + rng() * 0.07,
-      });
+      };
+      placements.push(placement);
+      placementIndex.add(placement);
     }
   }
 
-  appendGridReedPlacements(riverField, rng, placements);
+  appendGridReedPlacements(riverField, rng, placements, placementIndex);
   return placements;
 }
 
@@ -278,6 +282,7 @@ function appendGridReedPlacements(
   riverField: RiverField,
   rng: () => number,
   placements: ReedPlacement[],
+  placementIndex: SpatialHash2D<ReedPlacement>,
 ): void {
   const { resolution, startX, startZ, stepX, stepZ } = riverField;
 
@@ -298,9 +303,9 @@ function appendGridReedPlacements(
 
       const chance = THREE.MathUtils.clamp(0.42 + (1 - shore / 4.8) * 0.38, 0.2, 0.9);
       if (rng() > chance) continue;
-      if (!hasMinimumDistance(placements, x, z, 0.38 + rng() * 0.24)) continue;
+      if (placementIndex.hasPointWithin(x, z, 0.38 + rng() * 0.24)) continue;
 
-      placements.push({
+      const placement = {
         x,
         z,
         scale: resolveReedScale(shore, rng),
@@ -310,7 +315,9 @@ function appendGridReedPlacements(
         hue: 0.24 + (rng() - 0.5) * 0.03,
         sat: 0.34 + rng() * 0.1,
         light: 0.3 + rng() * 0.07,
-      });
+      };
+      placements.push(placement);
+      placementIndex.add(placement);
     }
   }
 }
@@ -405,14 +412,4 @@ function resolveReedScale(shore: number, rng: () => number): number {
   }
 
   return scale;
-}
-
-function hasMinimumDistance(points: ReedPlacement[], x: number, z: number, minDistance: number): boolean {
-  const minDistanceSq = minDistance * minDistance;
-  for (const point of points) {
-    const dx = x - point.x;
-    const dz = z - point.z;
-    if (dx * dx + dz * dz < minDistanceSq) return false;
-  }
-  return true;
 }

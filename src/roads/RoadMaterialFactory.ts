@@ -20,6 +20,7 @@ export class RoadMaterialFactory {
   private roadTextures: TextureSet | null = null;
   private bridgeTextures: TextureSet | null = null;
   private terrainBlendTextures: TerrainBlendTextureSet | null = null;
+  private texturesReadyPromise: Promise<void> = Promise.resolve();
 
   private constructor() {
     this.previewValid = new THREE.MeshBasicMaterial({
@@ -67,18 +68,39 @@ export class RoadMaterialFactory {
   }
 
   static async create(maxAnisotropy: number): Promise<RoadMaterialFactory> {
+    const factory = RoadMaterialFactory.createProgressive(maxAnisotropy);
+    await factory.whenTexturesReady();
+    return factory;
+  }
+
+  static createProgressive(maxAnisotropy: number): RoadMaterialFactory {
     const factory = new RoadMaterialFactory();
+    factory.roadTextures = createPlaceholderTextureSet(THREE.RepeatWrapping, true);
+    factory.bridgeTextures = createPlaceholderTextureSet(THREE.RepeatWrapping, false);
+    factory.terrainBlendTextures = {
+      meadow: createPlaceholderTextureSet(THREE.MirroredRepeatWrapping, false),
+      dense: createPlaceholderTextureSet(THREE.MirroredRepeatWrapping, false),
+      dry: createPlaceholderTextureSet(THREE.MirroredRepeatWrapping, false),
+    };
+    Object.assign(factory, factory.createMaterials());
+
     const textureLoader = new RoadTextureLoader(Math.min(maxAnisotropy, 8));
-    const [roadTextures, bridgeTextures, terrainBlendTextures] = await Promise.all([
+    factory.texturesReadyPromise = Promise.all([
       textureLoader.loadRoadTextures(),
       textureLoader.loadBridgeTextures(),
       textureLoader.loadTerrainBlendTextures(),
-    ]);
-    factory.roadTextures = roadTextures;
-    factory.bridgeTextures = bridgeTextures;
-    factory.terrainBlendTextures = terrainBlendTextures;
-    Object.assign(factory, factory.createMaterials());
+    ]).then(([roadTextures, bridgeTextures, terrainBlendTextures]) => {
+      hydrateTextureSet(factory.roadTextures!, roadTextures);
+      hydrateTextureSet(factory.bridgeTextures!, bridgeTextures);
+      hydrateTextureSet(factory.terrainBlendTextures!.meadow, terrainBlendTextures.meadow);
+      hydrateTextureSet(factory.terrainBlendTextures!.dense, terrainBlendTextures.dense);
+      hydrateTextureSet(factory.terrainBlendTextures!.dry, terrainBlendTextures.dry);
+    });
     return factory;
+  }
+
+  whenTexturesReady(): Promise<void> {
+    return this.texturesReadyPromise;
   }
 
   dispose(): void {
@@ -142,5 +164,55 @@ export class RoadMaterialFactory {
 
   private disposeTextureSet(set: TextureSet): void {
     Object.values(set).forEach((texture) => texture?.dispose());
+  }
+}
+
+function createPlaceholderTextureSet(wrapping: THREE.Wrapping, includeRoadMasks: boolean): TextureSet {
+  const set: TextureSet = {
+    albedo: createPlaceholderTexture([104, 122, 76, 255], true, wrapping),
+    normal: createPlaceholderTexture([128, 128, 255, 255], false, wrapping),
+    roughness: createPlaceholderTexture([230, 230, 230, 255], false, wrapping),
+    ao: createPlaceholderTexture([255, 255, 255, 255], false, wrapping),
+    height: createPlaceholderTexture([128, 128, 128, 255], false, wrapping),
+  };
+  if (includeRoadMasks) {
+    set.edgeMask = createPlaceholderTexture([255, 255, 255, 255], false, wrapping);
+    set.rutMask = createPlaceholderTexture([0, 0, 0, 255], false, wrapping);
+  } else {
+    set.edgeMask = createPlaceholderTexture([255, 255, 255, 255], false, wrapping);
+  }
+  return set;
+}
+
+function createPlaceholderTexture(
+  rgba: [number, number, number, number],
+  srgb: boolean,
+  wrapping: THREE.Wrapping,
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.fillStyle = `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3] / 255})`;
+    context.fillRect(0, 0, 1, 1);
+  }
+  // Keep this generic so WebGPU does not retain DataTexture upload semantics
+  // after the placeholder is hydrated with an ImageBitmap.
+  const texture = new THREE.Texture(canvas);
+  texture.wrapS = wrapping;
+  texture.wrapT = wrapping;
+  texture.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function hydrateTextureSet(target: TextureSet, source: TextureSet): void {
+  for (const key of Object.keys(source) as Array<keyof TextureSet>) {
+    const targetTexture = target[key];
+    const sourceTexture = source[key];
+    if (!targetTexture || !sourceTexture) continue;
+    targetTexture.copy(sourceTexture);
+    targetTexture.needsUpdate = true;
   }
 }

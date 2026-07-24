@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SpatialHash2D } from '../utils/SpatialHash2D.ts';
 import { MeshSSSNodeMaterial } from 'three/webgpu';
 import {
   attribute,
@@ -32,7 +33,6 @@ import {
   type ForestCore,
   type ForestSpawnConfig,
   forestDensityAt,
-  hasMinimumDistance,
   isInsidePlayableExtent,
   pick,
   samplePointInForestCore,
@@ -200,6 +200,7 @@ export function createUndergrowthPlacements(
   isBlockedAt?: (x: number, z: number) => boolean,
 ): UndergrowthPlacement[] {
   const placements: UndergrowthPlacement[] = [];
+  const placementIndex = new SpatialHash2D<UndergrowthPlacement>(2);
   let attempts = 0;
 
   while (placements.length < spawnConfig.undergrowthTargetCount && attempts < spawnConfig.undergrowthTargetCount * 36) {
@@ -223,17 +224,19 @@ export function createUndergrowthPlacements(
         : kind === 'juniper'
           ? THREE.MathUtils.lerp(1.85, 1.25, density)
           : THREE.MathUtils.lerp(1.6, 1.0, density);
-    if (!hasMinimumDistance(placements, x, z, minDistance)) continue;
+    if (placementIndex.hasPointWithin(x, z, minDistance)) continue;
     if (isBlockedAt?.(x, z)) continue;
 
-    placements.push({
+    const placement = {
       x,
       z,
       kind,
       scale: sampleUndergrowthScale(kind, density, rng),
       yaw: rng() * TAU,
       meshIndex: -1,
-    });
+    };
+    placements.push(placement);
+    placementIndex.add(placement);
   }
 
   return placements;

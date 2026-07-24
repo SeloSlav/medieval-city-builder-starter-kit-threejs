@@ -33,6 +33,7 @@ export type RiverSystem = {
   field: RiverField;
   group: THREE.Group;
   reedsGroup: THREE.Group;
+  finishDetails: () => Promise<void>;
   getShoreRockPlacements: () => ReadonlyArray<RockObstacle>;
   syncPlacementClearance: (
     buildings: Iterable<BuildingTerrainSource>,
@@ -63,18 +64,51 @@ export async function createRiverSystem(
 
   const rockMaterial = createRiverRockMaterial(rockTextures);
   const rockShadowMaterials = createPropShadowMaterials();
-  const rng = mulberry32(0x71ee1212);
   const waterController = createRiverWaterMesh(group, terrain, riverField);
-  const shoreStones = createRiverShoreStones(terrain, riverField, rockMaterial, rockShadowMaterials, rng);
-  const bankMeshes = createRiverBankMeshes(terrain, riverField, bankMaterial);
-  const reeds: RiverReedField = await createRiverReeds(
-    terrain,
-    riverField,
-    mulberry32(0x8eed1212),
-    maxAnisotropy,
-    rendererBackend,
-  );
-  group.add(shoreStones.group, bankMeshes, reeds.group);
+  const reedsGroup = new THREE.Group();
+  reedsGroup.name = 'Progressive river reeds';
+  group.add(reedsGroup);
+  let shoreStones: ReturnType<typeof createRiverShoreStones> | null = null;
+  let reeds: RiverReedField | null = null;
+  let detailsPromise: Promise<void> | null = null;
+  let disposed = false;
+  let clearance: {
+    buildings: BuildingTerrainSource[];
+    farmFieldPolygons: Point2[][];
+  } | null = null;
+
+  const finishDetails = (): Promise<void> => {
+    if (detailsPromise) return detailsPromise;
+    detailsPromise = (async () => {
+      const nextShoreStones = createRiverShoreStones(
+        terrain,
+        riverField,
+        rockMaterial,
+        rockShadowMaterials,
+        mulberry32(0x71ee1212),
+      );
+      const bankMeshes = createRiverBankMeshes(terrain, riverField, bankMaterial);
+      const nextReeds = await createRiverReeds(
+        terrain,
+        riverField,
+        mulberry32(0x8eed1212),
+        maxAnisotropy,
+        rendererBackend,
+      );
+      if (disposed) {
+        nextReeds.dispose();
+        return;
+      }
+      shoreStones = nextShoreStones;
+      reeds = nextReeds;
+      group.add(nextShoreStones.group, bankMeshes);
+      reedsGroup.add(nextReeds.group);
+      if (clearance) {
+        nextShoreStones.syncPlacementClearance(clearance.buildings, clearance.farmFieldPolygons);
+      }
+    })();
+    return detailsPromise;
+  };
 
   const dispose = () => {
     waterController?.dispose();
@@ -85,24 +119,32 @@ export async function createRiverSystem(
     rockMaterial.roughnessMap?.dispose();
     rockShadowMaterials.shadowCast.dispose();
     rockShadowMaterials.shadowDepth.dispose();
-    reeds.dispose();
+    reeds?.dispose();
   };
 
   return {
     field: riverField,
     group,
-    reedsGroup: reeds.group,
-    getShoreRockPlacements: () => shoreStones.placements,
+    reedsGroup,
+    finishDetails,
+    getShoreRockPlacements: () => shoreStones?.placements ?? [],
     syncPlacementClearance: (buildings, farmFieldPolygons) => {
-      shoreStones.syncPlacementClearance(buildings, farmFieldPolygons);
+      clearance = {
+        buildings: [...buildings],
+        farmFieldPolygons: [...farmFieldPolygons],
+      };
+      shoreStones?.syncPlacementClearance(clearance.buildings, clearance.farmFieldPolygons);
     },
     isBlockedAt: (x, z) => riverField.isBlockedForProps(x, z),
     isGrassBlockedAt: (x, z) => riverField.isGrassBlockedAt(x, z),
     updateCameraState: (cameraPosition, cameraTarget, cameraDistance, firstPersonActive) => {
-      reeds.updateCameraState(cameraPosition, cameraTarget, cameraDistance, firstPersonActive);
+      reeds?.updateCameraState(cameraPosition, cameraTarget, cameraDistance, firstPersonActive);
     },
     tick: (dt, timeSec) => waterController?.tick(dt, timeSec),
-    dispose,
+    dispose: () => {
+      disposed = true;
+      dispose();
+    },
   };
 }
 

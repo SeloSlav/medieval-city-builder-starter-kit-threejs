@@ -15,6 +15,7 @@ import {
   AGRICULTURE_BUILD_MENU_ENTRIES,
   BASIC_BUILD_MENU_ENTRIES,
   RURAL_INDUSTRY_BUILD_MENU_ENTRIES,
+  hydrateBuildMenuImages,
   renderBuildMenuCards,
   resolveBuildMenuHotkey,
   runBuildMenuAction,
@@ -727,6 +728,7 @@ export class BuildToolbar {
   private setBasicBuildMenuOpen(open: boolean): void {
     if (this.basicBuildMenuOpen === open) return;
     if (open) this.closeOtherBuildMenus('basic');
+    if (open) hydrateBuildMenuImages(this.basicBuildMenu);
     this.basicBuildMenuOpen = open;
     this.basicBuildMenu.hidden = !open;
     this.basicBuildMenuButton.setAttribute('aria-expanded', String(open));
@@ -737,6 +739,7 @@ export class BuildToolbar {
   private setAgricultureBuildMenuOpen(open: boolean): void {
     if (this.agricultureBuildMenuOpen === open) return;
     if (open) this.closeOtherBuildMenus('agriculture');
+    if (open) hydrateBuildMenuImages(this.agricultureBuildMenu);
     this.agricultureBuildMenuOpen = open;
     this.agricultureBuildMenu.hidden = !open;
     this.agricultureBuildMenuButton.setAttribute('aria-expanded', String(open));
@@ -747,6 +750,7 @@ export class BuildToolbar {
   private setRuralIndustryBuildMenuOpen(open: boolean): void {
     if (this.ruralIndustryBuildMenuOpen === open) return;
     if (open) this.closeOtherBuildMenus('industry');
+    if (open) hydrateBuildMenuImages(this.ruralIndustryBuildMenu);
     this.ruralIndustryBuildMenuOpen = open;
     this.ruralIndustryBuildMenu.hidden = !open;
     this.ruralIndustryBuildMenuButton.setAttribute('aria-expanded', String(open));

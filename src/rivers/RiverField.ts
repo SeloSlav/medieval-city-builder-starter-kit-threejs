@@ -9,6 +9,17 @@ export type RiverFieldOptions = {
   resolution?: number;
 };
 
+export type SerializedRiverField = {
+  resolution: number;
+  startX: number;
+  startZ: number;
+  spanX: number;
+  spanZ: number;
+  riverMask: Float32Array;
+  shoreDistance: Float32Array;
+  organicSignedDistance: Float32Array;
+};
+
 const DEFAULT_RESOLUTION = 512;
 const WATER_THRESHOLD = 0.48;
 const MASK_DILATE_THRESHOLD = 0.38;
@@ -96,6 +107,33 @@ export class RiverField {
       organicSignedDistance,
       layout,
     );
+  }
+
+  static fromSerialized(data: SerializedRiverField, layout: RiverLayout): RiverField {
+    return new RiverField(
+      data.resolution,
+      data.startX,
+      data.startZ,
+      data.spanX,
+      data.spanZ,
+      data.riverMask,
+      data.shoreDistance,
+      data.organicSignedDistance,
+      layout,
+    );
+  }
+
+  serialize(): SerializedRiverField {
+    return {
+      resolution: this.resolution,
+      startX: this.startX,
+      startZ: this.startZ,
+      spanX: this.spanX,
+      spanZ: this.spanZ,
+      riverMask: this.riverMask,
+      shoreDistance: this.shoreDistance,
+      organicSignedDistance: this.organicSignedDistance,
+    };
   }
 
   sampleRiverMask(x: number, z: number): number {
