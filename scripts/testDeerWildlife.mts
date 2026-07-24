@@ -8,9 +8,17 @@ import {
   DEER_ROAM_RADIUS,
   canDeerDetectObserver,
   createHerdSexDistribution,
+  herdSexCounts,
   type DeerMotionState,
   updateDeerMotion,
 } from '../src/foraging/DeerWildlifeBehavior.ts';
+import { createGameHerdSpawnPoints } from '../src/foraging/DeerWildlifeVisuals.ts';
+import {
+  GAME_PATCH_MAX_YIELD,
+  RICH_GAME_PATCH_MAX_YIELD,
+  displayedGameAnimalCount,
+} from '../src/foraging/foragingYields.ts';
+import { formatResourceAmount } from '../src/resources/yields.ts';
 
 function fixedRandom(values: number[]): () => number {
   let index = 0;
@@ -22,6 +30,39 @@ function fixedRandom(values: number[]): () => number {
 }
 
 {
+  const standardHerd = createGameHerdSpawnPoints(
+    { x: 10, z: -20, kind: 'game' },
+    fixedRandom([0.18, 0.74, 0.42, 0.91]),
+  );
+  const largeHerd = createGameHerdSpawnPoints(
+    { x: -30, z: 40, kind: 'game', isRich: true },
+    fixedRandom([0.12, 0.64, 0.37, 0.88]),
+  );
+  assert.equal(standardHerd.length, GAME_PATCH_MAX_YIELD);
+  assert.equal(largeHerd.length, RICH_GAME_PATCH_MAX_YIELD);
+  assert.equal(displayedGameAnimalCount(7.99), 7);
+  assert.equal(formatResourceAmount('game', 7.99), '7 game');
+}
+
+{
+  assert.deepEqual(herdSexCounts(0), { doeCount: 0, stagCount: 0 });
+  assert.deepEqual(herdSexCounts(1), { doeCount: 1, stagCount: 0 });
+  assert.deepEqual(herdSexCounts(2), { doeCount: 1, stagCount: 1 });
+  assert.deepEqual(herdSexCounts(5), { doeCount: 4, stagCount: 1 });
+  assert.deepEqual(herdSexCounts(12), { doeCount: 10, stagCount: 2 });
+  assert.deepEqual(herdSexCounts(20), { doeCount: 16, stagCount: 4 });
+  for (let population = 2; population <= 20; population++) {
+    const counts = herdSexCounts(population);
+    assert.equal(counts.doeCount + counts.stagCount, population);
+    assert.ok(counts.doeCount >= 1, `${population} deer should include a doe`);
+    assert.ok(counts.stagCount >= 1, `${population} deer should include a stag`);
+    assert.equal(
+      counts.stagCount,
+      Math.min(population - 1, Math.max(1, Math.round(population * 0.2))),
+      `${population} deer should retain the intended stag ratio`,
+    );
+  }
+
   const distribution = createHerdSexDistribution(5, fixedRandom([0.18, 0.74, 0.42, 0.91]));
   assert.equal(distribution.filter((sex) => sex === 'stag').length, 1, 'a five-deer herd should have one stag');
   assert.equal(distribution.filter((sex) => sex === 'doe').length, 4, 'a five-deer herd should remain doe-heavy');

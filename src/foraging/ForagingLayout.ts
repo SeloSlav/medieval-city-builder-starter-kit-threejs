@@ -62,8 +62,17 @@ export class ForagingLayout {
     );
 
     const sites: ForagingSite[] = [];
-    const gameSite = pickGameSite(rng, seed, extent, forestCores, gameRespawnCandidates, sites);
-    if (gameSite) sites.push(gameSite);
+    for (let gameIndex = 0; gameIndex < 2; gameIndex++) {
+      const gameSite = pickGameSite(
+        rng,
+        seed ^ gameIndex * 0x7f4a,
+        extent,
+        forestCores,
+        gameRespawnCandidates,
+        sites,
+      );
+      if (gameSite) sites.push({ ...gameSite, isRich: gameIndex === 1 });
+    }
 
     for (let i = 0; i < 2; i++) {
       const berrySite = pickBerrySite(rng, seed ^ (0x9e37 + i * 0x5151), extent, forestCores, sites);
@@ -251,8 +260,27 @@ function pickGameSite(
     return { x, z, kind: 'game' };
   }
 
-  const fallback = denseCandidates[0] ?? { x: -186, z: 148 };
+  const fallback = denseCandidates.reduce<{ x: number; z: number } | null>(
+    (best, candidate) => {
+      if (!best) return candidate;
+      return nearestSiteDistance(candidate, existing) > nearestSiteDistance(best, existing)
+        ? candidate
+        : best;
+    },
+    null,
+  ) ?? { x: -186, z: 148 };
   return { x: fallback.x, z: fallback.z, kind: 'game' };
+}
+
+function nearestSiteDistance(
+  point: { x: number; z: number },
+  sites: ReadonlyArray<ForagingSite>,
+): number {
+  if (sites.length === 0) return Number.POSITIVE_INFINITY;
+  return sites.reduce(
+    (nearest, site) => Math.min(nearest, Math.hypot(point.x - site.x, point.z - site.z)),
+    Number.POSITIVE_INFINITY,
+  );
 }
 
 function pickBerrySite(

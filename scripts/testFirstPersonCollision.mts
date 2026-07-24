@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { FpCollisionWorld } from '../src/camera/fp/fpCollisionWorld.ts';
+import { PastureMarkers } from '../src/farming/PastureMarkers.ts';
 import {
   createFpLocomotionState,
   FP_WALK_FOOT_RADIUS_XZ,
@@ -38,8 +39,24 @@ buildingShell.position.y = 2;
 building.add(buildingShell);
 buildingRoot.add(building);
 
+const pastureParent = new THREE.Group();
+const pastureMarkers = new PastureMarkers(pastureParent, () => 0);
+pastureMarkers.syncPastures([{
+  id: 'navigation-pasture',
+  farmsteadId: 'pastoral-farmstead',
+  corners: [
+    { x: 15, z: -5 },
+    { x: 25, z: -5 },
+    { x: 25, z: 5 },
+    { x: 15, z: 5 },
+  ],
+  area: 100,
+  averageSlopeDegrees: 0,
+  moisture: 0.5,
+}], new Map());
+
 const collisionWorld = new FpCollisionWorld({
-  getStaticRoots: () => [root, fenceRoot, buildingRoot],
+  getStaticRoots: () => [root, fenceRoot, buildingRoot, ...pastureParent.children],
   getHeightAt: () => 0,
   getRockObstaclesNear: (x, _z, radius) => (
     Math.abs(x - 9) <= radius
@@ -112,6 +129,45 @@ function resolveAt(
   assert.ok(
     lowRailPosition.x < 7.22,
     'low fence rails should remain barriers instead of becoming automatic steps',
+  );
+}
+
+{
+  const route = collisionWorld.routeAgentPath([
+    { x: 4.5, z: 0 },
+    { x: 7, z: 0 },
+    { x: 4.5, z: 0 },
+  ]);
+  assert.ok(route, 'agents should find a route around a fence');
+  assert.ok(
+    route.some((point) => Math.abs(point.z) > 1.7),
+    'agent routing should detour beyond the end of a blocking fence',
+  );
+  assert.ok(
+    route.some((point) => Math.hypot(point.x - 7, point.z) < 1e-6),
+    'agent routing should preserve worker activity waypoints',
+  );
+}
+
+{
+  const throughGate = collisionWorld.routeAgentPath([
+    { x: 20, z: -8 },
+    { x: 20, z: 0 },
+  ]);
+  assert.ok(throughGate, 'agents should be able to enter a pasture through its gate');
+  assert.ok(
+    throughGate.every((point) => Math.abs(point.x - 20) < 0.1),
+    'the centered pasture gate should preserve a clear direct approach',
+  );
+
+  const aroundFence = collisionWorld.routeAgentPath([
+    { x: 28, z: 0 },
+    { x: 20, z: 0 },
+  ]);
+  assert.ok(aroundFence, 'agents should route to the pasture gate instead of crossing its rails');
+  assert.ok(
+    aroundFence.some((point) => point.z < -4.5),
+    'a herder approaching a closed pasture edge should detour through the gate',
   );
 }
 

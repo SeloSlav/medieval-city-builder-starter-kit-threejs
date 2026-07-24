@@ -71,7 +71,7 @@ export type WorkerTarget = PointXZ & {
   kind: WorkerTargetKind;
 };
 
-export type WorkerActivityKind = 'chop' | 'mine' | 'gather';
+export type WorkerActivityKind = 'chop' | 'mine' | 'gather' | 'build';
 
 export type WorkerWalkPlan = {
   path: PointXZ[];
@@ -317,7 +317,10 @@ export function pickWorkerWalkPlan(
   const start = workplaceYardPosition(building, slotIndex);
   const rng = mulberry32(seed ^ hashStringSeed(building.id));
 
-  if (targets.length > 0 && rng() < 0.82) {
+  if (
+    targets.length > 0
+    && (building.constructionComplete === false || rng() < 0.82)
+  ) {
     const preferred = targets.filter(
       (target) => Math.sqrt(distanceSq(building, target))
         <= Math.min(Math.max(1, building.workRadius), MAX_PREFERRED_RESOURCE_WALK),
@@ -395,6 +398,9 @@ function workerActivityFor(
   building: BuildingState,
   target: WorkerTarget,
 ): WorkerActivityKind | null {
+  if (building.constructionComplete === false && target.kind === 'construction') {
+    return 'build';
+  }
   if (building.kind === 'lumber_mill' && target.kind === 'tree') return 'chop';
   if (building.kind === 'stone_quarry' && target.kind === 'quarry') return 'mine';
   if (building.kind === 'large_quarry' && target.kind === 'quarry') return 'mine';

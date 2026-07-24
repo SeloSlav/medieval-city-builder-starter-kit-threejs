@@ -14,6 +14,11 @@ import {
   isForagingHarvestAvailable,
   isForagingRegrowthSeason,
 } from '../src/foraging/foragingSeason.ts';
+import {
+  GAME_PATCH_MAX_YIELD,
+  RICH_GAME_PATCH_MAX_YIELD,
+  RICH_GAME_PATCH_PICK_RADIUS,
+} from '../src/foraging/foragingYields.ts';
 import { forestDensityAt } from '../src/props/forestField.ts';
 import { MUSHROOM_ICON_SVG } from '../src/map/resourceMapIconGlyphs.ts';
 import { createWorldLayout } from '../src/resources/WorldLayout.ts';
@@ -58,6 +63,18 @@ for (const mapSize of ['small', 'medium', 'large'] as const) {
   const dimensions = resolveWorldDimensions(mapSize);
   const mushrooms = layout.foragingLayout.sites.filter((site) => site.kind === 'mushrooms');
   const berries = layout.foragingLayout.sites.filter((site) => site.kind === 'berries');
+  const gameHabitats = layout.foragingLayout.sites.filter((site) => site.kind === 'game');
+  assert.equal(gameHabitats.length, 2, `${mapSize} maps should have two game habitats`);
+  assert.equal(
+    gameHabitats.filter((site) => site.isRich).length,
+    1,
+    `${mapSize} maps should have one large game habitat`,
+  );
+  assert.notDeepEqual(
+    [gameHabitats[0].x, gameHabitats[0].z],
+    [gameHabitats[1].x, gameHabitats[1].z],
+    `${mapSize} game habitats should occupy different locations`,
+  );
   assert.equal(mushrooms.length, 2, `${mapSize} maps should have two mushroom beds`);
   assert.equal(berries.length, 2, `${mapSize} maps should have two berry patches`);
 
@@ -83,6 +100,15 @@ for (const mapSize of ['small', 'medium', 'large'] as const) {
 
 const layout = createWorldLayout();
 const registry = WorldLayoutRegistry.fromWorldLayout(layout);
+const gameDefinitions = registry.definitionList.filter((node) => node.kind === 'game');
+assert.deepEqual(gameDefinitions.map((node) => node.id), ['foraging-game-0', 'foraging-game-1']);
+assert.deepEqual(
+  gameDefinitions.map((node) => node.maxYield),
+  [GAME_PATCH_MAX_YIELD, RICH_GAME_PATCH_MAX_YIELD],
+);
+assert.equal(gameDefinitions[1].label, 'Large game habitat');
+assert.equal(gameDefinitions[1].pickRadius, RICH_GAME_PATCH_PICK_RADIUS);
+assert.ok(gameDefinitions[1].pickRadius > gameDefinitions[0].pickRadius);
 const mushroomDefinitions = registry.definitionList.filter((node) => node.kind === 'mushrooms');
 assert.equal(mushroomDefinitions.length, 2);
 assert.ok(mushroomDefinitions.every((node) => node.resource === 'mushrooms'));
@@ -245,7 +271,8 @@ const deerVisuals = readFileSync(
   `${projectRoot}src/foraging/DeerWildlifeVisuals.ts`,
   'utf8',
 );
-assert.match(deerVisuals, /actorIndex\s*<\s*visiblePopulation/);
+assert.match(deerVisuals, /herdSexCounts\(visiblePopulation\)/);
+assert.match(deerVisuals, /visual\.sexIndex\s*<\s*visibleSexCounts\.(stagCount|doeCount)/);
 assert.match(deerVisuals, /node\.x\s*-\s*visual\.motion\.homeX/);
 
 console.log('foraging ecology tests passed');

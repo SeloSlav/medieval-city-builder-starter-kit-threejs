@@ -2,6 +2,11 @@ export type DeerBehaviorMode = 'idle' | 'graze' | 'walk' | 'flee';
 
 export type DeerSex = 'doe' | 'stag';
 
+export type DeerSexCounts = {
+  doeCount: number;
+  stagCount: number;
+};
+
 export type DeerObserver = {
   x: number;
   z: number;
@@ -111,15 +116,23 @@ export function canDeerDetectObserver(
  * Keeps small resource herds doe-heavy while guaranteeing that mixed herds show
  * both models. Five animals resolve to one stag and four does.
  */
-export function createHerdSexDistribution(count: number, random: () => number): DeerSex[] {
+export function herdSexCounts(count: number): DeerSexCounts {
   const herdSize = Math.max(0, Math.floor(count));
-  if (herdSize === 0) return [];
-  if (herdSize === 1) return ['doe'];
+  if (herdSize === 0) return { doeCount: 0, stagCount: 0 };
+  if (herdSize === 1) return { doeCount: 1, stagCount: 0 };
 
   const stagCount = Math.min(herdSize - 1, Math.max(1, Math.round(herdSize * 0.2)));
+  return {
+    doeCount: herdSize - stagCount,
+    stagCount,
+  };
+}
+
+export function createHerdSexDistribution(count: number, random: () => number): DeerSex[] {
+  const { doeCount, stagCount } = herdSexCounts(count);
   const distribution: DeerSex[] = [
     ...Array.from({ length: stagCount }, () => 'stag' as const),
-    ...Array.from({ length: herdSize - stagCount }, () => 'doe' as const),
+    ...Array.from({ length: doeCount }, () => 'doe' as const),
   ];
 
   for (let index = distribution.length - 1; index > 0; index--) {

@@ -3,6 +3,7 @@ import {
   LARGE_QUARRY_MAX_YIELD,
   SMALL_QUARRY_MAX_YIELD,
 } from '../generated/gameBalance.ts';
+import { displayedGameAnimalCount } from '../foraging/foragingYields.ts';
 import type { ResourceKind } from './types.ts';
 
 /** World stone budget — finite until late-game markets. Tuned with harvest rate in server constants. */
@@ -34,7 +35,7 @@ export function formatResourceAmount(kind: ResourceKind, amount: number): string
     case 'water':
       return amount > 0 ? 'Fresh water access' : 'No water stored';
     case 'game':
-      return `${Math.round(amount)} game`;
+      return `${displayedGameAnimalCount(amount)} game`;
     case 'berries':
       return `${Math.round(amount)} berries`;
     case 'mushrooms':

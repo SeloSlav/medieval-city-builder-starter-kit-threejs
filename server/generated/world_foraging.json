@@ -10,6 +10,15 @@
       "anchorZ": -345.85891523715105
     },
     {
+      "nodeId": "foraging-game-1",
+      "nodeKind": "game",
+      "x": 30.941482275538146,
+      "z": 223.19324045442045,
+      "maxYield": 20,
+      "anchorX": 30.941482275538146,
+      "anchorZ": 223.19324045442045
+    },
+    {
       "nodeId": "foraging-berries-0",
       "nodeKind": "berries",
       "x": -274.9947069143876,
@@ -30,20 +39,20 @@
     {
       "nodeId": "foraging-mushrooms-0",
       "nodeKind": "mushrooms",
-      "x": -302.96968699395654,
-      "z": -316.3476636510342,
+      "x": 310.08070289380845,
+      "z": -14.77296280991286,
       "maxYield": 42,
-      "anchorX": -302.96968699395654,
-      "anchorZ": -316.3476636510342
+      "anchorX": 310.08070289380845,
+      "anchorZ": -14.77296280991286
     },
     {
       "nodeId": "foraging-mushrooms-1",
       "nodeKind": "mushrooms",
-      "x": -71.30329248979687,
-      "z": 233.68659560326486,
+      "x": 112.36198970898985,
+      "z": 311.6173404496163,
       "maxYield": 42,
-      "anchorX": -71.30329248979687,
-      "anchorZ": 233.68659560326486
+      "anchorX": 112.36198970898985,
+      "anchorZ": 311.6173404496163
     },
     {
       "nodeId": "foraging-fish-small-0",

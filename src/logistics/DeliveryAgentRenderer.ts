@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+  deliveryLegRemainingMeters,
   deliveryWorkerPersonIdentity,
   type DeliveryTripState,
   type DeliveryTripPhase,
@@ -32,6 +33,7 @@ import {
   pickVillagerModelVariant,
 } from '../settlement/villagerPaths.ts';
 import type { VillagerModelVariant } from '../settlement/SettlementCrowdRenderer.ts';
+import type { GameSpeed } from '../world/gameSpeed.ts';
 
 const DISPLAY_BLEND_RATE = 14;
 const DELIVERY_ROUTE_COLOR = 0xff5ea8;
@@ -54,6 +56,7 @@ type TripVisual = {
 type DeliveryAgentRendererOptions = {
   terrain: Terrain;
   parent: THREE.Group;
+  getGameSpeed: () => GameSpeed;
 };
 
 export type DeliveryAgentInspection = {
@@ -61,11 +64,13 @@ export type DeliveryAgentInspection = {
   personIdentity: string;
   modelVariant: VillagerModelVariant;
   trip: DeliveryTripState;
+  remainingMeters: number | null;
   position: { x: number; y: number; z: number };
   visible: boolean;
 };
 
 export class DeliveryAgentRenderer {
+  private readonly getGameSpeed: () => GameSpeed;
   private readonly terrain: Terrain;
   private readonly group = new THREE.Group();
   private readonly visuals = new Map<string, TripVisual>();
@@ -80,6 +85,7 @@ export class DeliveryAgentRenderer {
   private disposed = false;
 
   constructor(options: DeliveryAgentRendererOptions) {
+    this.getGameSpeed = options.getGameSpeed;
     this.terrain = options.terrain;
     this.group.name = 'Delivery agents';
     this.selectedRoute = createSelectedDeliveryRoute();
@@ -106,11 +112,7 @@ export class DeliveryAgentRenderer {
       if (existing) {
         existing.polyline = polyline;
         existing.pathDistance = pathDistance;
-        existing.serverProgress = trip.progress;
-        existing.phase = trip.phase;
-        existing.travelSpeed = this.tripTravelSpeed(trip);
-        existing.serverX = trip.x;
-        existing.serverZ = trip.z;
+        this.applyAuthoritativeTripState(existing, trip);
         this.ensureCartMesh(existing, trip);
         continue;
       }
@@ -146,10 +148,12 @@ export class DeliveryAgentRenderer {
   }
 
   update(dt: number, view?: CrowdViewState): void {
+    const gameSpeed = this.getGameSpeed();
     for (const [tripId, visual] of this.visuals) {
+      const effectiveTravelSpeed = visual.travelSpeed * gameSpeed;
       if (visual.phase !== 'unloading') {
-        visual.displayProgress += visual.travelSpeed * dt;
-        const maxLead = Math.max(0.6, visual.travelSpeed * 0.35);
+        visual.displayProgress += effectiveTravelSpeed * dt;
+        const maxLead = Math.max(0.6, effectiveTravelSpeed * 0.35);
         if (visual.displayProgress > visual.serverProgress + maxLead) {
           visual.displayProgress = visual.serverProgress + maxLead;
         }
@@ -183,7 +187,7 @@ export class DeliveryAgentRenderer {
           visual.worker,
           dt,
           visual.phase !== 'unloading',
-          visual.travelSpeed,
+          effectiveTravelSpeed,
         );
       }
       const castShadow = isWithinShadowRange(x, z, view);
@@ -199,11 +203,7 @@ export class DeliveryAgentRenderer {
     for (const trip of trips) {
       const visual = this.visuals.get(trip.id);
       if (!visual) continue;
-      visual.serverProgress = trip.progress;
-      visual.phase = trip.phase;
-      visual.travelSpeed = this.tripTravelSpeed(trip);
-      visual.serverX = trip.x;
-      visual.serverZ = trip.z;
+      this.applyAuthoritativeTripState(visual, trip);
       const polyline = decodeRoutePolyline(trip.routePolylineJson);
       if (polyline && polyline.length >= 2) {
         visual.polyline = polyline;
@@ -291,6 +291,22 @@ export class DeliveryAgentRenderer {
     this.group.removeFromParent();
   }
 
+  private applyAuthoritativeTripState(
+    visual: TripVisual,
+    trip: DeliveryTripState,
+  ): void {
+    const phaseChanged = visual.phase !== trip.phase;
+    const progressRestarted = trip.progress + 1e-6 < visual.serverProgress;
+    visual.serverProgress = trip.progress;
+    visual.phase = trip.phase;
+    visual.travelSpeed = this.tripTravelSpeed(trip);
+    visual.serverX = trip.x;
+    visual.serverZ = trip.z;
+    if (phaseChanged || progressRestarted) {
+      visual.displayProgress = trip.progress;
+    }
+  }
+
   private phaseSampleDistance(visual: TripVisual): number {
     const progress = Math.max(0, Math.min(visual.displayProgress, visual.pathDistance));
     if (visual.phase === 'inbound') {
@@ -369,6 +385,11 @@ export class DeliveryAgentRenderer {
       personIdentity,
       modelVariant: pickVillagerModelVariant(hashStringSeed(personIdentity)),
       trip,
+      remainingMeters: deliveryLegRemainingMeters(
+        visual.pathDistance,
+        visual.displayProgress,
+        visual.phase,
+      ),
       position: {
         x: visual.mesh.position.x,
         y: visual.mesh.position.y,

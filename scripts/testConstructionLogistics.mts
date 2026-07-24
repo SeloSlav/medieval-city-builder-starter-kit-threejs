@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import * as THREE from 'three';
 import {
   CONSTRUCTION_DELIVERY_SPEED_MPS,
   CONSTRUCTION_HAUL_PER_WORKER,
@@ -69,6 +70,26 @@ assert.ok(
   mesh.children.some((child) => child.position.y > 2),
   'mid-stage site should contain raised timber framing',
 );
+
+const framedSite = createConstructionSiteMesh('village_storehouse', 0.75, 1, 1);
+const roofRafters = framedSite.children.filter(
+  (child): child is THREE.Mesh => child instanceof THREE.Mesh
+    && child.name === 'Construction roof rafter',
+);
+assert.equal(roofRafters.length, 8, 'the framed construction stage should show four roof trusses');
+for (const rafter of roofRafters) {
+  const geometry = rafter.geometry as THREE.BoxGeometry;
+  const length = geometry.parameters.width;
+  const directionToRidge = -Math.sign(rafter.position.x);
+  const innerY = rafter.position.y
+    + Math.sin(rafter.rotation.z) * directionToRidge * length * 0.5;
+  const outerY = rafter.position.y
+    - Math.sin(rafter.rotation.z) * directionToRidge * length * 0.5;
+  assert.ok(
+    innerY > outerY,
+    'every construction rafter must rise toward the center ridge',
+  );
+}
 
 const constructionServer = read('server/src/simulation/construction.rs');
 assert.match(constructionServer, /construction_reserved_timber/);

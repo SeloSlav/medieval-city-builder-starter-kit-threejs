@@ -9,8 +9,9 @@ const RAIL_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x6e4d2d, roughnes
 const CATTLE_GRASS = new THREE.MeshStandardMaterial({ color: 0x627b40, roughness: 1, transparent: true, opacity: 0.18, depthWrite: false });
 const SHEEP_GRASS = new THREE.MeshStandardMaterial({ color: 0x78834b, roughness: 1, transparent: true, opacity: 0.16, depthWrite: false });
 const PANNAGE_GROUND = new THREE.MeshStandardMaterial({ color: 0x57442d, roughness: 1, transparent: true, opacity: 0.12, depthWrite: false });
+const PASTURE_GATE_WIDTH_M = 2.2;
 
-function addFenceEdge(
+function addFenceSpan(
   group: THREE.Group,
   a: { x: number; z: number },
   b: { x: number; z: number },
@@ -44,6 +45,32 @@ function addFenceEdge(
       group.add(rail);
     }
   }
+}
+
+function addFenceEdge(
+  group: THREE.Group,
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  getHeightAt: (x: number, z: number) => number,
+  openingWidth = 0,
+): void {
+  const length = Math.hypot(b.x - a.x, b.z - a.z);
+  if (openingWidth <= 0 || length <= openingWidth + 1.2) {
+    addFenceSpan(group, a, b, getHeightAt);
+    return;
+  }
+
+  const halfOpeningT = openingWidth / (length * 2);
+  const openingStart = {
+    x: THREE.MathUtils.lerp(a.x, b.x, 0.5 - halfOpeningT),
+    z: THREE.MathUtils.lerp(a.z, b.z, 0.5 - halfOpeningT),
+  };
+  const openingEnd = {
+    x: THREE.MathUtils.lerp(a.x, b.x, 0.5 + halfOpeningT),
+    z: THREE.MathUtils.lerp(a.z, b.z, 0.5 + halfOpeningT),
+  };
+  addFenceSpan(group, a, openingStart, getHeightAt);
+  addFenceSpan(group, openingEnd, b, getHeightAt);
 }
 
 function pastureSurface(
@@ -116,7 +143,13 @@ export class PastureMarkers {
       group.userData.pastureId = pasture.id;
       group.add(pastureSurface(corners, this.getHeightAt, herds.get(pasture.farmsteadId)));
       for (let edge = 0; edge < 4; edge++) {
-        addFenceEdge(group, corners[edge], corners[(edge + 1) % 4], this.getHeightAt);
+        addFenceEdge(
+          group,
+          corners[edge],
+          corners[(edge + 1) % 4],
+          this.getHeightAt,
+          edge === 0 ? PASTURE_GATE_WIDTH_M : 0,
+        );
       }
       this.root.add(group);
       this.groups.set(pasture.id, group);

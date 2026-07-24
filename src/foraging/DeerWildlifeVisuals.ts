@@ -4,12 +4,17 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { mulberry32 } from '../props/forestField.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { ForagingSite } from './ForagingLayout.ts';
-import { GAME_PATCH_MAX_YIELD } from './foragingYields.ts';
+import {
+  displayedGameAnimalCount,
+  gamePatchMaxYield,
+  gamePatchSpawnRadius,
+} from './foragingYields.ts';
 import type { ForagingNodeState } from '../resources/types.ts';
 import {
   chooseInitialDeerMode,
   chooseRestDuration,
   createHerdSexDistribution,
+  herdSexCounts,
   type DeerBehaviorMode,
   type DeerMotionState,
   type DeerObserver,
@@ -26,7 +31,8 @@ type DeerAnimationSet = {
 
 type DeerVisual = {
   nodeId: string;
-  actorIndex: number;
+  sex: DeerSex;
+  sexIndex: number;
   root: THREE.Group;
   mixer: THREE.AnimationMixer;
   actions: DeerAnimationSet;
@@ -58,8 +64,6 @@ export type DeerWildlifeVisuals = {
 
 const DOE_MODEL_URL = '/assets/models/deer/quaternius-deer.glb';
 const STAG_MODEL_URL = '/assets/models/deer/quaternius-stag.glb';
-const DEER_PER_GAME_SITE = GAME_PATCH_MAX_YIELD;
-const HERD_SPAWN_RADIUS = 12;
 const DOE_TARGET_HEIGHT = 1.7;
 const STAG_TARGET_HEIGHT = 2;
 const CLOSE_WORLD_MAX_CAMERA_DISTANCE = 210;
@@ -113,11 +117,14 @@ export async function createDeerWildlifeVisuals(
   for (let siteIndex = 0; siteIndex < gameSites.length; siteIndex++) {
     const site = gameSites[siteIndex];
     const nodeId = `foraging-game-${siteIndex}`;
-    const spawnPoints = createHerdSpawnPoints(site, rng, isBlockedAt);
+    const spawnPoints = createGameHerdSpawnPoints(site, rng, isBlockedAt);
     const distribution = createHerdSexDistribution(spawnPoints.length, rng);
+    let siteDoeCount = 0;
+    let siteStagCount = 0;
     for (let index = 0; index < spawnPoints.length; index++) {
       const spawn = spawnPoints[index];
       const sex = distribution[index];
+      const sexIndex = sex === 'stag' ? siteStagCount++ : siteDoeCount++;
       const source = modelSources[sex];
       const model = cloneSkinned(source.scene) as THREE.Group;
       const sizeVariation = THREE.MathUtils.lerp(0.9, 1.08, rng());
@@ -164,7 +171,8 @@ export async function createDeerWildlifeVisuals(
       root.rotation.y = heading;
       deer.push({
         nodeId,
-        actorIndex: index,
+        sex,
+        sexIndex,
         root,
         mixer,
         actions,
@@ -210,9 +218,12 @@ export async function createDeerWildlifeVisuals(
     for (const visual of deer) {
       const node = byId.get(visual.nodeId);
       const visiblePopulation = node && node.remaining > 0
-        ? Math.max(1, Math.floor(node.remaining + 1e-6))
+        ? displayedGameAnimalCount(node.remaining)
         : 0;
-      visual.root.visible = visual.actorIndex < visiblePopulation;
+      const visibleSexCounts = herdSexCounts(visiblePopulation);
+      visual.root.visible = visual.sex === 'stag'
+        ? visual.sexIndex < visibleSexCounts.stagCount
+        : visual.sexIndex < visibleSexCounts.doeCount;
       if (!node) continue;
       const dx = node.x - visual.motion.homeX;
       const dz = node.z - visual.motion.homeZ;
@@ -299,16 +310,18 @@ function resolveAnimationClips(animations: ReadonlyArray<THREE.AnimationClip>): 
   };
 }
 
-function createHerdSpawnPoints(
+export function createGameHerdSpawnPoints(
   site: ForagingSite,
   random: () => number,
   isBlockedAt?: (x: number, z: number) => boolean,
 ): Array<{ x: number; z: number }> {
+  const herdSize = gamePatchMaxYield(site.isRich === true);
+  const spawnRadius = gamePatchSpawnRadius(site.isRich === true);
   const points: Array<{ x: number; z: number }> = [];
   let attempts = 0;
-  while (points.length < DEER_PER_GAME_SITE && attempts < DEER_PER_GAME_SITE * 20) {
+  while (points.length < herdSize && attempts < herdSize * 30) {
     attempts++;
-    const radius = points.length === 0 ? 2.5 : Math.sqrt(random()) * HERD_SPAWN_RADIUS;
+    const radius = points.length === 0 ? 2.5 : Math.sqrt(random()) * spawnRadius;
     const angle = random() * TAU;
     const x = site.x + Math.sin(angle) * radius;
     const z = site.z + Math.cos(angle) * radius;
@@ -317,7 +330,21 @@ function createHerdSpawnPoints(
     points.push({ x, z });
   }
 
-  if (points.length === 0) points.push({ x: site.x, z: site.z });
+  // Keep the visual actor pool equal to the authoritative habitat capacity.
+  // This deterministic spiral is only needed when water/quarry blocking rejects
+  // too many random placements.
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  while (points.length < herdSize) {
+    const index = points.length;
+    const radius = index === 0
+      ? 2.5
+      : Math.min(spawnRadius, 3 + Math.sqrt(index) * 3.35);
+    const angle = index * goldenAngle;
+    points.push({
+      x: site.x + Math.sin(angle) * radius,
+      z: site.z + Math.cos(angle) * radius,
+    });
+  }
   return points;
 }
 

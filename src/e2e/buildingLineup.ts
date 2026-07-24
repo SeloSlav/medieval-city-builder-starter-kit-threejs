@@ -36,8 +36,8 @@ const viewSpecs = [
     label: getBuildingDefinition(kind).label,
   })),
   {
-    mesh: createConstructionSiteMesh('village_storehouse', 0.55, 0.72, 1),
-    label: 'Storehouse construction · 55%',
+    mesh: createConstructionSiteMesh('village_storehouse', 0.75, 0.9, 1),
+    label: 'Storehouse construction · 75%',
   },
 ].slice(0, selectedKinds.length === 1 ? 1 : undefined);
 

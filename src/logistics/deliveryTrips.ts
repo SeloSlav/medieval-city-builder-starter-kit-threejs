@@ -305,6 +305,16 @@ export function tripRemainingSeconds(trip: DeliveryTripState, pathDistance: numb
   }
 }
 
+export function deliveryLegRemainingMeters(
+  pathDistance: number,
+  progress: number,
+  phase: DeliveryTripPhase,
+): number | null {
+  if (!Number.isFinite(pathDistance) || pathDistance <= 1e-6) return null;
+  if (phase === 'unloading') return 0;
+  return Math.max(0, pathDistance - Math.max(0, progress));
+}
+
 export function formatTripPhaseLabel(phase: DeliveryTripPhase): string {
   switch (phase) {
     case 'outbound':

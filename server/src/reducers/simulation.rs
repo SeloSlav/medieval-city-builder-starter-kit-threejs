@@ -17,7 +17,9 @@ use crate::simulation::{
 use crate::economy::{reconcile_all_building_labor, step_regional_markets};
 use crate::tables::WorldConfig;
 use crate::tables::{Building, Residence, SimPacingState};
-use crate::balance_generated::{BASE_SPEED_DENOMINATOR, BASE_SPEED_NUMERATOR};
+use crate::balance_generated::{
+    BASE_SPEED_DENOMINATOR, BASE_SPEED_NUMERATOR, TICK_DT,
+};
 
 pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSchedule) {
     let Some(config) = ctx.db.world_config().id().find(&0) else {
@@ -33,6 +35,17 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
         12 => 20,
         _ => 1,
     };
+    // Delivery speeds are expressed in world metres per second. Advance them on
+    // every scheduler heartbeat so Scenic's deliberately sparse economy/calendar
+    // steps do not turn a 2.4 m/s cart into a 0.08 m/s cart.
+    let delivery_clock = crate::simulation::game_clock(config.sim_tick);
+    let delivery_tick = SimTickContext::new(ctx);
+    step_delivery_trips(
+        ctx,
+        &delivery_tick,
+        &delivery_clock,
+        TICK_DT * speed as f64,
+    );
     let previous_credit = ctx
         .db
         .sim_pacing_state()
@@ -89,7 +102,6 @@ fn run_one_sim_tick(ctx: &ReducerContext) {
     reconcile_all_building_labor(ctx);
 
     let tick = SimTickContext::new(ctx);
-    step_delivery_trips(ctx, &tick, &clock);
     step_fires(ctx, &clock, environment, world_seed, sim_tick);
     step_construction_sites(ctx, &tick, &clock);
     step_household_market_orders(ctx, &tick, &clock, sim_tick);

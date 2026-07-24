@@ -10,7 +10,7 @@ export type AudioClipDefinition = {
   loop?: boolean;
 };
 
-export type WorkerActivitySoundKind = 'chop' | 'mine';
+export type WorkerActivitySoundKind = 'chop' | 'mine' | 'build';
 
 export const AMBIENT_LAYERS: Record<AmbientLayerId, AudioClipDefinition> = {
   birds_wind_day: { path: '/sounds/ambient/birds_wind_day.mp3', volume: 0.2, loop: true },
@@ -41,4 +41,5 @@ export const WORKER_ACTIVITY_CLIPS: Record<
 > = {
   chop: workerActivityVariants('chop_wood'),
   mine: workerActivityVariants('mine_stone'),
+  build: workerActivityVariants('hammer_wood'),
 };

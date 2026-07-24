@@ -51,7 +51,7 @@ export function workerActivitySoundGain(
 }
 
 /**
- * Plays short extraction impacts only for close, audible workers. A small
+ * Plays short work impacts only for close, audible workers. A small
  * shared pool and global cadence prevent large crews from creating an audio
  * element per villager or producing a wall of overlapping effects.
  */

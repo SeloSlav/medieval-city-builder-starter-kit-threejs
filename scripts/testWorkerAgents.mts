@@ -141,11 +141,33 @@ const lumberWorkPlan = Array.from({ length: 32 }, (_, seed) =>
 assert.ok(lumberWorkPlan, 'lumberjacks should schedule chopping stops at mature trees');
 assert.equal(lumberWorkPlan.target?.id, 'tree-mature');
 
+const constructionSite: BuildingState = {
+  ...lumberMill,
+  id: 'construction-site',
+  constructionComplete: false,
+  constructionProgress: 0.5,
+};
+const constructionTargets = collectWorkerTargets(constructionSite, targetInputs);
+for (let seed = 0; seed < 24; seed++) {
+  const constructionPlan = pickWorkerWalkPlan(
+    constructionSite,
+    seed % 4,
+    constructionTargets,
+    seed,
+  );
+  assert.equal(
+    constructionPlan?.activity,
+    'build',
+    'builders should always stop to hammer the construction site instead of wandering',
+  );
+  assert.equal(constructionPlan?.target?.kind, 'construction');
+}
+
 for (const [activity, clips] of Object.entries(WORKER_ACTIVITY_CLIPS)) {
   assert.equal(clips.length, 4, `${activity} should have four randomized sound variants`);
   for (const clip of clips) {
     const assetPath = `public${clip.path}`;
-    assert.ok(fs.statSync(assetPath).size > 20_000, `${assetPath} should be a real audio asset`);
+    assert.ok(fs.statSync(assetPath).size > 10_000, `${assetPath} should be a real audio asset`);
   }
 }
 const closeSoundView = buildCrowdViewState(

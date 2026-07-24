@@ -197,6 +197,15 @@ export async function bootstrapAppSession(
   const spacetimeStore = new SpacetimeGameStore();
   const sessionGate = new SessionConnectionGate();
   const roadNetwork = new RoadNetwork();
+  const firstPersonCollisionWorld = new FpCollisionWorld({
+    getStaticRoots: () => sceneManager.getFirstPersonCollisionRoots(),
+    getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
+    getRockObstaclesNear: (x, z, radius) => sceneManager.getRockObstaclesNear(x, z, radius),
+    getTreeRegistry: () => liveContext.treeRegistry,
+    getTreeState: (treeId) => liveContext.gameState.trees.get(treeId),
+    isTreeLayoutActive: (layoutIndex) =>
+      sceneManager.getForestManager()?.isTreeLayoutActiveForCollision(layoutIndex) ?? false,
+  });
 
   const requireSessionReady = (): void => {
     if (!sessionGate.isReady()) {
@@ -245,6 +254,7 @@ export async function bootstrapAppSession(
   const deliveryAgents = new DeliveryAgentRenderer({
     terrain: sceneManager.terrain,
     parent: sceneManager.selectionGroup,
+    getGameSpeed: () => spacetimeStore.snapshot.gameSpeed,
   });
   const fireEffects = new FireEffectsRenderer(
     sceneManager.terrain,
@@ -254,6 +264,7 @@ export async function bootstrapAppSession(
     parent: sceneManager.selectionGroup,
     getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
     getRoadDeckY: (x, z) => sceneManager.sampleRoadDeckY(x, z),
+    routePathAroundObstacles: (path) => firstPersonCollisionWorld.routeAgentPath(path),
   });
   const placementGate: PlacementInteractionGate = {
     isSessionReady: () => sessionGate.isReady(),
@@ -711,16 +722,6 @@ export async function bootstrapAppSession(
     computeResourceTotals(gameState),
     computePopulationStats(gameState),
   );
-
-  const firstPersonCollisionWorld = new FpCollisionWorld({
-    getStaticRoots: () => sceneManager.getFirstPersonCollisionRoots(),
-    getHeightAt: (x, z) => sceneManager.terrain.getHeightAt(x, z),
-    getRockObstaclesNear: (x, z, radius) => sceneManager.getRockObstaclesNear(x, z, radius),
-    getTreeRegistry: () => liveContext.treeRegistry,
-    getTreeState: (treeId) => liveContext.gameState.trees.get(treeId),
-    isTreeLayoutActive: (layoutIndex) =>
-      sceneManager.getForestManager()?.isTreeLayoutActiveForCollision(layoutIndex) ?? false,
-  });
 
   firstPersonController = new FirstPersonController({
     camera: sceneManager.camera,

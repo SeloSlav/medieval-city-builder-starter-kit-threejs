@@ -33,7 +33,7 @@ const TARGET_HEIGHTS = {
 } as const;
 
 export type VillagerModelVariant = keyof typeof MODEL_URLS;
-export type VillagerRenderMode = 'idle' | 'walk' | 'chop' | 'mine' | 'gather';
+export type VillagerRenderMode = 'idle' | 'walk' | 'chop' | 'mine' | 'gather' | 'build';
 
 type FallbackPartLayer = {
   mesh: THREE.InstancedMesh;
@@ -384,6 +384,7 @@ export class SettlementCrowdRenderer {
       chop: mixer.clipAction(source.clips.chop, model),
       mine: mixer.clipAction(source.clips.mine, model),
       gather: mixer.clipAction(source.clips.gather, model),
+      build: mixer.clipAction(source.clips.build, model),
     };
     for (const action of Object.values(actions)) {
       action.enabled = true;
@@ -393,6 +394,7 @@ export class SettlementCrowdRenderer {
     actions.chop.setEffectiveTimeScale(1.08);
     actions.mine.setEffectiveTimeScale(0.9);
     actions.gather.setEffectiveTimeScale(0.92);
+    actions.build.setEffectiveTimeScale(1.08);
     actions[agent.mode].play();
     actions[agent.mode].time =
       (agent.appearanceSeed % 997) / 997 * actions[agent.mode].getClip().duration;
@@ -528,13 +530,15 @@ async function loadVillagerSource(
   chop.name = `${swing.name}:worker-chop`;
   const mine = swing.clone();
   mine.name = `${swing.name}:worker-mine`;
+  const build = swing.clone();
+  build.name = `${swing.name}:worker-build`;
   const gather = createGatherAnimationClip(gltf.scene);
   return {
     scene: gltf.scene,
     bounds,
     sourceHeight,
     targetHeight,
-    clips: { idle, walk, chop, mine, gather },
+    clips: { idle, walk, chop, mine, gather, build },
   };
 }
 
@@ -590,8 +594,13 @@ function createGatherAnimationClip(scene: THREE.Object3D): THREE.AnimationClip {
   return new THREE.AnimationClip('Worker_Gather', 2.4, tracks).optimize();
 }
 
-function isWorkMode(mode: VillagerRenderMode): mode is 'chop' | 'mine' | 'gather' {
-  return mode === 'chop' || mode === 'mine' || mode === 'gather';
+function isWorkMode(
+  mode: VillagerRenderMode,
+): mode is 'chop' | 'mine' | 'gather' | 'build' {
+  return mode === 'chop'
+    || mode === 'mine'
+    || mode === 'gather'
+    || mode === 'build';
 }
 
 function findAnimationClip(

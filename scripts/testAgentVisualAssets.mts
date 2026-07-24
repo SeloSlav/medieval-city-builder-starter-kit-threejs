@@ -237,6 +237,10 @@ const workerToolAssets: ReadonlyArray<{
     kind: 'pickaxe',
     path: 'public/assets/models/worker-tools/kenney-tool-pickaxe.glb',
   },
+  {
+    kind: 'hammer',
+    path: 'public/assets/models/worker-tools/kenney-tool-hammer.glb',
+  },
 ];
 const workerRigGltf = await parseGlb(villagerAssets[0].path);
 const workerRigBounds = new THREE.Box3().setFromObject(workerRigGltf.scene);

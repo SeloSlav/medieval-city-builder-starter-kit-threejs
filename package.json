@@ -51,6 +51,7 @@
     "test:household-routines": "node --experimental-strip-types scripts/testHouseholdRoutines.mts",
     "test:civic-logistics": "npx tsx scripts/testCivicLogistics.mts",
     "test:construction-logistics": "node --experimental-strip-types scripts/testConstructionLogistics.mts",
+    "test:delivery-pacing": "node --experimental-strip-types scripts/testDeliveryPacing.mts",
     "test:quarry-balance": "node --experimental-strip-types scripts/testQuarryBalance.mts",
     "test:rich-stone": "node --experimental-strip-types scripts/testRichStoneSystem.mts",
     "test:fishing": "node --experimental-strip-types scripts/testFishingSystem.mts",

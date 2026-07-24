@@ -5,9 +5,9 @@ import { foragingPickRadius } from '../foraging/foragingYields.ts';
 import {
   BERRY_PATCH_MAX_YIELD,
   FISH_SHOAL_MAX_YIELD,
-  GAME_PATCH_MAX_YIELD,
   MUSHROOM_PATCH_MAX_YIELD,
   RICH_FISH_SHOAL_MAX_YIELD,
+  gamePatchMaxYield,
 } from '../foraging/foragingYields.ts';
 import { quarryMaxYield, quarryPickRadius } from './yields.ts';
 import type { WorldLayout } from './WorldLayout.ts';
@@ -52,10 +52,14 @@ export class WorldLayoutRegistry {
     }
 
     let berryIndex = 0;
+    let gameIndex = 0;
     let mushroomIndex = 0;
     let fishIndex = 0;
     for (const site of layout.foragingLayout.sites) {
-      if (site.kind === 'berries') {
+      if (site.kind === 'game') {
+        definitions.push(foragingDefinition(site, gameIndex));
+        gameIndex++;
+      } else if (site.kind === 'berries') {
         definitions.push(foragingDefinition(site, berryIndex));
         berryIndex++;
       } else if (site.kind === 'mushrooms') {
@@ -163,32 +167,33 @@ export function buildingKindLabel(kind: BuildingKind): string {
   return getBuildingDefinition(kind).label;
 }
 
-function foragingDefinition(site: ForagingSite, berryIndex = 0): ResourceNodeDefinition {
+function foragingDefinition(site: ForagingSite, nodeIndex = 0): ResourceNodeDefinition {
   const isGame = site.kind === 'game';
+  const isRichGame = isGame && site.isRich === true;
   const isMushroom = site.kind === 'mushrooms';
   const isFish = site.kind === 'fish';
   const isRichFish = isFish && site.isRich === true;
   return {
     id: isGame
-      ? 'foraging-game-0'
+      ? `foraging-game-${nodeIndex}`
       : isMushroom
-        ? `foraging-mushrooms-${berryIndex}`
+        ? `foraging-mushrooms-${nodeIndex}`
       : isFish
-        ? `foraging-fish-${isRichFish ? 'rich' : 'small'}-${berryIndex}`
-        : `foraging-berries-${berryIndex}`,
+        ? `foraging-fish-${isRichFish ? 'rich' : 'small'}-${nodeIndex}`
+        : `foraging-berries-${nodeIndex}`,
     kind: site.kind,
     resource: isGame ? 'game' : isMushroom ? 'mushrooms' : isFish ? 'fish' : 'berries',
     x: site.x,
     z: site.z,
     label: isGame
-      ? 'Game habitat'
+      ? (isRichGame ? 'Large game habitat' : 'Game habitat')
       : isMushroom
         ? 'Deep-forest mushroom bed'
         : isFish
           ? (isRichFish ? 'Rich fishing shoal' : 'Fishing shoal')
           : 'Berry patch',
     maxYield: isGame
-      ? GAME_PATCH_MAX_YIELD
+      ? gamePatchMaxYield(isRichGame)
       : isMushroom
         ? MUSHROOM_PATCH_MAX_YIELD
       : isRichFish
@@ -196,8 +201,8 @@ function foragingDefinition(site: ForagingSite, berryIndex = 0): ResourceNodeDef
         : isFish
           ? FISH_SHOAL_MAX_YIELD
           : BERRY_PATCH_MAX_YIELD,
-    pickRadius: foragingPickRadius(site.kind),
-    isRich: isRichFish,
+    pickRadius: foragingPickRadius(site.kind, isRichGame || isRichFish),
+    isRich: isRichGame || isRichFish,
   };
 }
 

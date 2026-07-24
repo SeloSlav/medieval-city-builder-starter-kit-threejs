@@ -13,7 +13,9 @@ import {
 import {
   createSeedThreeWildflowerGeometry,
   createSeedThreeWildflowerMaterial,
-  sampleSeedThreeWildflowerColor,
+  disposeSeedThreeWildflowerTextureCache,
+  loadSeedThreeWildflowerAtlas,
+  SEEDTHREE_WILDFLOWER_VARIANTS,
 } from '../vegetation/seedthree/seedThreeWildflowers.ts';
 import type { Terrain } from '../terrain/Terrain.ts';
 import type { RoadNetwork } from '../roads/RoadNetwork.ts';
@@ -65,12 +67,12 @@ const ROAD_CLEAR_MARGIN = 1.05;
 const TAU = Math.PI * 2;
 const GRID_SIDE = GRASS_STREAM_CHUNK_RADIUS * 2 + 1;
 const GRASS_SLOT_CAPACITY = GRASS_TUFTS_PER_CHUNK + 14;
-const WILDFLOWER_SLOT_CAPACITY = 12;
+const WILDFLOWER_SLOT_CAPACITY = 4;
 const MAX_GRASS_STREAM_INSTANCES = GRID_SIDE * GRID_SIDE * GRASS_SLOT_CAPACITY;
 const MAX_WILDFLOWER_STREAM_INSTANCES = GRID_SIDE * GRID_SIDE * WILDFLOWER_SLOT_CAPACITY;
 const MIN_TUFT_SPACING_SQ = 0.26 * 0.26;
 const MIN_MICRO_TUFT_SPACING_SQ = 0.16 * 0.16;
-const MIN_WILDFLOWER_SPACING_SQ = 0.82 * 0.82;
+const MIN_WILDFLOWER_SPACING_SQ = 2.1 * 2.1;
 /** Park culled tufts far below the world — zero-scale at origin alpha-tests into a visible orb. */
 const HIDDEN_INSTANCE_Y = -4096;
 const hiddenMatrix = new THREE.Matrix4().compose(
@@ -114,7 +116,6 @@ type GrassStreamMesh = {
   wildflowers?: true;
   tintAttr?: THREE.InstancedBufferAttribute;
   anchorAttr?: THREE.InstancedBufferAttribute;
-  flowerColorAttr?: THREE.InstancedBufferAttribute;
 };
 
 export type GrassBladeFieldOptions = {
@@ -148,12 +149,13 @@ export async function createGrassBladeField(
   let disposeResources: () => void;
 
   if (useSeedThreeClumps) {
-    const textures = await loadSeedThreeGrassTextures(options?.maxAnisotropy ?? 4);
+    const [textures, wildflowerAtlas] = await Promise.all([
+      loadSeedThreeGrassTextures(options?.maxAnisotropy ?? 4),
+      loadSeedThreeWildflowerAtlas(options?.maxAnisotropy ?? 4),
+    ]);
     const variants = createSeedThreeTuftVariants();
     const grassMaterial = createSeedThreeGrassMaterial(textures);
-    const wildflowerMaterial = createSeedThreeWildflowerMaterial();
     applyGrassDepthOffset(grassMaterial);
-    applyGrassDepthOffset(wildflowerMaterial);
     streamMeshes = variants.map((variant, index) => {
       const geometry = variant.geometry;
       const tintAttr = new THREE.InstancedBufferAttribute(new Float32Array(MAX_GRASS_STREAM_INSTANCES * 3), 3);
@@ -170,41 +172,43 @@ export async function createGrassBladeField(
       mesh.visible = false;
       return { mesh, slotCapacity: GRASS_SLOT_CAPACITY, variant, tintAttr, anchorAttr };
     });
-    const wildflowerGeometry = createSeedThreeWildflowerGeometry();
-    const flowerColorAttr = new THREE.InstancedBufferAttribute(
-      new Float32Array(MAX_WILDFLOWER_STREAM_INSTANCES * 3),
-      3,
-    );
+    const wildflowerGeometry = createSeedThreeWildflowerGeometry(0.9);
     const wildflowerAnchorAttr = new THREE.InstancedBufferAttribute(
-      new Float32Array(MAX_WILDFLOWER_STREAM_INSTANCES * 3),
-      3,
+      new Float32Array(MAX_WILDFLOWER_STREAM_INSTANCES * 4),
+      4,
     );
-    wildflowerGeometry.setAttribute('aFlowerColor', flowerColorAttr);
     wildflowerGeometry.setAttribute('aAnchorPos', wildflowerAnchorAttr);
+    const wildflowerMaterial = createSeedThreeWildflowerMaterial(
+      wildflowerAtlas,
+      'Gorski Kotar wildflower atlas',
+    );
+    applyGrassDepthOffset(wildflowerMaterial);
     const wildflowerMesh = new THREE.InstancedMesh(
       wildflowerGeometry,
       wildflowerMaterial,
       MAX_WILDFLOWER_STREAM_INSTANCES,
     );
-    wildflowerMesh.name = 'SeedThree streamed wildflower understorey';
+    wildflowerMesh.name = 'SeedThree streamed Gorski Kotar wildflowers';
     wildflowerMesh.count = 0;
     wildflowerMesh.castShadow = false;
     wildflowerMesh.receiveShadow = true;
     wildflowerMesh.frustumCulled = false;
     wildflowerMesh.renderOrder = 3;
     wildflowerMesh.visible = false;
+    wildflowerMesh.userData.texturePath =
+      '/assets/textures/vegetation/wildflowers/gorski-kotar-wildflower-atlas.png';
     streamMeshes.push({
       mesh: wildflowerMesh,
       slotCapacity: WILDFLOWER_SLOT_CAPACITY,
       wildflowers: true,
       anchorAttr: wildflowerAnchorAttr,
-      flowerColorAttr,
     });
     displayMaterials = [grassMaterial, wildflowerMaterial];
     disposeResources = () => {
       for (const entry of streamMeshes) entry.mesh.geometry.dispose();
       for (const material of displayMaterials) material.dispose();
       disposeSeedThreeGrassTextureCache();
+      disposeSeedThreeWildflowerTextureCache();
     };
   } else {
     const grassMaterial = createGrassBladeMaterial();
@@ -418,7 +422,6 @@ export async function createGrassBladeField(
       if (entry.mesh.instanceColor) entry.mesh.instanceColor.needsUpdate = true;
       if (entry.tintAttr) entry.tintAttr.needsUpdate = true;
       if (entry.anchorAttr) entry.anchorAttr.needsUpdate = true;
-      if (entry.flowerColorAttr) entry.flowerColorAttr.needsUpdate = true;
     }
     boundingSphereFrame++;
     const sphereInterval = buildInteractionActive ? 6 : firstPersonActive ? 5 : 3;
@@ -551,7 +554,6 @@ const writePosition = new THREE.Vector3();
 const writeScale = new THREE.Vector3();
 const writeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const writeColor = new THREE.Color();
-const writeFlowerColor = new THREE.Color();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function writeSeedThreeChunkInstances(
@@ -683,23 +685,25 @@ function writeSeedThreeWildflowerChunkInstances(
   maxInstances: number,
 ): number {
   const { terrain, extent, terrainExtent, forestCores, roadSpatialIndex } = context;
+  if (!entry.wildflowers || !entry.anchorAttr) return 0;
+
   const seed = (chunkSeed(chunkX, chunkZ) ^ 0x7f4a7c15) >>> 0;
   const rng = mulberry32(seed);
   const chunkMinX = chunkX * GRASS_BLADE_CHUNK_SIZE;
   const chunkMinZ = chunkZ * GRASS_BLADE_CHUNK_SIZE;
   const margin = GRASS_BLADE_CHUNK_SIZE * 0.08;
-  const target = Math.min(maxInstances, 7 + Math.floor(rng() * 6));
+  const target = rng() < 0.16 ? 0 : 2 + Math.floor(rng() * 3);
   const localPlacements: Array<{ x: number; z: number }> = [];
-  const paletteOffset = seed % 5;
+  const paletteOffset = seed % SEEDTHREE_WILDFLOWER_VARIANTS.length;
   let instanceIndex = startIndex;
 
-  for (let attempt = 0; attempt < target * 12 && localPlacements.length < target; attempt++) {
+  for (let attempt = 0; attempt < target * 18 && localPlacements.length < target; attempt++) {
     let x: number;
     let z: number;
-    if (localPlacements.length > 0 && rng() < 0.46) {
+    if (localPlacements.length > 0 && rng() < 0.34) {
       const anchor = localPlacements[Math.floor(rng() * localPlacements.length)]!;
       const angle = rng() * TAU;
-      const radius = THREE.MathUtils.lerp(0.88, 2.5, Math.pow(rng(), 0.7));
+      const radius = THREE.MathUtils.lerp(1.9, 4.2, Math.pow(rng(), 0.7));
       x = anchor.x + Math.cos(angle) * radius;
       z = anchor.z + Math.sin(angle) * radius;
     } else {
@@ -745,12 +749,20 @@ function writeSeedThreeWildflowerChunkInstances(
     writeScale.set(widthScale, heightScale, widthScale);
     writeMatrix.compose(writePosition, writeQuaternion, writeScale);
 
-    entry.mesh.setMatrixAt(instanceIndex, writeMatrix);
-    const paletteIndex = (paletteOffset + localPlacements.length - 1) % 5;
-    const flowerColor = sampleSeedThreeWildflowerColor(paletteIndex, rng, writeFlowerColor);
-    entry.flowerColorAttr?.setXYZ(instanceIndex, flowerColor.r, flowerColor.g, flowerColor.b);
-    entry.anchorAttr?.setXYZ(instanceIndex, x, rootY, z);
-    instanceIndex++;
+    const placementVariant =
+      (paletteOffset + localPlacements.length - 1) % SEEDTHREE_WILDFLOWER_VARIANTS.length;
+    if (instanceIndex < startIndex + maxInstances) {
+      const variant = SEEDTHREE_WILDFLOWER_VARIANTS[placementVariant]!;
+      entry.mesh.setMatrixAt(instanceIndex, writeMatrix);
+      entry.anchorAttr.setXYZW(
+        instanceIndex,
+        x,
+        rootY,
+        z,
+        variant.atlasOffset[0],
+      );
+      instanceIndex++;
+    }
   }
 
   for (let pad = instanceIndex; pad < startIndex + maxInstances; pad++) {

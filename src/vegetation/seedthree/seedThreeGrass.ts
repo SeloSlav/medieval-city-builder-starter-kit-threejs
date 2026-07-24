@@ -65,11 +65,20 @@ function swayAt(phaseWorld: TslNode, phaseScale: number): TslNode {
  * Rooted grass sway for instanced tufts.
  * Must bend from positionLocal (post-instance-matrix), not positionGeometry.
  */
-export function createPinnedGrassWindPosition(): TslNode {
+export function createPinnedGrassWindPosition(
+  weightAttribute?: string,
+  anchorAttributeType: 'vec3' | 'vec4' = 'vec3',
+): TslNode {
   const local = tsl.positionLocal;
-  const k = tsl.uv().y.mul(tsl.uv().y);
+  const weight = weightAttribute
+    ? tsl.attribute(weightAttribute, 'float')
+    : tsl.uv().y;
+  const k = weight.mul(weight);
   const amp = tsl.windStrength.mul(0.16);
-  const anchorWorld = tsl.attribute('aAnchorPos', 'vec3');
+  const anchorAttribute = tsl.attribute('aAnchorPos', anchorAttributeType);
+  const anchorWorld = anchorAttributeType === 'vec4'
+    ? anchorAttribute.xyz
+    : anchorAttribute;
   const gust = swayAt(anchorWorld, 2.2).mul(amp);
   const jitterT = tsl.time
     .mul(tsl.windSpeed)

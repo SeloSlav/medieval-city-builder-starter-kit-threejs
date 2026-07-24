@@ -258,7 +258,10 @@ export class App {
         getTreeRegistry: () => this.treeRegistry,
       },
       onForestClearanceChanged: () => this.syncForestClearance(),
-      onFirstPersonCollisionChanged: () => this.firstPersonController?.invalidateCollisionWorld(),
+      onFirstPersonCollisionChanged: () => {
+        this.firstPersonController?.invalidateCollisionWorld();
+        this.villagers?.invalidateNavigation();
+      },
     };
 
     this.gameRuntime.start();

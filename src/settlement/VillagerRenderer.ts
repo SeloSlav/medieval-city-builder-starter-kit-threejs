@@ -134,6 +134,7 @@ export type VillagerRendererOptions = {
   parent: THREE.Group;
   getHeightAt: (x: number, z: number) => number;
   getRoadDeckY?: (x: number, z: number) => number | null;
+  routePathAroundObstacles?: (path: readonly PointXZ[]) => PointXZ[] | null;
 };
 
 export class VillagerRenderer {
@@ -141,6 +142,8 @@ export class VillagerRenderer {
   private readonly activityAudio = new WorkerActivityAudio();
   private readonly getHeightAt: (x: number, z: number) => number;
   private readonly getRoadDeckY: ((x: number, z: number) => number | null) | null;
+  private readonly routePathAroundObstacles:
+    ((path: readonly PointXZ[]) => PointXZ[] | null) | null;
   private readonly agents = new Map<string, VillagerAgent>();
   private residences = new Map<string, ResidenceState>();
   private buildings = new Map<string, BuildingState>();
@@ -153,6 +156,7 @@ export class VillagerRenderer {
   constructor(options: VillagerRendererOptions) {
     this.getHeightAt = options.getHeightAt;
     this.getRoadDeckY = options.getRoadDeckY ?? null;
+    this.routePathAroundObstacles = options.routePathAroundObstacles ?? null;
     this.renderer = new SettlementCrowdRenderer({ parent: options.parent });
   }
 
@@ -162,6 +166,45 @@ export class VillagerRenderer {
     let changed = false;
     for (const agent of this.agents.values()) {
       changed = this.reconcileRoutine(agent) || changed;
+    }
+    if (changed) this.pushRenderState();
+  }
+
+  /**
+   * Replans active movement after settlement collision meshes change.
+   * This prevents an already-started walk from continuing through a newly
+   * placed building or fence.
+   */
+  invalidateNavigation(): void {
+    if (!this.routePathAroundObstacles) return;
+
+    let changed = false;
+    for (const agent of this.agents.values()) {
+      if (!agent.pathPurpose || agent.path.length < 2) continue;
+      const cursor = Math.min(agent.pathDistance, agent.displayPathCursor);
+      const remaining = remainingPolyline(agent.path, cursor);
+      const remainingWorkDistance = agent.pathPurpose === 'worker_work_loop'
+        && agent.workActivity
+        && !agent.workPerformed
+        ? Math.max(0, agent.workStopDistance - cursor)
+        : null;
+      const rerouted = this.routeWorkerPath(remaining, remainingWorkDistance);
+      if (!rerouted || polylineLengthXZ(rerouted.path) < 0.05) {
+        this.cancelBlockedPath(agent);
+        changed = true;
+        continue;
+      }
+
+      agent.path = rerouted.path;
+      agent.pathDistance = polylineLengthXZ(rerouted.path);
+      agent.pathCursor = 0;
+      agent.simPathCursor = 0;
+      agent.displayPathCursor = 0;
+      agent.workStopDistance = rerouted.workStopDistance ?? 0;
+      agent.x = rerouted.path[0].x;
+      agent.z = rerouted.path[0].z;
+      agent.y = this.resolveGroundY(agent.x, agent.z) + 0.02;
+      changed = true;
     }
     if (changed) this.pushRenderState();
   }
@@ -592,7 +635,7 @@ export class VillagerRenderer {
       this.activityAudio.tick(
         dt,
         renderAgents.flatMap((agent) => (
-          agent.mode === 'chop' || agent.mode === 'mine'
+          agent.mode === 'chop' || agent.mode === 'mine' || agent.mode === 'build'
             ? [{
                 id: agent.id,
                 mode: agent.mode,
@@ -611,6 +654,7 @@ export class VillagerRenderer {
       agent.mode === 'chop'
       || agent.mode === 'mine'
       || agent.mode === 'gather'
+      || agent.mode === 'build'
     ) {
       agent.workRemaining -= dt;
       if (agent.workRemaining <= 0) this.finishWorkerActivity(agent);
@@ -740,7 +784,7 @@ export class VillagerRenderer {
       return;
     }
 
-    const path = pickVillagerWalkPath(
+    const candidatePath = pickVillagerWalkPath(
       residence,
       [...this.residences.values()],
       this.roadNetwork,
@@ -749,6 +793,7 @@ export class VillagerRenderer {
     );
     agent.pathSeed = (agent.pathSeed * 1_664_525) ^ 0x7feb352d;
 
+    const path = candidatePath ? this.routePath(candidatePath) : null;
     const pathDistance = path ? polylineLengthXZ(path) : 0;
     if (!path || pathDistance < 4) {
       agent.idleRemaining = pickIdleDuration(agent.pathSeed);
@@ -778,7 +823,10 @@ export class VillagerRenderer {
     );
     agent.pathSeed = (agent.pathSeed * 1_664_525) ^ 0x165667b1;
 
-    const path = plan?.path ?? null;
+    const routedPlan = plan
+      ? this.routeWorkerPath(plan.path, plan.workDistance)
+      : null;
+    const path = routedPlan?.path ?? null;
     const pathDistance = path ? polylineLengthXZ(path) : 0;
     if (!path || pathDistance < 4) {
       agent.idleRemaining = pickIdleDuration(agent.pathSeed) * 0.5;
@@ -796,7 +844,7 @@ export class VillagerRenderer {
     agent.workTarget = plan?.target
       ? { x: plan.target.x, z: plan.target.z }
       : null;
-    agent.workStopDistance = plan?.workDistance ?? 0;
+    agent.workStopDistance = routedPlan?.workStopDistance ?? 0;
     agent.workRemaining = 0;
     agent.workPerformed = false;
     agent.idleDirty = false;
@@ -838,10 +886,11 @@ export class VillagerRenderer {
       destination,
       this.roadNetwork,
     );
-    if (!path || !this.beginJourney(agent, path, 'return_home')) {
+    if (!path) {
       this.completeWorkerReturnHome(agent);
       return true;
     }
+    if (!this.beginJourney(agent, path, 'return_home')) return false;
     agent.routinePhase = 'returning_home';
     return true;
   }
@@ -866,10 +915,11 @@ export class VillagerRenderer {
       destination,
       this.roadNetwork,
     );
-    if (!path || !this.beginJourney(agent, path, 'commute_to_work')) {
+    if (!path) {
       this.completeWorkerCommuteToWork(agent);
       return true;
     }
+    if (!this.beginJourney(agent, path, 'commute_to_work')) return false;
     agent.routinePhase = 'commuting_to_work';
     return true;
   }
@@ -900,11 +950,12 @@ export class VillagerRenderer {
     path: PointXZ[],
     purpose: Exclude<VillagerPathPurpose, 'home_wander' | 'worker_work_loop' | null>,
   ): boolean {
-    const pathDistance = polylineLengthXZ(path);
+    const routedPath = this.routePath(path);
+    const pathDistance = routedPath ? polylineLengthXZ(routedPath) : 0;
     if (pathDistance < 0.25) return false;
     agent.mode = 'walk';
     agent.pathPurpose = purpose;
-    agent.path = path;
+    agent.path = routedPath!;
     agent.pathDistance = pathDistance;
     agent.pathCursor = 0;
     agent.simPathCursor = 0;
@@ -912,6 +963,48 @@ export class VillagerRenderer {
     this.clearWorkerActivity(agent);
     agent.idleDirty = false;
     return true;
+  }
+
+  private routePath(path: readonly PointXZ[]): PointXZ[] | null {
+    if (path.length < 2) return path.map((point) => ({ ...point }));
+    if (!this.routePathAroundObstacles) return path.map((point) => ({ ...point }));
+    return this.routePathAroundObstacles(path);
+  }
+
+  private routeWorkerPath(
+    path: readonly PointXZ[],
+    workDistance: number | null,
+  ): { path: PointXZ[]; workStopDistance: number | null } | null {
+    if (workDistance == null) {
+      const routedPath = this.routePath(path);
+      return routedPath ? { path: routedPath, workStopDistance: null } : null;
+    }
+
+    const split = splitPolylineAtDistance(path, workDistance);
+    if (!split) return null;
+    const approach = this.routePath(split.before);
+    const departure = this.routePath(split.after);
+    if (!approach || !departure) return null;
+    return {
+      path: joinPolylines(approach, departure),
+      workStopDistance: polylineLengthXZ(approach),
+    };
+  }
+
+  private cancelBlockedPath(agent: VillagerAgent): void {
+    const purpose = agent.pathPurpose;
+    const current = samplePolylineXZ(agent.path, agent.displayPathCursor);
+    if (current) {
+      agent.x = current.x;
+      agent.z = current.z;
+      agent.y = this.resolveGroundY(agent.x, agent.z) + 0.02;
+    }
+    this.clearPath(agent);
+    if (purpose === 'commute_to_work') agent.routinePhase = 'home_outdoors';
+    if (purpose === 'return_home' || purpose === 'worker_work_loop') {
+      agent.routinePhase = 'work';
+    }
+    agent.idleRemaining = 1;
   }
 
   private clearPath(agent: VillagerAgent): void {
@@ -997,11 +1090,68 @@ export class VillagerRenderer {
 
   private workerToolFor(agent: VillagerAgent): WorkerToolKind | null {
     if (agent.role !== 'worker' || !agent.workplaceId) return null;
-    const kind = this.buildings.get(agent.workplaceId)?.kind;
+    const workplace = this.buildings.get(agent.workplaceId);
+    if (workplace?.constructionComplete === false) return 'hammer';
+    const kind = workplace?.kind;
     if (kind === 'lumber_mill') return 'hatchet';
     if (kind === 'stone_quarry' || kind === 'large_quarry') return 'pickaxe';
     return null;
   }
+}
+
+function remainingPolyline(path: readonly PointXZ[], distance: number): PointXZ[] {
+  const split = splitPolylineAtDistance(path, distance);
+  return split?.after ?? [];
+}
+
+function splitPolylineAtDistance(
+  path: readonly PointXZ[],
+  distance: number,
+): { before: PointXZ[]; after: PointXZ[] } | null {
+  if (path.length === 0) return null;
+  if (path.length === 1) {
+    const point = { ...path[0] };
+    return { before: [point], after: [{ ...point }] };
+  }
+
+  let remaining = Math.max(0, distance);
+  const before: PointXZ[] = [{ ...path[0] }];
+  for (let index = 0; index < path.length - 1; index++) {
+    const start = path[index];
+    const end = path[index + 1];
+    const segmentLength = Math.hypot(end.x - start.x, end.z - start.z);
+    if (segmentLength <= 1e-6) continue;
+    if (remaining <= segmentLength + 1e-6) {
+      const t = Math.min(1, remaining / segmentLength);
+      const splitPoint = {
+        x: start.x + (end.x - start.x) * t,
+        z: start.z + (end.z - start.z) * t,
+      };
+      pushPathPoint(before, splitPoint);
+      const after: PointXZ[] = [{ ...splitPoint }];
+      for (let tail = index + 1; tail < path.length; tail++) {
+        pushPathPoint(after, path[tail]);
+      }
+      return { before, after };
+    }
+    remaining -= segmentLength;
+    pushPathPoint(before, end);
+  }
+
+  const last = { ...path[path.length - 1] };
+  return { before, after: [last] };
+}
+
+function joinPolylines(first: readonly PointXZ[], second: readonly PointXZ[]): PointXZ[] {
+  const joined = first.map((point) => ({ ...point }));
+  for (const point of second) pushPathPoint(joined, point);
+  return joined;
+}
+
+function pushPathPoint(path: PointXZ[], point: PointXZ): void {
+  const previous = path[path.length - 1];
+  if (previous && Math.hypot(previous.x - point.x, previous.z - point.z) <= 1e-5) return;
+  path.push({ ...point });
 }
 
 function describeVillagerActivity(
@@ -1021,6 +1171,7 @@ function describeVillagerActivity(
       if (agent.mode === 'chop') return `Chopping timber near ${workplaceLabel}`;
       if (agent.mode === 'mine') return `Quarrying stone near ${workplaceLabel}`;
       if (agent.mode === 'gather') return `Gathering wild food near ${workplaceLabel}`;
+      if (agent.mode === 'build') return `Hammering on ${workplaceLabel}`;
       if (workplace?.constructionComplete === false) {
         return agent.mode === 'walk'
           ? `Building ${workplaceLabel}`

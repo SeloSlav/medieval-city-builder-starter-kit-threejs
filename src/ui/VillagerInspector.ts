@@ -34,6 +34,7 @@ export class VillagerInspector {
   private readonly name: HTMLElement;
   private readonly eyebrow: HTMLElement;
   private readonly activity: HTMLElement;
+  private readonly current: HTMLElement;
   private readonly initials: HTMLElement;
   private readonly occupation: HTMLElement;
   private readonly workplace: HTMLElement;
@@ -44,6 +45,8 @@ export class VillagerInspector {
   private readonly crewLabel: HTMLElement;
   private readonly pace: HTMLElement;
   private readonly paceLabel: HTMLElement;
+  private readonly distanceRow: HTMLElement;
+  private readonly distance: HTMLElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly marker: THREE.Mesh;
   private selectedPersonIdentity: string | null = null;
@@ -89,6 +92,10 @@ export class VillagerInspector {
               <dt data-villager-pace-label>Walking pace</dt>
               <dd data-villager-pace>—</dd>
             </div>
+            <div data-delivery-distance-row hidden>
+              <dt>Distance left</dt>
+              <dd data-delivery-distance>—</dd>
+            </div>
           </dl>
         </aside>
       `,
@@ -98,6 +105,7 @@ export class VillagerInspector {
     this.name = mustElement(this.panel, '[data-villager-name]');
     this.eyebrow = mustElement(this.panel, '[data-villager-eyebrow]');
     this.activity = mustElement(this.panel, '[data-villager-activity]');
+    this.current = mustElement(this.panel, '[data-villager-current]');
     this.initials = mustElement(this.panel, '[data-villager-initials]');
     this.occupation = mustElement(this.panel, '[data-villager-occupation]');
     this.workplace = mustElement(this.panel, '[data-villager-workplace]');
@@ -108,6 +116,8 @@ export class VillagerInspector {
     this.crewLabel = mustElement(this.panel, '[data-villager-crew-label]');
     this.pace = mustElement(this.panel, '[data-villager-pace]');
     this.paceLabel = mustElement(this.panel, '[data-villager-pace-label]');
+    this.distanceRow = mustElement(this.panel, '[data-delivery-distance-row]');
+    this.distance = mustElement(this.panel, '[data-delivery-distance]');
     this.closeButton = mustButton(this.panel, '[data-villager-close]');
 
     this.marker = createVillagerMarker();
@@ -208,9 +218,11 @@ export class VillagerInspector {
     this.householdLabel.textContent = 'Household';
     this.crewLabel.textContent = 'Crew';
     this.paceLabel.textContent = 'Walking pace';
+    this.distanceRow.hidden = true;
     this.name.textContent = inspection.name;
     this.eyebrow.textContent = inspection.eyebrow;
     this.activity.textContent = inspection.activity;
+    this.current.textContent = inspection.activity;
     this.activity.dataset.state = inspection.activityState;
     this.initials.textContent = inspection.initials;
     this.occupation.textContent = inspection.occupation;
@@ -248,6 +260,7 @@ export class VillagerInspector {
     this.householdLabel.textContent = 'Route target';
     this.crewLabel.textContent = 'Cargo';
     this.paceLabel.textContent = 'Cart speed';
+    this.distanceRow.hidden = false;
     this.name.textContent = name;
     this.eyebrow.textContent = `Delivery agent · ${phase}`;
     this.activity.textContent = returning
@@ -255,6 +268,11 @@ export class VillagerInspector {
       : trip.phase === 'unloading'
         ? `Unloading ${cargo.toLocaleLowerCase()} at ${destination}`
         : `Delivering ${cargoAmount} ${cargo.toLocaleLowerCase()} to ${destination}`;
+    this.current.textContent = returning
+      ? `Returning to ${originLabel}`
+      : trip.phase === 'unloading'
+        ? `Unloading at ${destination}`
+        : `Traveling to ${destination}`;
     this.activity.dataset.state = 'active';
     this.initials.textContent = name
       .split(/\s+/)
@@ -274,6 +292,9 @@ export class VillagerInspector {
       * Math.max(1, trip.deliveryWorkers)
       * Math.max(1, trip.travelSpeedMultiplier);
     this.pace.textContent = `${speed.toFixed(1)} m/s`;
+    this.distance.textContent = inspection.remainingMeters == null
+      ? '—'
+      : `${Math.ceil(inspection.remainingMeters).toLocaleString()} m`;
     this.marker.position.set(
       inspection.position.x,
       inspection.position.y + 2.12,

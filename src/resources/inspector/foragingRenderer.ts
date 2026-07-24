@@ -4,6 +4,7 @@ import {
   isForagingHarvestAvailable,
   isForagingRegrowthSeason,
 } from '../../foraging/foragingSeason.ts';
+import { displayedGameAnimalCount } from '../../foraging/foragingYields.ts';
 import { gameClock } from '../../world/gameCalendar.ts';
 import { formatResourceAmount } from '../yields.ts';
 import type { InspectableTarget } from '../types.ts';
@@ -34,20 +35,20 @@ export function renderForagingInspector(
     statusText = 'Extinct — the habitat remains empty';
     statusState = 'warning';
   } else if (belowGameBreedingFloor) {
-    statusText = `${formatStock(state.remaining, state.maxYield)} — below the two-animal breeding floor`;
+    statusText = `${formatStock(state.kind, state.remaining, state.maxYield)} — below the two-animal breeding floor`;
     statusState = 'warning';
   } else if (!available) {
     statusText = state.kind === 'fish'
-      ? `${formatStock(state.remaining, state.maxYield)} — frozen for winter`
-      : `${formatStock(state.remaining, state.maxYield)} — dormant for winter`;
+      ? `${formatStock(state.kind, state.remaining, state.maxYield)} — frozen for winter`
+      : `${formatStock(state.kind, state.remaining, state.maxYield)} — dormant for winter`;
     statusState = 'idle';
   } else if (depleted) {
     statusText = `Empty — regrows here during spring and summer`;
     statusState = 'idle';
   } else if (regrowing) {
-    statusText = `${formatStock(state.remaining, state.maxYield)} — population recovering`;
+    statusText = `${formatStock(state.kind, state.remaining, state.maxYield)} — population recovering`;
   } else {
-    statusText = formatStock(state.remaining, state.maxYield);
+    statusText = formatStock(state.kind, state.remaining, state.maxYield);
   }
 
   const lifecycle = lifecycleDescription(state.kind);
@@ -70,7 +71,14 @@ export function renderForagingInspector(
   };
 }
 
-function formatStock(remaining: number, maximum: number): string {
+function formatStock(
+  kind: 'game' | 'berries' | 'mushrooms' | 'fish',
+  remaining: number,
+  maximum: number,
+): string {
+  if (kind === 'game') {
+    return `${displayedGameAnimalCount(remaining)} / ${Math.round(maximum)}`;
+  }
   return `${Math.max(0, remaining).toFixed(remaining < 10 ? 1 : 0)} / ${Math.round(maximum)}`;
 }
 

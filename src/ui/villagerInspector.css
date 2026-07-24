@@ -118,6 +118,10 @@
   line-height: 1.3;
 }
 
+.villager-inspector-stats > div[hidden] {
+  display: none;
+}
+
 .villager-inspector-stats dt {
   color: var(--muted);
 }

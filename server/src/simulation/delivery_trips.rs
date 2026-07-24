@@ -8,7 +8,6 @@ use crate::balance_generated::{
     CONSTRUCTION_HAUL_PER_WORKER, FIRE_BUCKET_SPEED_MPS, FIRE_BUCKET_UNLOAD_SECONDS,
     FIRE_BUCKET_WATER, STOREHOUSE_HAUL_PER_WORKER,
 };
-use crate::constants::TICK_DT;
 use crate::db::*;
 use crate::economy::{
     building_commodity_room, building_commodity_stock, credit_treasury_commodity,
@@ -132,10 +131,18 @@ struct StartTripSpec {
     load_amount: f64,
 }
 
-pub fn step_delivery_trips(ctx: &ReducerContext, tick: &SimTickContext, clock: &GameClock) {
+pub fn step_delivery_trips(
+    ctx: &ReducerContext,
+    tick: &SimTickContext,
+    clock: &GameClock,
+    elapsed_seconds: f64,
+) {
+    if !elapsed_seconds.is_finite() || elapsed_seconds <= 0.0 {
+        return;
+    }
     let trips: Vec<DeliveryTrip> = ctx.db.delivery_trip().iter().collect();
     for trip in trips {
-        step_one_trip(ctx, tick, clock, trip);
+        step_one_trip(ctx, tick, clock, trip, elapsed_seconds);
     }
 }
 
@@ -630,6 +637,7 @@ fn step_one_trip(
     tick: &SimTickContext,
     clock: &GameClock,
     mut trip: DeliveryTrip,
+    elapsed_seconds: f64,
 ) {
     if trip.destination_kind != DELIVERY_DESTINATION_FIRE
         && labor_and_logistics_paused(ctx, trip.owner, clock)
@@ -655,50 +663,83 @@ fn step_one_trip(
     let workers = trip.delivery_workers.max(1) as f64;
     let travel_speed = trip.speed_mps * workers * trip.travel_speed_multiplier.max(1e-6);
 
-    let Some(phase) = DeliveryTripPhase::from_u8(trip.phase) else {
-        return_trip_cargo_to_building(ctx, &trip);
-        ctx.db.delivery_trip().id().delete(trip.id);
+    if travel_speed <= 1e-9 {
         return;
-    };
+    }
 
-    match phase {
-        DeliveryTripPhase::Outbound => {
-            trip.progress += travel_speed * TICK_DT;
-            if trip.progress >= path_distance {
-                trip.progress = path_distance;
-                trip.phase = DeliveryTripPhase::Unloading.as_u8();
-                trip.unload_remaining = trip.unload_seconds / workers;
+    let mut remaining_seconds = elapsed_seconds;
+    while remaining_seconds > 1e-9 {
+        let Some(phase) = DeliveryTripPhase::from_u8(trip.phase) else {
+            return_trip_cargo_to_building(ctx, &trip);
+            ctx.db.delivery_trip().id().delete(trip.id);
+            return;
+        };
+
+        match phase {
+            DeliveryTripPhase::Outbound => {
+                let remaining_distance = (path_distance - trip.progress).max(0.0);
+                let travel_seconds = remaining_distance / travel_speed;
+                if remaining_seconds + 1e-9 < travel_seconds {
+                    trip.progress += travel_speed * remaining_seconds;
+                    remaining_seconds = 0.0;
+                } else {
+                    trip.progress = path_distance;
+                    remaining_seconds = (remaining_seconds - travel_seconds).max(0.0);
+                    trip.phase = DeliveryTripPhase::Unloading.as_u8();
+                    trip.unload_remaining = trip.unload_seconds / workers;
+                }
             }
+            DeliveryTripPhase::Unloading => {
+                if remaining_seconds + 1e-9 < trip.unload_remaining {
+                    trip.unload_remaining -= remaining_seconds;
+                    remaining_seconds = 0.0;
+                } else {
+                    remaining_seconds =
+                        (remaining_seconds - trip.unload_remaining).max(0.0);
+                    trip.unload_remaining = 0.0;
+                    complete_unload(ctx, &mut trip, clock.sim_tick);
+                    trip.phase = DeliveryTripPhase::Inbound.as_u8();
+                    trip.progress = 0.0;
+                }
+            }
+            DeliveryTripPhase::Inbound => {
+                let remaining_distance = (path_distance - trip.progress).max(0.0);
+                let travel_seconds = remaining_distance / travel_speed;
+                if remaining_seconds + 1e-9 < travel_seconds {
+                    trip.progress += travel_speed * remaining_seconds;
+                    remaining_seconds = 0.0;
+                } else {
+                    finish_inbound_trip(ctx, trip);
+                    return;
+                }
+            }
+        }
+    }
+
+    match DeliveryTripPhase::from_u8(trip.phase) {
+        Some(DeliveryTripPhase::Outbound) => {
             let (x, z) = RoadNetwork::sample_polyline_xz(&route.polyline, trip.progress);
             trip.x = x;
             trip.z = z;
-            ctx.db.delivery_trip().id().update(trip);
         }
-        DeliveryTripPhase::Unloading => {
-            trip.unload_remaining = (trip.unload_remaining - TICK_DT).max(0.0);
+        Some(DeliveryTripPhase::Unloading) => {
             let (x, z) = RoadNetwork::sample_polyline_xz(&route.polyline, path_distance);
             trip.x = x;
             trip.z = z;
-
-            if trip.unload_remaining <= 0.0 {
-                complete_unload(ctx, &mut trip, clock.sim_tick);
-                trip.phase = DeliveryTripPhase::Inbound.as_u8();
-                trip.progress = 0.0;
-            }
-            ctx.db.delivery_trip().id().update(trip);
         }
-        DeliveryTripPhase::Inbound => {
-            trip.progress += travel_speed * TICK_DT;
-            if trip.progress >= path_distance {
-                finish_inbound_trip(ctx, trip);
-                return;
-            }
-            let (x, z) = RoadNetwork::sample_polyline_inbound_xz(&route.polyline, trip.progress);
+        Some(DeliveryTripPhase::Inbound) => {
+            let (x, z) =
+                RoadNetwork::sample_polyline_inbound_xz(&route.polyline, trip.progress);
             trip.x = x;
             trip.z = z;
-            ctx.db.delivery_trip().id().update(trip);
+        }
+        None => {
+            return_trip_cargo_to_building(ctx, &trip);
+            ctx.db.delivery_trip().id().delete(trip.id);
+            return;
         }
     }
+    ctx.db.delivery_trip().id().update(trip);
 }
 
 fn trip_route(

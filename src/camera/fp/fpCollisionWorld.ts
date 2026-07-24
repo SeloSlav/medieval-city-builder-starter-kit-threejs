@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { TreePhase } from '../../resources/types.ts';
 import type { TreeRegistry } from '../../resources/TreeRegistry.ts';
-import type { RockObstacle } from '../../utils/pathGeometry.ts';
+import { routeAgentPolyline } from '../../settlement/agentNavigation.ts';
+import type { PointXZ, RockObstacle } from '../../utils/pathGeometry.ts';
 import type { FpWalkProbePhase } from './fpAirborneWalkPolicy.ts';
 
 const STATIC_CELL_SIZE_M = 8;
@@ -89,6 +90,21 @@ export class FpCollisionWorld {
 
   invalidateStatic(): void {
     this.staticDirty = true;
+  }
+
+  /**
+   * Builds a lightweight crowd route around the same static buildings and
+   * fences used by first-person collision.
+   */
+  routeAgentPath(
+    path: readonly PointXZ[],
+    radius = 0.28,
+  ): PointXZ[] | null {
+    if (this.staticDirty) this.rebuildStaticIndex();
+    return routeAgentPolyline(
+      path,
+      (x, z) => this.staticIndex.diskOverlaps(x, z, radius),
+    );
   }
 
   prepare(x: number, z: number): void {
@@ -284,6 +300,26 @@ class StaticColliderIndex {
         }
       }
     }
+  }
+
+  diskOverlaps(x: number, z: number, radius: number): boolean {
+    const minCellX = Math.floor((x - radius) / STATIC_CELL_SIZE_M);
+    const maxCellX = Math.floor((x + radius) / STATIC_CELL_SIZE_M);
+    const minCellZ = Math.floor((z - radius) / STATIC_CELL_SIZE_M);
+    const maxCellZ = Math.floor((z + radius) / STATIC_CELL_SIZE_M);
+    this.querySeen.clear();
+    for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+      for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
+        const bucket = this.cells.get(`${cellX}:${cellZ}`);
+        if (!bucket) continue;
+        for (const collider of bucket) {
+          if (this.querySeen.has(collider)) continue;
+          this.querySeen.add(collider);
+          if (diskOverlapsCollider(x, z, radius, collider)) return true;
+        }
+      }
+    }
+    return false;
   }
 }
 

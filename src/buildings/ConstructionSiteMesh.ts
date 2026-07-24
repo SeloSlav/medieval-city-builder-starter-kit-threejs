@@ -8,6 +8,8 @@ const PALE_STONE = new THREE.MeshStandardMaterial({ color: 0x9a9588, roughness: 
 const TIMBER = new THREE.MeshStandardMaterial({ color: 0x6d4527, roughness: 0.9 });
 const CUT_WOOD = new THREE.MeshStandardMaterial({ color: 0xc39158, roughness: 0.86 });
 const ROPE = new THREE.MeshStandardMaterial({ color: 0x9a8057, roughness: 1 });
+const ROOF_PLATE_Y = 4.25;
+const ROOF_RIDGE_Y = 5.45;
 
 export function constructionVisualSignature(
   progress: number,
@@ -101,23 +103,29 @@ function addWallFrames(
 
 function addRoofRafters(root: THREE.Group, halfWidth: number, halfDepth: number): void {
   for (const z of [-halfDepth, -halfDepth * 0.33, halfDepth * 0.33, halfDepth]) {
-    addAngledBeam(root, halfWidth * 1.15, 4.25, z, Math.PI * 0.19);
-    addAngledBeam(root, -halfWidth * 1.15, 4.25, z, -Math.PI * 0.19);
+    addRoofRafter(root, -1, halfWidth, z);
+    addRoofRafter(root, 1, halfWidth, z);
   }
-  addBeam(root, 0.24, 0.24, halfDepth * 2 + 0.6, 0, 5.45, 0, TIMBER);
+  addBeam(root, 0.24, 0.24, halfDepth * 2 + 0.6, 0, ROOF_RIDGE_Y, 0, TIMBER);
 }
 
-function addAngledBeam(
+function addRoofRafter(
   root: THREE.Group,
-  x: number,
-  y: number,
+  side: -1 | 1,
+  halfWidth: number,
   z: number,
-  angle: number,
 ): void {
-  const length = Math.abs(x) * 1.08;
+  const rise = ROOF_RIDGE_Y - ROOF_PLATE_Y;
+  const length = Math.hypot(halfWidth, rise);
+  const pitch = Math.atan2(rise, halfWidth);
   const beam = new THREE.Mesh(new THREE.BoxGeometry(length, 0.22, 0.24), TIMBER);
-  beam.position.set(x * 0.5, y + 0.55, z);
-  beam.rotation.z = angle;
+  beam.name = 'Construction roof rafter';
+  beam.position.set(
+    side * halfWidth * 0.5,
+    (ROOF_PLATE_Y + ROOF_RIDGE_Y) * 0.5,
+    z,
+  );
+  beam.rotation.z = -side * pitch;
   root.add(beam);
 }
 
