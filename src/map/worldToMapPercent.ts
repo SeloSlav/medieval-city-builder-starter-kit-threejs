@@ -20,3 +20,11 @@ export function worldToMapPercent(
     y: ((z - bounds.minZ) / (bounds.maxZ - bounds.minZ)) * 100,
   };
 }
+
+/**
+ * Converts an XZ world-space direction into a CSS rotation for a marker whose
+ * unrotated tip points upward. The minimap maps +X right and +Z down.
+ */
+export function worldDirectionToMapRotation(x: number, z: number): number {
+  return Math.atan2(x, -z);
+}

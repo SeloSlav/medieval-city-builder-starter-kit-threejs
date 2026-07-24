@@ -97,17 +97,21 @@ export function resolveWorldMapFocus(
 ): MinimapFocus {
   if (firstPersonController.isActive()) {
     const position = firstPersonController.getPosition();
+    const yaw = firstPersonController.getBodyYaw();
     return {
       x: position.x,
       z: position.z,
-      yaw: firstPersonController.getBodyYaw(),
+      forwardX: -Math.sin(yaw),
+      forwardZ: -Math.cos(yaw),
     };
   }
 
   const target = cameraController.getTargetPosition();
+  const yaw = cameraController.getYaw();
   return {
     x: target.x,
     z: target.z,
-    yaw: cameraController.getYaw(),
+    forwardX: -Math.cos(yaw),
+    forwardZ: -Math.sin(yaw),
   };
 }

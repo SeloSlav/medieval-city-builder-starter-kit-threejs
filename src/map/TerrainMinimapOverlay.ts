@@ -4,12 +4,17 @@ import { isWorldMapForagingMarkerVisible } from './worldMapMarkers.ts';
 import type { RiverField } from '../rivers/RiverField.ts';
 import type { TerrainBounds } from '../terrain/Terrain.ts';
 import { createTerrainMinimapImage } from './createTerrainMinimapImage.ts';
-import { riverFieldBounds, worldToMapPercent } from './worldToMapPercent.ts';
+import {
+  riverFieldBounds,
+  worldDirectionToMapRotation,
+  worldToMapPercent,
+} from './worldToMapPercent.ts';
 
 export type MinimapFocus = {
   x: number;
   z: number;
-  yaw: number;
+  forwardX: number;
+  forwardZ: number;
 };
 
 type TerrainMinimapOverlayOptions = {
@@ -173,7 +178,8 @@ export class TerrainMinimapOverlay {
     this.focusMarker.hidden = false;
     this.focusMarker.style.left = `${point.x}%`;
     this.focusMarker.style.top = `${point.y}%`;
-    this.focusMarker.style.transform = `translate(-50%, -50%) rotate(${focus.yaw}rad)`;
+    const rotation = worldDirectionToMapRotation(focus.forwardX, focus.forwardZ);
+    this.focusMarker.style.transform = `translate(-50%, -50%) rotate(${rotation}rad)`;
   }
 
   private placeMarkerEntry(entry: MinimapMarkerEntry): void {

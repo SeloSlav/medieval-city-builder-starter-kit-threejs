@@ -85,6 +85,7 @@ import QuarryRow from "./quarry_table";
 import ResidenceRow from "./residence_table";
 import ResidenceNeedRow from "./residence_need_table";
 import RoadNetworkStateRow from "./road_network_state_table";
+import SimPacingStateRow from "./sim_pacing_state_table";
 import SimTickScheduleRow from "./sim_tick_schedule_table";
 import TreeEntityRow from "./tree_entity_table";
 import WorldConfigRow from "./world_config_table";
@@ -312,6 +313,17 @@ const tablesSchema = __schema({
       { name: 'road_network_state_owner_key', constraint: 'unique', columns: ['owner'] },
     ],
   }, RoadNetworkStateRow),
+  sim_pacing_state: __table({
+    name: 'sim_pacing_state',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'sim_pacing_state_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, SimPacingStateRow),
   sim_tick_schedule: __table({
     name: 'sim_tick_schedule',
     indexes: [

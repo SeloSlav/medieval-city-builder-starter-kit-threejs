@@ -40,6 +40,7 @@
     "test:residence-terrain": "node --experimental-strip-types scripts/testResidenceTerrainAdaptation.mts",
     "test:building-art": "npx tsx scripts/testBuildingArtDirection.mts",
     "test:camera-controller": "npx tsx scripts/testCameraController.mts",
+    "test:world-map": "node --experimental-strip-types scripts/testWorldMapCoordinates.mts",
     "test:first-person-collision": "node --experimental-strip-types scripts/testFirstPersonCollision.mts",
     "test:client-sync": "npx tsx scripts/testClientSyncScheduling.mts",
     "test:placement-regressions": "node --experimental-strip-types scripts/testPlacementRegressions.mts",

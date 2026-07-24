@@ -298,6 +298,12 @@ export const RoadNetworkState = __t.object("RoadNetworkState", {
 });
 export type RoadNetworkState = __Infer<typeof RoadNetworkState>;
 
+export const SimPacingState = __t.object("SimPacingState", {
+  id: __t.u8(),
+  stepCredit: __t.u16(),
+});
+export type SimPacingState = __Infer<typeof SimPacingState>;
+
 export const SimTickSchedule = __t.object("SimTickSchedule", {
   scheduleId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
