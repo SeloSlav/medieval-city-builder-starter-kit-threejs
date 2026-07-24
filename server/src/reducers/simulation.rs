@@ -38,14 +38,16 @@ pub fn run_sim_tick(ctx: &ReducerContext, _schedule: crate::schedule::SimTickSch
     // Delivery speeds are expressed in world metres per second. Advance them on
     // every scheduler heartbeat so Scenic's deliberately sparse economy/calendar
     // steps do not turn a 2.4 m/s cart into a 0.08 m/s cart.
-    let delivery_clock = crate::simulation::game_clock(config.sim_tick);
-    let delivery_tick = SimTickContext::new(ctx);
-    step_delivery_trips(
-        ctx,
-        &delivery_tick,
-        &delivery_clock,
-        TICK_DT * speed as f64,
-    );
+    if ctx.db.delivery_trip().iter().next().is_some() {
+        let delivery_clock = crate::simulation::game_clock(config.sim_tick);
+        let delivery_tick = SimTickContext::new(ctx);
+        step_delivery_trips(
+            ctx,
+            &delivery_tick,
+            &delivery_clock,
+            TICK_DT * speed as f64,
+        );
+    }
     let previous_credit = ctx
         .db
         .sim_pacing_state()

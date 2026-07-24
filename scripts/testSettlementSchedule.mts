@@ -3,6 +3,7 @@ import {
   CALENDAR_DAY_START_OFFSET_SECONDS,
   CALENDAR_SECONDS_PER_DAY,
   CALENDAR_WORK_START_HOUR,
+  SIM_REALTIME_RATE,
   SIM_TICK_SECONDS,
 } from '../src/generated/gameBalance.ts';
 import { gameClock, gameClockAtElapsedSeconds, isLaborPaused, laborPauseLabel } from '../src/world/gameCalendar.ts';
@@ -123,8 +124,13 @@ const clockFromElapsed = gameClockAtElapsedSeconds(
 assert.equal(clockFromElapsed.hour, CALENDAR_WORK_START_HOUR);
 assert.equal(clockFromElapsed.minute, 2);
 assert.equal(gameClock(workMorningTick).hour, CALENDAR_WORK_START_HOUR);
-assert.ok(Math.abs(interpolatedSimElapsedSeconds(0, 1, 1) - 0.4) < 1e-9);
-assert.ok(Math.abs(interpolatedSimElapsedSeconds(0, 1, 4) - 1.6) < 1e-9);
+for (const speed of [1, 5, 20, 120] as const) {
+  assert.ok(
+    Math.abs(
+      interpolatedSimElapsedSeconds(0, 1, speed) - speed * SIM_REALTIME_RATE,
+    ) < 1e-9,
+  );
+}
 assert.equal(interpolatedSimElapsedSeconds(0, 10, 0), 0);
 
 console.log('settlement schedule tests passed');
