@@ -8,7 +8,6 @@ import type { GameState } from '../resources/types.ts';
 import type { SceneManager } from '../scene/SceneManager.ts';
 import type { SettlementHud } from '../ui/SettlementHud.ts';
 import {
-  deriveSettlementSchedule,
   deriveInterpolatedSettlementSchedule,
   settlementScheduleDirtyKey,
   type SettlementSchedule,
@@ -24,17 +23,30 @@ export type SettlementPresentationTargets = {
 
 type SnapshotAnchor = {
   simTick: number;
+  elapsedSeconds: number;
   receivedAtMs: number;
   gameSpeed: SpacetimeGameSnapshot['gameSpeed'];
 };
+
+function advanceSimElapsedSeconds(
+  elapsedSeconds: number,
+  realElapsedSeconds: number,
+  gameSpeed: SpacetimeGameSnapshot['gameSpeed'],
+): number {
+  return elapsedSeconds
+    + Math.max(0, realElapsedSeconds) * gameSpeed * SIM_REALTIME_RATE;
+}
 
 export function interpolatedSimElapsedSeconds(
   simTick: number,
   realElapsedSeconds: number,
   gameSpeed: SpacetimeGameSnapshot['gameSpeed'],
 ): number {
-  return simElapsedSeconds(simTick)
-    + Math.max(0, realElapsedSeconds) * gameSpeed * SIM_REALTIME_RATE;
+  return advanceSimElapsedSeconds(
+    simElapsedSeconds(simTick),
+    realElapsedSeconds,
+    gameSpeed,
+  );
 }
 
 export class SettlementPresentationController {
@@ -45,6 +57,11 @@ export class SettlementPresentationController {
     'simTick' | 'parishPolicy' | 'gameSpeed'
   > | null = null;
   private lastGameState: GameState | null = null;
+  private readonly now: () => number;
+
+  constructor(now: () => number = () => performance.now()) {
+    this.now = now;
+  }
 
   sync(
     targets: SettlementPresentationTargets,
@@ -63,16 +80,26 @@ export class SettlementPresentationController {
       return null;
     }
 
+    const nowMs = this.now();
+    const elapsedSeconds = this.anchor?.simTick === snapshot.simTick
+      ? this.elapsedSecondsAt(nowMs)
+      : simElapsedSeconds(snapshot.simTick);
+
     this.lastDirtyKey = dirtyKey;
     this.lastSnapshot = snapshot;
     this.lastGameState = gameState;
     this.anchor = {
       simTick: snapshot.simTick,
-      receivedAtMs: performance.now(),
+      elapsedSeconds,
+      receivedAtMs: nowMs,
       gameSpeed: snapshot.gameSpeed,
     };
 
-    const schedule = deriveSettlementSchedule(snapshot, gameState);
+    const schedule = deriveInterpolatedSettlementSchedule(
+      elapsedSeconds,
+      snapshot.parishPolicy,
+      gameState,
+    );
     this.applyPresentation(targets, schedule);
     return schedule;
   }
@@ -81,12 +108,7 @@ export class SettlementPresentationController {
   tick(targets: SettlementPresentationTargets): void {
     if (!this.anchor || !this.lastSnapshot) return;
 
-    const driftSeconds = (performance.now() - this.anchor.receivedAtMs) / 1000;
-    const elapsedSeconds = interpolatedSimElapsedSeconds(
-      this.anchor.simTick,
-      driftSeconds,
-      this.anchor.gameSpeed,
-    );
+    const elapsedSeconds = this.elapsedSecondsAt(this.now());
     const schedule = deriveInterpolatedSettlementSchedule(
       elapsedSeconds,
       this.lastSnapshot.parishPolicy,
@@ -100,6 +122,16 @@ export class SettlementPresentationController {
     this.anchor = null;
     this.lastSnapshot = null;
     this.lastGameState = null;
+  }
+
+  private elapsedSecondsAt(nowMs: number): number {
+    if (!this.anchor) return 0;
+    const driftSeconds = (nowMs - this.anchor.receivedAtMs) / 1000;
+    return advanceSimElapsedSeconds(
+      this.anchor.elapsedSeconds,
+      driftSeconds,
+      this.anchor.gameSpeed,
+    );
   }
 
   private applyPresentation(targets: SettlementPresentationTargets, schedule: SettlementSchedule): void {

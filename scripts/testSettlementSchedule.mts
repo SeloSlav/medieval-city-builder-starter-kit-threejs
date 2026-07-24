@@ -14,7 +14,10 @@ import {
 } from '../src/world/settlementSchedule.ts';
 import { deriveInterpolatedSettlementSchedule } from '../src/world/settlementSchedule.ts';
 import { DEFAULT_PARISH_POLICY } from '../src/economy/chapelParish.ts';
-import { interpolatedSimElapsedSeconds } from '../src/app/settlementSchedulePresentation.ts';
+import {
+  interpolatedSimElapsedSeconds,
+  SettlementPresentationController,
+} from '../src/app/settlementSchedulePresentation.ts';
 import type { GameState } from '../src/resources/types.ts';
 
 const secondsPerGameHour = CALENDAR_SECONDS_PER_DAY / 24;
@@ -132,5 +135,76 @@ for (const speed of [1, 5, 20, 120] as const) {
   );
 }
 assert.equal(interpolatedSimElapsedSeconds(0, 10, 0), 0);
+
+let presentationNowMs = 1_000;
+const presentation = new SettlementPresentationController(() => presentationNowMs);
+const emptyPresentationTargets = {
+  settlementHud: null,
+  sceneManager: null,
+  residenceMarkers: null,
+  villagers: null,
+  ambientAudio: null,
+};
+const anchorTick = 3_700;
+const ultraSchedule = presentation.sync(
+  emptyPresentationTargets,
+  {
+    simTick: anchorTick,
+    parishPolicy: DEFAULT_PARISH_POLICY,
+    gameSpeed: 120,
+  },
+  null,
+  true,
+);
+assert.ok(ultraSchedule);
+
+presentationNowMs += 1_000;
+const scenicSchedule = presentation.sync(
+  emptyPresentationTargets,
+  {
+    simTick: anchorTick,
+    parishPolicy: DEFAULT_PARISH_POLICY,
+    gameSpeed: 1,
+  },
+  null,
+  true,
+);
+assert.ok(scenicSchedule);
+assert.ok(
+  scenicSchedule.clock.simTick > ultraSchedule.clock.simTick,
+  'switching speed at the same authoritative tick must preserve interpolated clock progress',
+);
+assert.ok(
+  Math.abs(
+    scenicSchedule.clock.simTick
+      - (
+        ultraSchedule.clock.simTick
+        + 120 * SIM_REALTIME_RATE / SIM_TICK_SECONDS
+      ),
+  ) < 1e-9,
+);
+
+presentationNowMs += 1_000;
+const normalSchedule = presentation.sync(
+  emptyPresentationTargets,
+  {
+    simTick: anchorTick,
+    parishPolicy: DEFAULT_PARISH_POLICY,
+    gameSpeed: 5,
+  },
+  null,
+  true,
+);
+assert.ok(normalSchedule);
+assert.ok(
+  Math.abs(
+    normalSchedule.clock.simTick
+      - (
+        scenicSchedule.clock.simTick
+        + SIM_REALTIME_RATE / SIM_TICK_SECONDS
+      ),
+  ) < 1e-9,
+  'each subsequent speed transition must continue from the displayed clock',
+);
 
 console.log('settlement schedule tests passed');
