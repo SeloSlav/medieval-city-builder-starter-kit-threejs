@@ -9,8 +9,9 @@ export type BackyardPlantKind = 'apple' | 'cherry' | 'rose';
  * Medieval Roads-specific preset and is intentionally outside the upstream PR.
  */
 export const BACKYARD_PLANT_SPECIES: Record<BackyardPlantKind, SeedThreeSpeciesPreset> = {
-  apple: apple as SeedThreeSpeciesPreset,
-  cherry: cherry as SeedThreeSpeciesPreset,
+  // Keep the historical names because SeedThree uses species.name in its RNG seed.
+  apple: { ...apple, name: 'Gorski Backyard Apple' } as SeedThreeSpeciesPreset,
+  cherry: { ...cherry, name: 'Gorski Backyard Cherry' } as SeedThreeSpeciesPreset,
   rose: {
     name: 'Gorski Cottage Rose',
     bark: 'sweetgum_albedo.png',
